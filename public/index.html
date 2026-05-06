@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Калькулятор шкафа</title>
+<style>
+  body { font-family: 'Segoe UI', Arial; margin: 0; padding: 0; background: #f4f7fb; }
+  .top-menu {
+    background: #1a5f7a;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    height: 50px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  .top-menu .left { display: flex; align-items: center; gap: 20px; }
+  .top-menu .left h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  .top-menu .left a { color: white; text-decoration: none; font-size: 14px; padding: 4px 8px; border-radius: 4px; }
+  .top-menu .left a:hover { background: rgba(255,255,255,0.2); }
+  .top-menu .right { display: flex; align-items: center; gap: 15px; }
+  .top-menu .right span { opacity: 0.9; }
+  .top-menu .right button {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: white;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .top-menu .right button:hover { background: rgba(255,255,255,0.3); }
+  .content { padding: 20px; }
+  .hidden { display: none; }
+  /* стили форм авторизации */
+  .auth-container { max-width: 400px; margin: 60px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .auth-container h2 { color: #1a5f7a; margin-top: 0; }
+  .auth-container input { display: block; width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
+  .auth-container button { width: 100%; padding: 10px; background: #1a5f7a; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+  .auth-container button:hover { background: #134b5f; }
+  .auth-container .toggle { color: #1a5f7a; cursor: pointer; text-decoration: underline; font-size: 14px; }
+  .error { color: red; }
+</style>
+</head>
+<body>
+
+<!-- Форма авторизации (скрыта, если уже вошли) -->
+<div id="authBlock" class="auth-container">
+  <h2 id="authTitle">Вход</h2>
+  <div id="authError" class="error"></div>
+  <input type="text" id="username" placeholder="Имя пользователя">
+  <input type="password" id="password" placeholder="Пароль">
+  <button id="authBtn">Войти</button>
+  <p style="text-align:center">
+    <span class="toggle" id="toggleAuth">Нет аккаунта? Зарегистрироваться</span>
+  </p>
+</div>
+
+<!-- Верхнее меню (скрыто, пока не вошли) -->
+<div id="topMenu" class="top-menu hidden">
+  <div class="left">
+    <h1>Калькулятор шкафа</h1>
+    <a href="#" id="adminLink" class="hidden">Администрирование</a>
+  </div>
+  <div class="right">
+    <span id="menuUsername"></span>
+    <button id="logoutMenuBtn">Выйти</button>
+  </div>
+</div>
+
+<!-- Основной контент (скрыт, пока не вошли) -->
+<div id="mainContent" class="content hidden">
+  <!-- здесь будут добавляться секции калькулятора позже -->
+  <p>Добро пожаловать в калькулятор шкафа управления вентиляционной установкой.</p>
+</div>
+
+<script>
+const API = '/api/auth';
+let mode = 'login';
+
+const authBlock = document.getElementById('authBlock');
+const topMenu = document.getElementById('topMenu');
+const mainContent = document.getElementById('mainContent');
+const authTitle = document.getElementById('authTitle');
+const authBtn = document.getElementById('authBtn');
+const toggleAuth = document.getElementById('toggleAuth');
+const authError = document.getElementById('authError');
+const usernameInput = document.getElementById('username');
+const passwordInput = document.getElementById('password');
+const menuUsername = document.getElementById('menuUsername');
+const logoutMenuBtn = document.getElementById('logoutMenuBtn');
+const adminLink = document.getElementById('adminLink');
+
+toggleAuth.addEventListener('click', () => {
+  mode = mode === 'login' ? 'register' : 'login';
+  authTitle.textContent = mode === 'login' ? 'Вход' : 'Регистрация';
+  authBtn.textContent = mode === 'login' ? 'Войти' : 'Зарегистрироваться';
+  toggleAuth.textContent = mode === 'login' ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
+  authError.textContent = '';
+});
+
+authBtn.addEventListener('click', async () => {
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value.trim();
+  if (!username || !password) {
+    authError.textContent = 'Заполните все поля';
+    return;
+  }
+  const endpoint = mode === 'login' ? '/login' : '/register';
+  try {
+    const res = await fetch(API + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      authError.textContent = data.error || 'Ошибка';
+      return;
+    }
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      showApp(data.user);
+    } else {
+      // регистрация успешна
+      mode = 'login';
+      authTitle.textContent = 'Вход';
+      authBtn.textContent = 'Войти';
+      toggleAuth.textContent = 'Нет аккаунта? Зарегистрироваться';
+      authError.textContent = '';
+      usernameInput.value = '';
+      passwordInput.value = '';
+      alert('Регистрация успешна! Теперь войдите.');
+    }
+  } catch (err) {
+    authError.textContent = 'Ошибка соединения';
+  }
+});
+
+logoutMenuBtn.addEventListener('click', () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  authBlock.classList.remove('hidden');
+  topMenu.classList.add('hidden');
+  mainContent.classList.add('hidden');
+  usernameInput.value = '';
+  passwordInput.value = '';
+});
+
+function showApp(user) {
+  authBlock.classList.add('hidden');
+  topMenu.classList.remove('hidden');
+  mainContent.classList.remove('hidden');
+  menuUsername.textContent = user.username;
+  if (user.role === 'admin') {
+    adminLink.classList.remove('hidden');
+  } else {
+    adminLink.classList.add('hidden');
+  }
+}
+
+// Проверка при загрузке страницы
+window.addEventListener('load', () => {
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  if (token && user) showApp(user);
+});
+</script>
+</body>
+</html>

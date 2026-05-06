@@ -1,0 +1,19 @@
+{
+  "name": "hr-server",
+  "version": "1.0.0",
+  "description": "Backend for ventilation cabinet calculator",
+  "main": "server.js",
+  "scripts": {
+    "migrate": "node migrate.js",
+    "seed": "node seed.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.13.0"
+  }
+}
