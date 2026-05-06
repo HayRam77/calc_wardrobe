@@ -50,6 +50,7 @@
   <div class="left">
     <h1>Калькулятор шкафа</h1>
     <a href="#" id="adminLink" class="hidden">Управление<br>пользователями</a>
+    <a href="#" id="allProjectsLink" class="hidden">Все<br>проекты</a>
   </div>
   <div class="right">
     <span id="menuUserInfo"></span>
@@ -58,20 +59,31 @@
 </div>
 
 <div id="mainContent" class="content hidden">
+  <!-- Главная страница -->
   <div id="homePage"><p>Добро пожаловать в калькулятор шкафа.</p></div>
 
+  <!-- Админ-панель -->
   <div id="adminPage" class="hidden">
     <h2>Управление пользователями</h2>
     <div id="usersTable"></div>
     <button id="backToHomeBtn">Назад</button>
   </div>
 
+  <!-- Все проекты (админ) -->
+  <div id="allProjectsPage" class="hidden">
+    <h2>Все проекты</h2>
+    <div id="allProjectsTable"></div>
+    <button id="backToHomeFromProjectsBtn">Назад</button>
+  </div>
+
+  <!-- Детальная карточка пользователя -->
   <div id="userDetailPage" class="hidden">
     <h2>Пользователь: <span id="detailUsername"></span></h2>
     <div id="detailInfo"></div>
     <button id="backToUsersBtn">← Назад к списку</button>
   </div>
 
+  <!-- Страница проекта -->
   <div id="projectPage" class="hidden">
     <h2>Проект: <span id="projectName"></span></h2>
     <p>Напряжение: <span id="projectVoltage"></span></p>
@@ -85,7 +97,7 @@
 const API_BASE = '/api';
 const AUTH = API_BASE + '/auth';
 let mode = 'login';
-let previousPage = null;
+let previousPage = null; // для возврата из проекта
 
 const authBlock = document.getElementById('authBlock');
 const topMenu = document.getElementById('topMenu');
@@ -99,11 +111,14 @@ const passwordInput = document.getElementById('password');
 const menuUserInfo = document.getElementById('menuUserInfo');
 const logoutMenuBtn = document.getElementById('logoutMenuBtn');
 const adminLink = document.getElementById('adminLink');
+const allProjectsLink = document.getElementById('allProjectsLink');
 const homePage = document.getElementById('homePage');
 const adminPage = document.getElementById('adminPage');
+const allProjectsPage = document.getElementById('allProjectsPage');
 const userDetailPage = document.getElementById('userDetailPage');
 const projectPage = document.getElementById('projectPage');
 
+// Авторизация (без изменений)
 toggleAuth.addEventListener('click', () => {
   mode = mode === 'login' ? 'register' : 'login';
   authTitle.textContent = mode === 'login' ? 'Вход' : 'Регистрация';
@@ -152,19 +167,39 @@ function showApp(user){
   const loginTime = localStorage.getItem('loginTime');
   let t=''; if(loginTime){ const d=new Date(loginTime); t=d.toLocaleString('ru-RU'); }
   menuUserInfo.textContent = user.username + (t ? ' (вход: '+t+')' : '');
-  if(user.role==='admin'){ adminLink.classList.remove('hidden'); } else { adminLink.classList.add('hidden'); }
-  homePage.classList.remove('hidden'); adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
+  if(user.role==='admin'){
+    adminLink.classList.remove('hidden');
+    allProjectsLink.classList.remove('hidden');
+  } else {
+    adminLink.classList.add('hidden');
+    allProjectsLink.classList.add('hidden');
+  }
+  homePage.classList.remove('hidden'); adminPage.classList.add('hidden'); allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
 }
 
+// Админ-панель
 adminLink.addEventListener('click', (e)=>{
   e.preventDefault();
-  homePage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
+  homePage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden'); allProjectsPage.classList.add('hidden');
   adminPage.classList.remove('hidden');
   loadUsers();
 });
 
+// Все проекты (админ)
+allProjectsLink.addEventListener('click', (e)=>{
+  e.preventDefault();
+  homePage.classList.add('hidden'); adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
+  allProjectsPage.classList.remove('hidden');
+  loadAllProjects();
+});
+
 document.getElementById('backToHomeBtn').addEventListener('click', ()=>{
-  adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
+  adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden'); allProjectsPage.classList.add('hidden');
+  homePage.classList.remove('hidden');
+});
+
+document.getElementById('backToHomeFromProjectsBtn').addEventListener('click', ()=>{
+  allProjectsPage.classList.add('hidden');
   homePage.classList.remove('hidden');
 });
 
@@ -194,6 +229,28 @@ async function loadUsers(){
   } catch(e){ document.getElementById('usersTable').innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; }
 }
 
+// Загрузка всех проектов для админа
+async function loadAllProjects(){
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch(API_BASE+'/projects',{headers:{'Authorization':'Bearer '+token}});
+    if(!res.ok) throw new Error('Ошибка загрузки');
+    const projects = await res.json();
+    let html = '<table><tr><th>Название</th><th>Создатель</th><th>Напряжение</th><th>Дата создания</th></tr>';
+    projects.forEach(p=>{
+      html += `<tr>
+        <td><span class="clickable project-link" data-id="${p.id}">${p.name}</span></td>
+        <td>${p.created_by || 'неизвестно'}</td>
+        <td>${p.voltage} В</td>
+        <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>
+      </tr>`;
+    });
+    html += '</table>';
+    document.getElementById('allProjectsTable').innerHTML = html;
+  } catch(e){ document.getElementById('allProjectsTable').innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; }
+}
+
+// Делегирование событий в таблице пользователей
 document.getElementById('usersTable').addEventListener('click', async (e)=>{
   const id = e.target.dataset.id;
   if(!id) return;
@@ -216,6 +273,14 @@ document.getElementById('usersTable').addEventListener('click', async (e)=>{
   } else if(e.target.classList.contains('user-detail-link')){
     e.preventDefault();
     showUserDetail(id);
+  }
+});
+
+// Клик по проекту в любом месте
+document.addEventListener('click', async (e)=>{
+  if(e.target.classList.contains('project-link')){
+    const projectId = e.target.dataset.id;
+    showProject(projectId);
   }
 });
 
@@ -245,7 +310,7 @@ async function showUserDetail(id){
       html += '</table>';
     } else html += '<p>Нет данных</p>';
     document.getElementById('detailInfo').innerHTML = html;
-    homePage.classList.add('hidden'); adminPage.classList.add('hidden'); projectPage.classList.add('hidden');
+    homePage.classList.add('hidden'); adminPage.classList.add('hidden'); allProjectsPage.classList.add('hidden'); projectPage.classList.add('hidden');
     userDetailPage.classList.remove('hidden');
     previousPage = 'userDetail';
   } catch(e){ alert('Ошибка загрузки данных пользователя'); }
@@ -254,13 +319,6 @@ async function showUserDetail(id){
 document.getElementById('backToUsersBtn').addEventListener('click', ()=>{
   userDetailPage.classList.add('hidden');
   adminPage.classList.remove('hidden');
-});
-
-document.addEventListener('click', async (e)=>{
-  if(e.target.classList.contains('project-link')){
-    const projectId = e.target.dataset.id;
-    showProject(projectId);
-  }
 });
 
 async function showProject(projectId){
@@ -286,7 +344,7 @@ async function showProject(projectId){
       } else blocksHtml += '<p>Блоков нет</p>';
     } else blocksHtml += '<p>Ошибка загрузки блоков</p>';
     document.getElementById('projectBlocks').innerHTML = blocksHtml;
-    homePage.classList.add('hidden'); adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden');
+    homePage.classList.add('hidden'); adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); allProjectsPage.classList.add('hidden');
     projectPage.classList.remove('hidden');
     previousPage = 'project';
   } catch(e){ alert('Ошибка загрузки проекта'); }
@@ -294,8 +352,11 @@ async function showProject(projectId){
 
 document.getElementById('backFromProjectBtn').addEventListener('click', ()=>{
   projectPage.classList.add('hidden');
+  // Возвращаемся в зависимости от того, откуда пришли
   if(previousPage === 'userDetail'){
     userDetailPage.classList.remove('hidden');
+  } else if(previousPage === 'allProjects'){
+    allProjectsPage.classList.remove('hidden');
   } else {
     homePage.classList.remove('hidden');
   }
