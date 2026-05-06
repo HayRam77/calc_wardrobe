@@ -11,8 +11,8 @@ router.post('/', async (req, res) => {
   if (!name) return res.status(400).json({ error: 'Имя проекта обязательно' });
   try {
     const result = await pool.query(
-      `INSERT INTO projects (name, voltage, simultaneity_factor) VALUES ($1, $2, $3) RETURNING *`,
-      [name, voltage || '380', 0.9]
+      `INSERT INTO projects (name, voltage, simultaneity_factor, user_id) VALUES ($1, $2, $3, $4) RETURNING *`,
+      [name, voltage || '380', 0.9, req.user.userId]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -20,20 +20,37 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Список проектов (можно фильтровать, пока все)
+// Список проектов (админ видит все, пользователь — свои)
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM projects ORDER BY updated_at DESC');
+    const query = req.user.role === 'admin' 
+      ? 'SELECT p.*, u.username as created_by FROM projects p LEFT JOIN users u ON p.user_id = u.id ORDER BY p.updated_at DESC'
+      : 'SELECT p.*, u.username as created_by FROM projects p LEFT JOIN users u ON p.user_id = u.id WHERE p.user_id = $1 ORDER BY p.updated_at DESC';
+    const params = req.user.role === 'admin' ? [] : [req.user.userId];
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Получить один проект
+// Получить один проект (админ видит любой)
 router.get('/:id', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM projects WHERE id = $1', [req.params.id]);
+    let query;
+    let params;
+    if (req.user.role === 'admin') {
+      query = `SELECT p.*, u.username as created_by FROM projects p 
+               LEFT JOIN users u ON p.user_id = u.id 
+               WHERE p.id = $1`;
+      params = [req.params.id];
+    } else {
+      query = `SELECT p.*, u.username as created_by FROM projects p 
+               LEFT JOIN users u ON p.user_id = u.id 
+               WHERE p.id = $1 AND p.user_id = $2`;
+      params = [req.params.id, req.user.userId];
+    }
+    const result = await pool.query(query, params);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Проект не найден' });
     res.json(result.rows[0]);
   } catch (err) {
@@ -41,14 +58,17 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Обновить проект (пока не используется, но оставим)
+// Обновить проект
 router.put('/:id', async (req, res) => {
   const { name, voltage, simultaneity_factor } = req.body;
   try {
-    const result = await pool.query(
-      `UPDATE projects SET name = COALESCE($1, name), voltage = COALESCE($2, voltage), simultaneity_factor = COALESCE($3, simultaneity_factor), updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *`,
-      [name, voltage, simultaneity_factor, req.params.id]
-    );
+    const query = req.user.role === 'admin'
+      ? `UPDATE projects SET name = COALESCE($1, name), voltage = COALESCE($2, voltage), simultaneity_factor = COALESCE($3, simultaneity_factor), updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *`
+      : `UPDATE projects SET name = COALESCE($1, name), voltage = COALESCE($2, voltage), simultaneity_factor = COALESCE($3, simultaneity_factor), updated_at = CURRENT_TIMESTAMP WHERE id = $4 AND user_id = $5 RETURNING *`;
+    const params = req.user.role === 'admin'
+      ? [name, voltage, simultaneity_factor, req.params.id]
+      : [name, voltage, simultaneity_factor, req.params.id, req.user.userId];
+    const result = await pool.query(query, params);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Проект не найден' });
     res.json(result.rows[0]);
   } catch (err) {
@@ -59,7 +79,11 @@ router.put('/:id', async (req, res) => {
 // Удалить проект
 router.delete('/:id', async (req, res) => {
   try {
-    await pool.query('DELETE FROM projects WHERE id = $1', [req.params.id]);
+    const query = req.user.role === 'admin'
+      ? 'DELETE FROM projects WHERE id = $1'
+      : 'DELETE FROM projects WHERE id = $1 AND user_id = $2';
+    const params = req.user.role === 'admin' ? [req.params.id] : [req.params.id, req.user.userId];
+    await pool.query(query, params);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
