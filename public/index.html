@@ -33,6 +33,7 @@
   button.small { padding: 3px 10px; font-size: 12px; margin-right: 4px; }
   .card { background: white; border: 1px solid #ccc; padding: 15px; margin: 10px 0; }
   .clickable { color: #1a5f7a; cursor: pointer; text-decoration: underline; }
+  .danger { background: #c0392b; color: white; border: none; }
 </style>
 </head>
 <body>
@@ -97,7 +98,28 @@
 const API_BASE = '/api';
 const AUTH = API_BASE + '/auth';
 let mode = 'login';
-let previousPage = null; // для возврата из проекта
+let previousPage = null;
+
+// Авто-выход при бездействии
+let inactivityTimer;
+const INACTIVITY_LIMIT = 5 * 60 * 1000; // 5 минут
+
+function resetInactivityTimer() {
+  clearTimeout(inactivityTimer);
+  inactivityTimer = setTimeout(async () => {
+    await performLogout();
+    alert('Вы были выведены из системы из-за бездействия.');
+  }, INACTIVITY_LIMIT);
+}
+
+function startInactivityTimer() {
+  resetInactivityTimer();
+}
+
+// События активности
+['click', 'mousemove', 'keydown', 'scroll', 'touchstart'].forEach(evt => {
+  document.addEventListener(evt, resetInactivityTimer);
+});
 
 const authBlock = document.getElementById('authBlock');
 const topMenu = document.getElementById('topMenu');
@@ -118,7 +140,7 @@ const allProjectsPage = document.getElementById('allProjectsPage');
 const userDetailPage = document.getElementById('userDetailPage');
 const projectPage = document.getElementById('projectPage');
 
-// Авторизация (без изменений)
+// Авторизация
 toggleAuth.addEventListener('click', () => {
   mode = mode === 'login' ? 'register' : 'login';
   authTitle.textContent = mode === 'login' ? 'Вход' : 'Регистрация';
@@ -154,6 +176,7 @@ authBtn.addEventListener('click', async () => {
 });
 
 async function performLogout(){
+  clearTimeout(inactivityTimer);
   const sid = localStorage.getItem('sessionId');
   if(sid){ try{ await fetch(AUTH+'/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:sid})}); }catch(e){} }
   localStorage.removeItem('token'); localStorage.removeItem('user'); localStorage.removeItem('sessionId'); localStorage.removeItem('loginTime');
@@ -175,6 +198,7 @@ function showApp(user){
     allProjectsLink.classList.add('hidden');
   }
   homePage.classList.remove('hidden'); adminPage.classList.add('hidden'); allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
+  startInactivityTimer(); // запускаем таймер
 }
 
 // Админ-панель
@@ -220,7 +244,7 @@ async function loadUsers(){
         <td>
           <button class="small block-btn" data-id="${u.id}">${u.is_blocked?'Разблок.':'Блокир.'}</button>
           <button class="small reset-btn" data-id="${u.id}">Сброс пароля</button>
-          <button class="small delete-btn" data-id="${u.id}">Удалить</button>
+          <button class="small danger delete-btn" data-id="${u.id}">Удалить</button>
         </td>
       </tr>`;
     });
@@ -236,19 +260,38 @@ async function loadAllProjects(){
     const res = await fetch(API_BASE+'/projects',{headers:{'Authorization':'Bearer '+token}});
     if(!res.ok) throw new Error('Ошибка загрузки');
     const projects = await res.json();
-    let html = '<table><tr><th>Название</th><th>Создатель</th><th>Напряжение</th><th>Дата создания</th></tr>';
+    let html = '<table><tr><th>Название</th><th>Создатель</th><th>Напряжение</th><th>Дата создания</th><th>Действия</th></tr>';
     projects.forEach(p=>{
       html += `<tr>
         <td><span class="clickable project-link" data-id="${p.id}">${p.name}</span></td>
         <td>${p.created_by || 'неизвестно'}</td>
         <td>${p.voltage} В</td>
         <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>
+        <td><button class="small danger delete-project-btn" data-id="${p.id}">Удалить</button></td>
       </tr>`;
     });
     html += '</table>';
     document.getElementById('allProjectsTable').innerHTML = html;
   } catch(e){ document.getElementById('allProjectsTable').innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; }
 }
+
+// Обработчик удаления проектов
+document.getElementById('allProjectsTable').addEventListener('click', async (e)=>{
+  if(e.target.classList.contains('delete-project-btn')){
+    const projectId = e.target.dataset.id;
+    if(!projectId) return;
+    if(!confirm('Удалить проект?')) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(API_BASE+'/projects/'+projectId, {
+        method: 'DELETE',
+        headers: {'Authorization':'Bearer '+token}
+      });
+      if(!res.ok) { alert('Ошибка удаления'); return; }
+      loadAllProjects();
+    } catch(e){ alert('Ошибка соединения'); }
+  }
+});
 
 // Делегирование событий в таблице пользователей
 document.getElementById('usersTable').addEventListener('click', async (e)=>{
@@ -352,7 +395,6 @@ async function showProject(projectId){
 
 document.getElementById('backFromProjectBtn').addEventListener('click', ()=>{
   projectPage.classList.add('hidden');
-  // Возвращаемся в зависимости от того, откуда пришли
   if(previousPage === 'userDetail'){
     userDetailPage.classList.remove('hidden');
   } else if(previousPage === 'allProjects'){
@@ -362,10 +404,14 @@ document.getElementById('backFromProjectBtn').addEventListener('click', ()=>{
   }
 });
 
+// Инициализация при загрузке
 window.addEventListener('load', ()=>{
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user')||'null');
-  if(token&&user) showApp(user);
+  if(token&&user) {
+    showApp(user);
+    startInactivityTimer(); // на случай если уже вошли (после обновления)
+  }
 });
 </script>
 </body>
