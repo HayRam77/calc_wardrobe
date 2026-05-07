@@ -5,22 +5,15 @@
 <title>Калькулятор шкафа</title>
 <style>
   body { font-family: 'Segoe UI', Arial; margin: 0; padding: 0; background: #f4f7fb; }
-  .top-menu {
-    background: #1a5f7a; color: white;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 20px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  }
+  .top-menu { background: #1a5f7a; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
   .top-menu .left { display: flex; align-items: center; gap: 20px; }
   .top-menu .left h1 { margin: 0; font-size: 20px; }
   .top-menu .left a { color: white; text-decoration: none; font-size: 13px; padding: 4px 8px; border-radius: 4px; line-height: 1.2; }
   .top-menu .left a:hover { background: rgba(255,255,255,0.2); }
   .top-menu .right { display: flex; align-items: center; gap: 15px; font-size: 13px; }
-  .top-menu .right button {
-    background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);
-    color: white; padding: 5px 12px; border-radius: 4px; cursor: pointer;
-  }
+  .top-menu .right button { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: white; padding: 5px 12px; border-radius: 4px; cursor: pointer; }
   .content { padding: 20px; }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
   .auth-container { max-width: 400px; margin: 60px auto; padding: 20px; background: white; border-radius: 8px; }
   .auth-container h2 { color: #1a5f7a; }
   .auth-container input, .auth-container button { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
@@ -39,14 +32,8 @@
   .form-group input, .form-group select { width: 100%; padding: 8px; box-sizing: border-box; }
   .param-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: center; }
   .param-row input { flex: 1; }
-  .modal-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center;
-  }
-  .modal {
-    background: white; border-radius: 8px; padding: 20px; min-width: 400px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto;
-  }
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; }
+  .modal { background: white; border-radius: 8px; padding: 20px; min-width: 400px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto; }
 </style>
 </head>
 <body>
@@ -76,14 +63,12 @@
 </div>
 
 <div id="mainContent" class="content hidden">
-  <div id="homePage"><p>Добро пожаловать в калькулятор шкафа.</p></div>
-
+  <div id="homePage" class="hidden"><p>Добро пожаловать в калькулятор шкафа.</p></div>
   <div id="myProjectsPage" class="hidden">
     <h2>Мои проекты</h2>
     <div id="myProjectsTable"></div>
     <button id="backToHomeFromMyBtn">Назад</button>
   </div>
-
   <div id="createProjectPage" class="hidden">
     <h2>Создать проект</h2>
     <div id="createProjectError" class="error"></div>
@@ -101,25 +86,21 @@
     <button id="saveProjectBtn">Создать</button>
     <button id="backToHomeFromCreateBtn" style="background:#888; margin-left:10px;">Отмена</button>
   </div>
-
   <div id="adminPage" class="hidden">
     <h2>Управление пользователями</h2>
     <div id="usersTable"></div>
     <button id="backToHomeBtn">Назад</button>
   </div>
-
   <div id="allProjectsPage" class="hidden">
     <h2>Все проекты</h2>
     <div id="allProjectsTable"></div>
     <button id="backToHomeFromProjectsBtn">Назад</button>
   </div>
-
   <div id="userDetailPage" class="hidden">
     <h2>Пользователь: <span id="detailUsername"></span></h2>
     <div id="detailInfo"></div>
     <button id="backToUsersBtn">← Назад к списку</button>
   </div>
-
   <div id="projectPage" class="hidden">
     <h2>Проект: <span id="projectName"></span></h2>
     <p>Напряжение: <span id="projectVoltage"></span></p>
@@ -141,7 +122,6 @@
     </div>
     <button id="backFromProjectBtn">← Назад</button>
   </div>
-
   <div id="templatesPage" class="hidden">
     <h2>Шаблоны блоков</h2>
     <button id="addTemplateBtn">+ Добавить шаблон</button>
@@ -179,7 +159,6 @@ let mode = 'login';
 let previousPage = null;
 let templates = [];
 let editingTemplateId = null;
-
 let inactivityTimer;
 const INACTIVITY_LIMIT = 5 * 60 * 1000;
 
@@ -265,6 +244,7 @@ async function performLogout(){
   const sid = localStorage.getItem('sessionId');
   if(sid){ try{ await fetch(AUTH+'/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:sid})}); }catch(e){} }
   localStorage.removeItem('token'); localStorage.removeItem('user'); localStorage.removeItem('sessionId'); localStorage.removeItem('loginTime');
+  templateModal.classList.add('hidden');
   authBlock.classList.remove('hidden'); topMenu.classList.add('hidden'); mainContent.classList.add('hidden');
   usernameInput.value=''; passwordInput.value='';
 }
@@ -280,6 +260,7 @@ async function loadTemplates() {
 }
 
 function showApp(user){
+  templateModal.classList.add('hidden');
   authBlock.classList.add('hidden'); topMenu.classList.remove('hidden'); mainContent.classList.remove('hidden');
   const loginTime = localStorage.getItem('loginTime');
   let t=''; if(loginTime){ const d=new Date(loginTime); t=d.toLocaleString('ru-RU'); }
@@ -288,76 +269,40 @@ function showApp(user){
     adminLink.classList.remove('hidden');
     allProjectsLink.classList.remove('hidden');
     templatesLink.classList.remove('hidden');
+    myProjectsLink.classList.add('hidden');
   } else {
     adminLink.classList.add('hidden');
     allProjectsLink.classList.add('hidden');
     templatesLink.classList.add('hidden');
+    myProjectsLink.classList.remove('hidden');
   }
-  myProjectsLink.classList.remove('hidden');
   createProjectLink.classList.remove('hidden');
-  homePage.classList.remove('hidden');
-  myProjectsPage.classList.add('hidden');
-  createProjectPage.classList.add('hidden');
-  adminPage.classList.add('hidden');
-  allProjectsPage.classList.add('hidden');
-  userDetailPage.classList.add('hidden');
-  projectPage.classList.add('hidden');
-  templatesPage.classList.add('hidden');
+  homePage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
+  adminPage.classList.add('hidden'); allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden');
+  projectPage.classList.add('hidden'); templatesPage.classList.add('hidden');
+
+  if (user.role === 'admin') {
+    allProjectsPage.classList.remove('hidden');
+    loadAllProjects();
+  } else {
+    homePage.classList.remove('hidden');
+  }
   startInactivityTimer();
   loadTemplates();
 }
 
-// Навигация (добавлены переходы для шаблонов и улучшена обработка previousPage)
-myProjectsLink.addEventListener('click', (e) => {
-  e.preventDefault();
-  previousPage = 'myProjects';
-  hideAll();
-  myProjectsPage.classList.remove('hidden');
-  loadMyProjects();
-});
-
-createProjectLink.addEventListener('click', (e) => {
-  e.preventDefault();
-  hideAll();
-  createProjectPage.classList.remove('hidden');
-});
-
-adminLink.addEventListener('click', (e) => {
-  e.preventDefault();
-  previousPage = 'admin';
-  hideAll();
-  adminPage.classList.remove('hidden');
-  loadUsers();
-});
-
-allProjectsLink.addEventListener('click', (e) => {
-  e.preventDefault();
-  previousPage = 'allProjects';
-  hideAll();
-  allProjectsPage.classList.remove('hidden');
-  loadAllProjects();
-});
-
-templatesLink.addEventListener('click', (e) => {
-  e.preventDefault();
-  previousPage = 'templates';
-  hideAll();
-  templatesPage.classList.remove('hidden');
-  loadTemplatesList();
-});
+myProjectsLink.addEventListener('click', (e) => { e.preventDefault(); previousPage='myProjects'; hideAll(); myProjectsPage.classList.remove('hidden'); loadMyProjects(); });
+createProjectLink.addEventListener('click', (e) => { e.preventDefault(); hideAll(); createProjectPage.classList.remove('hidden'); });
+adminLink.addEventListener('click', (e) => { e.preventDefault(); previousPage='admin'; hideAll(); adminPage.classList.remove('hidden'); loadUsers(); });
+allProjectsLink.addEventListener('click', (e) => { e.preventDefault(); previousPage='allProjects'; hideAll(); allProjectsPage.classList.remove('hidden'); loadAllProjects(); });
+templatesLink.addEventListener('click', (e) => { e.preventDefault(); previousPage='templates'; hideAll(); templatesPage.classList.remove('hidden'); loadTemplatesList(); });
 
 function hideAll() {
-  homePage.classList.add('hidden');
-  myProjectsPage.classList.add('hidden');
-  createProjectPage.classList.add('hidden');
-  adminPage.classList.add('hidden');
-  allProjectsPage.classList.add('hidden');
-  userDetailPage.classList.add('hidden');
-  projectPage.classList.add('hidden');
-  templatesPage.classList.add('hidden');
+  homePage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
+  adminPage.classList.add('hidden'); allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden');
+  projectPage.classList.add('hidden'); templatesPage.classList.add('hidden');
 }
 
-// ========== ПРОЕКТЫ (без изменений) ==========
 document.getElementById('saveProjectBtn').addEventListener('click', async () => {
   const name = document.getElementById('newProjectName').value.trim();
   if (!name) { document.getElementById('createProjectError').textContent = 'Введите название'; return; }
@@ -382,9 +327,9 @@ async function loadMyProjects(){
     const res = await fetch(API_BASE+'/projects', {headers:{'Authorization':'Bearer '+token}});
     if(!res.ok) throw new Error('Ошибка загрузки');
     const projects = await res.json();
-    let html = '<table><tr><th>Название</th><th>Напряжение</th><th>Дата создания</th><th>Действия</th></tr>';
+    let html = '<table><tr><th>Название</th><th>Примечание</th><th>Создатель</th><th>Дата создания</th><th>Действия</th></tr>';
     if(projects.length===0) html='<p>У вас пока нет проектов. <a href="#" id="createFromMyLink">Создать новый</a></p>';
-    else projects.forEach(p=>{ html+=`<tr><td><span class="clickable project-link" data-id="${p.id}">${p.name}</span></td><td>${p.voltage} В</td><td>${new Date(p.created_at).toLocaleString('ru-RU')}</td><td><button class="small danger delete-my-project-btn" data-id="${p.id}">Удалить</button></td></tr>`; });
+    else projects.forEach(p=>{ html+=`<tr><td><span class="clickable project-link" data-id="${p.id}">${p.name}</span></td><td>${p.remark || ''}</td><td>${p.created_by || ''}</td><td>${new Date(p.created_at).toLocaleString('ru-RU')}</td><td><button class="small danger delete-my-project-btn" data-id="${p.id}">Удалить</button></td></tr>`; });
     html+='</table>';
     document.getElementById('myProjectsTable').innerHTML = html;
     const cl = document.getElementById('createFromMyLink');
@@ -404,15 +349,14 @@ document.getElementById('myProjectsTable').addEventListener('click', async (e)=>
   }
 });
 
-// ========== АДМИН-ПРОЕКТЫ ==========
 async function loadAllProjects(){
   const token = localStorage.getItem('token');
   try {
     const res = await fetch(API_BASE+'/projects', {headers:{'Authorization':'Bearer '+token}});
     if(!res.ok) throw new Error('Ошибка загрузки');
     const projects = await res.json();
-    let html = '<table><tr><th>Название</th><th>Создатель</th><th>Напряжение</th><th>Дата создания</th><th>Действия</th></tr>';
-    projects.forEach(p=>{ html+=`<tr><td><span class="clickable project-link" data-id="${p.id}">${p.name}</span></td><td>${p.created_by||'неизвестно'}</td><td>${p.voltage} В</td><td>${new Date(p.created_at).toLocaleString('ru-RU')}</td><td><button class="small danger delete-project-btn" data-id="${p.id}">Удалить</button></td></tr>`; });
+    let html = '<table><tr><th>Название</th><th>Примечание</th><th>Создатель</th><th>Дата создания</th><th>Действия</th></tr>';
+    projects.forEach(p=>{ html+=`<tr><td><span class="clickable project-link" data-id="${p.id}">${p.name}</span></td><td>${p.remark || ''}</td><td>${p.created_by||'неизвестно'}</td><td>${new Date(p.created_at).toLocaleString('ru-RU')}</td><td><button class="small danger delete-project-btn" data-id="${p.id}">Удалить</button></td></tr>`; });
     html+='</table>';
     document.getElementById('allProjectsTable').innerHTML = html;
   } catch(e){ document.getElementById('allProjectsTable').innerHTML='<p style="color:red;">Ошибка загрузки</p>'; }
@@ -430,7 +374,6 @@ document.getElementById('allProjectsTable').addEventListener('click', async (e)=
   }
 });
 
-// ========== ПОЛЬЗОВАТЕЛИ ==========
 async function loadUsers(){
   const token = localStorage.getItem('token');
   try {
@@ -495,7 +438,6 @@ document.getElementById('backToUsersBtn').addEventListener('click', ()=>{
   adminPage.classList.remove('hidden');
 });
 
-// ========== ПРОЕКТЫ (страница проекта) ==========
 document.addEventListener('click', async (e)=>{
   if(e.target.classList.contains('project-link')){
     const projectId = e.target.dataset.id;
@@ -597,7 +539,6 @@ document.getElementById('templatesTable').addEventListener('click', async (e)=>{
 function openTemplateModal(id=null) {
   editingTemplateId = id;
   modalError.textContent = '';
-  document.getElementById('addParamBtn').style.display = 'block';
   if (id) {
     modalTitle.textContent = 'Редактировать шаблон';
     const t = templates.find(t=>t.id==id);
@@ -613,6 +554,8 @@ function openTemplateModal(id=null) {
   }
   templateModal.classList.remove('hidden');
 }
+
+document.getElementById('addTemplateBtn').addEventListener('click', () => openTemplateModal());
 
 document.getElementById('addParamBtn').addEventListener('click', ()=>{
   const row = document.createElement('div');
@@ -655,7 +598,13 @@ document.getElementById('cancelTemplateBtn').addEventListener('click', ()=>{
 
 document.getElementById('backToHomeFromTemplatesBtn').addEventListener('click', ()=>{
   templatesPage.classList.add('hidden');
-  homePage.classList.remove('hidden');
+  const user = JSON.parse(localStorage.getItem('user')||'null');
+  if (user && user.role === 'admin') {
+    allProjectsPage.classList.remove('hidden');
+    loadAllProjects();
+  } else {
+    homePage.classList.remove('hidden');
+  }
 });
 
 window.addEventListener('load', ()=>{

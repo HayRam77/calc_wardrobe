@@ -1,6 +1,5 @@
 <h2>Мои проекты</h2>
 <div id="myProjectsTable"></div>
-<div id="projectActions" style="margin-top:10px;"></div>
 
 <script>
 async function loadMyProjects() {
@@ -19,18 +18,18 @@ async function loadMyProjects() {
       });
       return;
     }
-    let html = '<table><tr><th>Название</th><th>Напряжение</th><th>Дата создания</th><th></th></tr>';
+    let html = '<table><tr><th>Название</th><th>Примечание</th><th>Дата создания</th><th></th></tr>';
     projects.forEach(p => {
       html += `<tr>
         <td><a href="/project/${p.id}" class="project-link">${p.name}</a></td>
-        <td>${p.voltage} В</td>
+        <td>${p.remark || ''}</td>
         <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>
         <td><button class="small danger delete-btn" data-id="${p.id}">Удалить</button></td>
       </tr>`;
     });
     html += '</table>';
     container.innerHTML = html;
-    // обработчики удаления
+
     container.querySelectorAll('.delete-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const id = e.target.dataset.id;
@@ -42,7 +41,6 @@ async function loadMyProjects() {
         } catch(e) { alert('Ошибка удаления'); }
       });
     });
-    // обработчики перехода на проект (уже есть ссылки, но для SPA перехватим клик)
     container.querySelectorAll('.project-link').forEach(link => {
       link.addEventListener('click', function(e) {
         e.preventDefault();

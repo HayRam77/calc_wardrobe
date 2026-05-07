@@ -11,6 +11,10 @@
     <option value="220">1 фаза, 220 В</option>
   </select>
 </div>
+<div class="form-group">
+  <label>Примечание</label>
+  <textarea id="newProjectRemark" rows="3" style="width:100%;"></textarea>
+</div>
 <button id="saveProjectBtn">Создать</button>
 <button id="cancelCreateProjectBtn" style="background:#888; margin-left:10px;">Отмена</button>
 
@@ -19,17 +23,17 @@ document.getElementById('saveProjectBtn').addEventListener('click', async () => 
   const name = document.getElementById('newProjectName').value.trim();
   if (!name) { document.getElementById('createProjectError').textContent = 'Введите название'; return; }
   const voltage = document.getElementById('newProjectVoltage').value;
+  const remark = document.getElementById('newProjectRemark').value.trim();
   const token = localStorage.getItem('token');
   try {
     const res = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ name, voltage })
+      body: JSON.stringify({ name, voltage, remark })
     });
     if (!res.ok) { const err = await res.json(); document.getElementById('createProjectError').textContent = err.error || 'Ошибка'; return; }
-    // Перенаправляем на "Мои проекты"
     history.pushState(null, '', '/projects');
-    loadPage('/projects');  // функция loadPage доступна из index.html
+    loadPage('/projects');
   } catch (e) { document.getElementById('createProjectError').textContent = 'Ошибка соединения'; }
 });
 

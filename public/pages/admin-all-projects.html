@@ -9,12 +9,12 @@ async function loadAllProjects() {
     const res = await fetch('/api/projects', { headers: { 'Authorization': 'Bearer ' + token } });
     if (!res.ok) throw new Error('Ошибка загрузки');
     const projects = await res.json();
-    let html = '<table><tr><th>Название</th><th>Создатель</th><th>Напряжение</th><th>Дата создания</th><th></th></tr>';
+    let html = '<table><tr><th>Название</th><th>Создатель</th><th>Примечание</th><th>Дата создания</th><th></th></tr>';
     projects.forEach(p => {
       html += `<tr>
         <td><a href="/project/${p.id}" class="project-link">${p.name}</a></td>
         <td>${p.created_by || 'неизвестно'}</td>
-        <td>${p.voltage} В</td>
+        <td>${p.remark || ''}</td>
         <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>
         <td><button class="small danger delete-btn" data-id="${p.id}">Удалить</button></td>
       </tr>`;
@@ -38,7 +38,7 @@ async function loadAllProjects() {
         e.preventDefault();
         const href = this.getAttribute('href');
         history.pushState(null, '', href);
-        loadPage(href); // из index.html
+        loadPage(href);
       });
     });
   } catch(e) {
