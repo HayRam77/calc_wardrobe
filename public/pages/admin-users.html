@@ -1,0 +1,86 @@
+<h2>Управление пользователями</h2>
+<div id="usersTable"></div>
+
+<script>
+async function loadUsers() {
+  const token = localStorage.getItem('token');
+  const container = document.getElementById('usersTable');
+  try {
+    const res = await fetch('/api/admin/users', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Ошибка загрузки');
+    const users = await res.json();
+    let html = '<table><tr><th>ID</th><th>Имя</th><th>Роль</th><th>Статус</th><th>Создан</th><th>Действия</th></tr>';
+    users.forEach(u => {
+      html += `<tr>
+        <td>${u.id}</td>
+        <td><a href="#" class="user-detail-link" data-id="${u.id}">${u.username}</a></td>
+        <td>${u.role}</td>
+        <td>${u.is_blocked ? 'Заблокирован' : 'Активен'}</td>
+        <td>${new Date(u.created_at).toLocaleString('ru-RU')}</td>
+        <td>
+          <button class="small block-btn" data-id="${u.id}">${u.is_blocked ? 'Разблок.' : 'Блокир.'}</button>
+          <button class="small reset-btn" data-id="${u.id}">Сброс пароля</button>
+          <button class="small danger delete-btn" data-id="${u.id}">Удалить</button>
+        </td>
+      </tr>`;
+    });
+    html += '</table>';
+    container.innerHTML = html;
+
+    // Обработчики кнопок
+    container.querySelectorAll('.block-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.target.dataset.id;
+        await fetch('/api/admin/users/' + id + '/block', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        loadUsers();
+      });
+    });
+    container.querySelectorAll('.reset-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.target.dataset.id;
+        const newPass = prompt('Введите новый пароль (не менее 4 символов):');
+        if (!newPass) return;
+        await fetch('/api/admin/users/' + id + '/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ newPassword: newPass })
+        });
+        alert('Пароль изменён');
+      });
+    });
+    container.querySelectorAll('.delete-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const id = e.target.dataset.id;
+        if (!confirm('Удалить пользователя?')) return;
+        await fetch('/api/admin/users/' + id, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        loadUsers();
+      });
+    });
+    container.querySelectorAll('.user-detail-link').forEach(link => {
+      link.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const id = link.dataset.id;
+        showUserDetail(id); // функция определена ниже (или можно глобально)
+      });
+    });
+  } catch (e) {
+    container.innerHTML = '<p style="color:red;">Ошибка загрузки пользователей</p>';
+  }
+}
+
+// Функция показа деталей пользователя (можно вынести в глобальный скрипт, но пока оставим локально)
+async function showUserDetail(userId) {
+  // тут нужен контейнер для деталей, но мы можем открыть модальное окно или новую страницу. 
+  // Для простоты откроем страницу /user/:id, которую мы ещё не сделали. 
+  // Пока используем промпт.
+  alert('Функция показа деталей будет добавлена позже');
+}
+
+loadUsers();
+</script>

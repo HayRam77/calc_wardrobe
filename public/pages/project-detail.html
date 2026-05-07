@@ -1,0 +1,117 @@
+<div id="projectContent">
+  <div id="projectInfo">
+    <h2 id="projectName"></h2>
+    <p>Напряжение: <span id="projectVoltage"></span></p>
+    <p>Создатель: <span id="projectCreator"></span></p>
+  </div>
+  <div id="projectBlocks"></div>
+  <div id="blockFormContainer" style="display:none; margin-top:15px; padding:10px; border:1px solid #ccc; background:white;">
+    <h4>Новый блок</h4>
+    <div class="form-group">
+      <label>Название блока</label>
+      <input type="text" id="blockNameInput">
+    </div>
+    <div class="form-group">
+      <label>Шаблон</label>
+      <select id="templateSelect"><option value="">Без шаблона</option></select>
+    </div>
+    <button id="saveBlockBtn">Добавить</button>
+    <button id="cancelBlockBtn" style="background:#888; margin-left:8px;">Отмена</button>
+    <div id="blockError" style="color:red; margin-top:5px;"></div>
+  </div>
+  <button id="addBlockBtn" style="display:none;">+ Новый блок</button>
+</div>
+
+<script>
+// Получаем ID проекта из URL (например, /project/1)
+const pathParts = location.pathname.split('/');
+const projectId = pathParts[pathParts.length - 1];
+let templates = [];
+
+// Загружаем шаблоны для выпадающего списка
+async function loadTemplatesForSelect() {
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch('/api/block-templates', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (res.ok) templates = await res.json();
+  } catch(e) {}
+}
+
+function populateTemplateSelect() {
+  const sel = document.getElementById('templateSelect');
+  sel.innerHTML = '<option value="">Без шаблона</option>';
+  templates.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = t.name;
+    sel.appendChild(opt);
+  });
+}
+
+async function showProject() {
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch('/api/projects/' + projectId, { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Проект не найден');
+    const project = await res.json();
+    document.getElementById('projectName').textContent = project.name;
+    document.getElementById('projectVoltage').textContent = project.voltage + ' В';
+    document.getElementById('projectCreator').textContent = project.created_by || 'неизвестно';
+
+    // Загружаем блоки
+    const blocksRes = await fetch('/api/projects/' + projectId + '/blocks', { headers: { 'Authorization': 'Bearer ' + token } });
+    let blocksHtml = '';
+    if (blocksRes.ok) {
+      const blocks = await blocksRes.json();
+      if (blocks.length > 0) {
+        blocksHtml = '<table><tr><th>Название</th><th>Параметры</th></tr>' +
+          blocks.map(b => `<tr><td>${b.block_name}</td><td>${b.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ') || '—'}</td></tr>`).join('') +
+          '</table>';
+      }
+    } else blocksHtml = '<p style="color:red;">Ошибка загрузки блоков</p>';
+
+    document.getElementById('projectBlocks').innerHTML = blocksHtml;
+    // Показываем кнопку добавления блока
+    document.getElementById('addBlockBtn').style.display = 'inline-block';
+    document.getElementById('blockFormContainer').style.display = 'none';
+  } catch(e) {
+    document.getElementById('projectContent').innerHTML = '<p>Ошибка загрузки проекта</p>';
+  }
+}
+
+document.getElementById('addBlockBtn').addEventListener('click', () => {
+  document.getElementById('blockFormContainer').style.display = 'block';
+  document.getElementById('addBlockBtn').style.display = 'none';
+  populateTemplateSelect();
+});
+
+document.getElementById('cancelBlockBtn').addEventListener('click', () => {
+  document.getElementById('blockFormContainer').style.display = 'none';
+  document.getElementById('addBlockBtn').style.display = 'inline-block';
+});
+
+document.getElementById('saveBlockBtn').addEventListener('click', async () => {
+  const blockName = document.getElementById('blockNameInput').value.trim();
+  if (!blockName) { document.getElementById('blockError').textContent = 'Введите название блока'; return; }
+  const templateId = document.getElementById('templateSelect').value || null;
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch('/api/projects/' + projectId + '/blocks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ block_name: blockName, template_id: templateId, order_index: 0 })
+    });
+    if (!res.ok) { const err = await res.json(); document.getElementById('blockError').textContent = err.error || 'Ошибка добавления'; return; }
+    document.getElementById('blockFormContainer').style.display = 'none';
+    document.getElementById('addBlockBtn').style.display = 'inline-block';
+    document.getElementById('blockNameInput').value = '';
+    document.getElementById('blockError').textContent = '';
+    showProject(); // обновляем список блоков
+  } catch(e) { document.getElementById('blockError').textContent = 'Ошибка соединения'; }
+});
+
+// Инициализация
+loadTemplatesForSelect().then(showProject);
+
+// Кнопка "Назад" не нужна, так как у пользователя есть меню и кнопка браузера "Назад"
+</script>

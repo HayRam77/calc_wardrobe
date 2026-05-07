@@ -1,0 +1,60 @@
+<h2>Шаблоны блоков</h2>
+<button id="addTemplateBtn">+ Добавить шаблон</button>
+<div id="templatesTable" style="margin-top:15px;"></div>
+
+<script>
+// Функция загрузки списка шаблонов (локальная для страницы)
+async function loadTemplatesList() {
+  const token = localStorage.getItem('token');
+  const container = document.getElementById('templatesTable');
+  try {
+    const res = await fetch('/api/block-templates', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Ошибка загрузки');
+    const templates = await res.json();
+    let html = '<table><tr><th>Название</th><th>Описание</th><th>Действия</th></tr>';
+    if (templates.length === 0) {
+      html = '<p>Нет шаблонов.</p>';
+    } else {
+      templates.forEach(t => {
+        html += `<tr>
+          <td>${t.name}</td>
+          <td>${t.description || ''}</td>
+          <td>
+            <button class="small edit-template-btn" data-id="${t.id}">Редактировать</button>
+            <button class="small danger delete-template-btn" data-id="${t.id}">Удалить</button>
+          </td>
+        </tr>`;
+      });
+    }
+    html += '</table>';
+    container.innerHTML = html;
+
+    // Обработчики
+    container.querySelectorAll('.edit-template-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const id = this.dataset.id;
+        openTemplateModal(id); // глобальная функция из index.html
+      });
+    });
+    container.querySelectorAll('.delete-template-btn').forEach(btn => {
+      btn.addEventListener('click', async function() {
+        const id = this.dataset.id;
+        if (!confirm('Удалить шаблон?')) return;
+        const token = localStorage.getItem('token');
+        try {
+          await fetch('/api/block-templates/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
+          loadTemplatesList();
+        } catch(e) { alert('Ошибка удаления'); }
+      });
+    });
+  } catch(e) {
+    container.innerHTML = '<p style="color:red;">Ошибка загрузки шаблонов</p>';
+  }
+}
+
+document.getElementById('addTemplateBtn').addEventListener('click', () => {
+  openTemplateModal(); // из index.html
+});
+
+loadTemplatesList();
+</script>
