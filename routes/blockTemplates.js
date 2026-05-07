@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const authMiddleware = require('../middleware/auth');
+const isAdmin = require('../middleware/isAdmin');
 
 router.use(authMiddleware);
+router.use(isAdmin); // только админы могут управлять шаблонами
 
 // Получить все шаблоны с параметрами
 router.get('/', async (req, res) => {
@@ -23,16 +25,31 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Получить один шаблон
+router.get('/:id', async (req, res) => {
+  try {
+    const tmpl = await pool.query('SELECT * FROM block_templates WHERE id = $1', [req.params.id]);
+    if (tmpl.rows.length === 0) return res.status(404).json({ error: 'Шаблон не найден' });
+    const params = await pool.query(
+      'SELECT id, param_name, param_value, display_order FROM block_parameters WHERE template_id = $1 ORDER BY display_order',
+      [req.params.id]
+    );
+    res.json({ ...tmpl.rows[0], parameters: params.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Создать шаблон
 router.post('/', async (req, res) => {
-  const { name, description, parameters } = req.body; // parameters: [{ param_name, param_value, display_order }]
+  const { name, description, parameters } = req.body;
   if (!name) return res.status(400).json({ error: 'Имя шаблона обязательно' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const tmpl = await client.query(
       'INSERT INTO block_templates (name, description, created_by) VALUES ($1, $2, $3) RETURNING *',
-      [name, description, req.user.userId]
+      [name, description || null, req.user.userId]
     );
     const templateId = tmpl.rows[0].id;
     if (parameters && parameters.length > 0) {
@@ -45,6 +62,39 @@ router.post('/', async (req, res) => {
     }
     await client.query('COMMIT');
     res.status(201).json(tmpl.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// Обновить шаблон и его параметры
+router.put('/:id', async (req, res) => {
+  const { name, description, parameters } = req.body;
+  if (!name) return res.status(400).json({ error: 'Имя шаблона обязательно' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Обновляем основные поля
+    await client.query(
+      'UPDATE block_templates SET name = $1, description = $2 WHERE id = $3',
+      [name, description || null, req.params.id]
+    );
+    // Удаляем старые параметры
+    await client.query('DELETE FROM block_parameters WHERE template_id = $1', [req.params.id]);
+    // Добавляем новые
+    if (parameters && parameters.length > 0) {
+      for (const p of parameters) {
+        await client.query(
+          'INSERT INTO block_parameters (template_id, param_name, param_value, display_order) VALUES ($1, $2, $3, $4)',
+          [req.params.id, p.param_name, p.param_value || '', p.display_order || 0]
+        );
+      }
+    }
+    await client.query('COMMIT');
+    res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
     res.status(500).json({ error: err.message });

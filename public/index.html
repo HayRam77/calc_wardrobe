@@ -37,6 +37,16 @@
   .form-group { margin-bottom: 15px; }
   .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
   .form-group input, .form-group select { width: 100%; padding: 8px; box-sizing: border-box; }
+  .param-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: center; }
+  .param-row input { flex: 1; }
+  .modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center;
+  }
+  .modal {
+    background: white; border-radius: 8px; padding: 20px; min-width: 400px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto;
+  }
 </style>
 </head>
 <body>
@@ -57,6 +67,7 @@
     <a href="#" id="createProjectLink">Создать проект</a>
     <a href="#" id="adminLink" class="hidden">Управление<br>пользователями</a>
     <a href="#" id="allProjectsLink" class="hidden">Все<br>проекты</a>
+    <a href="#" id="templatesLink" class="hidden">Шаблоны</a>
   </div>
   <div class="right">
     <span id="menuUserInfo"></span>
@@ -65,17 +76,14 @@
 </div>
 
 <div id="mainContent" class="content hidden">
-  <!-- Главная страница -->
   <div id="homePage"><p>Добро пожаловать в калькулятор шкафа.</p></div>
 
-  <!-- Мои проекты -->
   <div id="myProjectsPage" class="hidden">
     <h2>Мои проекты</h2>
     <div id="myProjectsTable"></div>
     <button id="backToHomeFromMyBtn">Назад</button>
   </div>
 
-  <!-- Создание проекта -->
   <div id="createProjectPage" class="hidden">
     <h2>Создать проект</h2>
     <div id="createProjectError" class="error"></div>
@@ -94,36 +102,29 @@
     <button id="backToHomeFromCreateBtn" style="background:#888; margin-left:10px;">Отмена</button>
   </div>
 
-  <!-- Админ-панель -->
   <div id="adminPage" class="hidden">
     <h2>Управление пользователями</h2>
     <div id="usersTable"></div>
     <button id="backToHomeBtn">Назад</button>
   </div>
 
-  <!-- Все проекты (админ) -->
   <div id="allProjectsPage" class="hidden">
     <h2>Все проекты</h2>
     <div id="allProjectsTable"></div>
     <button id="backToHomeFromProjectsBtn">Назад</button>
   </div>
 
-  <!-- Детальная карточка пользователя -->
   <div id="userDetailPage" class="hidden">
     <h2>Пользователь: <span id="detailUsername"></span></h2>
     <div id="detailInfo"></div>
     <button id="backToUsersBtn">← Назад к списку</button>
   </div>
 
-  <!-- Страница проекта -->
   <div id="projectPage" class="hidden">
     <h2>Проект: <span id="projectName"></span></h2>
     <p>Напряжение: <span id="projectVoltage"></span></p>
     <p>Создатель: <span id="projectCreator"></span></p>
-    <div id="projectBlocks">
-      <!-- динамически заполняется -->
-    </div>
-    <!-- Форма добавления блока (изначально скрыта) -->
+    <div id="projectBlocks"></div>
     <div id="blockFormContainer" class="hidden" style="margin-top:15px; padding:10px; border:1px solid #ccc; background:white;">
       <h4>Новый блок</h4>
       <div class="form-group">
@@ -140,6 +141,35 @@
     </div>
     <button id="backFromProjectBtn">← Назад</button>
   </div>
+
+  <div id="templatesPage" class="hidden">
+    <h2>Шаблоны блоков</h2>
+    <button id="addTemplateBtn">+ Добавить шаблон</button>
+    <div id="templatesTable" style="margin-top:15px;"></div>
+    <button id="backToHomeFromTemplatesBtn">Назад</button>
+  </div>
+</div>
+
+<div id="templateModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3 id="modalTitle">Новый шаблон</h3>
+    <div class="form-group">
+      <label>Название</label>
+      <input type="text" id="modalTemplateName">
+    </div>
+    <div class="form-group">
+      <label>Описание</label>
+      <input type="text" id="modalTemplateDesc">
+    </div>
+    <h4>Параметры</h4>
+    <div id="modalParams"></div>
+    <button id="addParamBtn" class="small" style="margin-top:8px;">+ Параметр</button>
+    <div id="modalError" class="error" style="margin-top:8px;"></div>
+    <div style="margin-top:15px; text-align:right;">
+      <button id="saveTemplateBtn">Сохранить</button>
+      <button id="cancelTemplateBtn" style="background:#888; margin-left:8px;">Отмена</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -148,8 +178,8 @@ const AUTH = API_BASE + '/auth';
 let mode = 'login';
 let previousPage = null;
 let templates = [];
+let editingTemplateId = null;
 
-// Авто-выход при бездействии
 let inactivityTimer;
 const INACTIVITY_LIMIT = 5 * 60 * 1000;
 
@@ -160,7 +190,6 @@ function resetInactivityTimer() {
     alert('Вы были выведены из системы из-за бездействия.');
   }, INACTIVITY_LIMIT);
 }
-
 function startInactivityTimer() { resetInactivityTimer(); }
 ['click', 'mousemove', 'keydown', 'scroll', 'touchstart'].forEach(evt => {
   document.addEventListener(evt, resetInactivityTimer);
@@ -179,6 +208,7 @@ const menuUserInfo = document.getElementById('menuUserInfo');
 const logoutMenuBtn = document.getElementById('logoutMenuBtn');
 const adminLink = document.getElementById('adminLink');
 const allProjectsLink = document.getElementById('allProjectsLink');
+const templatesLink = document.getElementById('templatesLink');
 const myProjectsLink = document.getElementById('myProjectsLink');
 const createProjectLink = document.getElementById('createProjectLink');
 const homePage = document.getElementById('homePage');
@@ -188,8 +218,14 @@ const adminPage = document.getElementById('adminPage');
 const allProjectsPage = document.getElementById('allProjectsPage');
 const userDetailPage = document.getElementById('userDetailPage');
 const projectPage = document.getElementById('projectPage');
+const templatesPage = document.getElementById('templatesPage');
+const templateModal = document.getElementById('templateModal');
+const modalTitle = document.getElementById('modalTitle');
+const modalTemplateName = document.getElementById('modalTemplateName');
+const modalTemplateDesc = document.getElementById('modalTemplateDesc');
+const modalParams = document.getElementById('modalParams');
+const modalError = document.getElementById('modalError');
 
-// Авторизация
 toggleAuth.addEventListener('click', () => {
   mode = mode === 'login' ? 'register' : 'login';
   authTitle.textContent = mode === 'login' ? 'Вход' : 'Регистрация';
@@ -239,6 +275,7 @@ async function loadTemplates() {
   try {
     const res = await fetch(API_BASE + '/block-templates', { headers: { 'Authorization': 'Bearer ' + token } });
     if (res.ok) templates = await res.json();
+    else templates = [];
   } catch(e) { templates = []; }
 }
 
@@ -250,9 +287,11 @@ function showApp(user){
   if(user.role==='admin'){
     adminLink.classList.remove('hidden');
     allProjectsLink.classList.remove('hidden');
+    templatesLink.classList.remove('hidden');
   } else {
     adminLink.classList.add('hidden');
     allProjectsLink.classList.add('hidden');
+    templatesLink.classList.add('hidden');
   }
   myProjectsLink.classList.remove('hidden');
   createProjectLink.classList.remove('hidden');
@@ -263,218 +302,160 @@ function showApp(user){
   allProjectsPage.classList.add('hidden');
   userDetailPage.classList.add('hidden');
   projectPage.classList.add('hidden');
+  templatesPage.classList.add('hidden');
   startInactivityTimer();
-  loadTemplates(); // загружаем каталог шаблонов блоков
+  loadTemplates();
 }
 
-// Навигация "Мои проекты"
+// Навигация (добавлены переходы для шаблонов и улучшена обработка previousPage)
 myProjectsLink.addEventListener('click', (e) => {
   e.preventDefault();
   previousPage = 'myProjects';
-  homePage.classList.add('hidden'); createProjectPage.classList.add('hidden'); adminPage.classList.add('hidden');
-  allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
+  hideAll();
   myProjectsPage.classList.remove('hidden');
   loadMyProjects();
 });
 
-// Создание проекта
 createProjectLink.addEventListener('click', (e) => {
   e.preventDefault();
-  homePage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); adminPage.classList.add('hidden');
-  allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
+  hideAll();
   createProjectPage.classList.remove('hidden');
 });
 
+adminLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  previousPage = 'admin';
+  hideAll();
+  adminPage.classList.remove('hidden');
+  loadUsers();
+});
+
+allProjectsLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  previousPage = 'allProjects';
+  hideAll();
+  allProjectsPage.classList.remove('hidden');
+  loadAllProjects();
+});
+
+templatesLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  previousPage = 'templates';
+  hideAll();
+  templatesPage.classList.remove('hidden');
+  loadTemplatesList();
+});
+
+function hideAll() {
+  homePage.classList.add('hidden');
+  myProjectsPage.classList.add('hidden');
+  createProjectPage.classList.add('hidden');
+  adminPage.classList.add('hidden');
+  allProjectsPage.classList.add('hidden');
+  userDetailPage.classList.add('hidden');
+  projectPage.classList.add('hidden');
+  templatesPage.classList.add('hidden');
+}
+
+// ========== ПРОЕКТЫ (без изменений) ==========
 document.getElementById('saveProjectBtn').addEventListener('click', async () => {
   const name = document.getElementById('newProjectName').value.trim();
   if (!name) { document.getElementById('createProjectError').textContent = 'Введите название'; return; }
   const voltage = document.getElementById('newProjectVoltage').value;
   const token = localStorage.getItem('token');
   try {
-    const res = await fetch(API_BASE + '/projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ name, voltage })
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      document.getElementById('createProjectError').textContent = err.error || 'Ошибка';
-      return;
-    }
-    document.getElementById('newProjectName').value = '';
+    const res = await fetch(API_BASE + '/projects', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({name, voltage}) });
+    if(!res.ok){ const err=await res.json(); document.getElementById('createProjectError').textContent=err.error||'Ошибка'; return; }
+    document.getElementById('newProjectName').value='';
     createProjectPage.classList.add('hidden');
     myProjectsPage.classList.remove('hidden');
     loadMyProjects();
-  } catch (e) { document.getElementById('createProjectError').textContent = 'Ошибка соединения'; }
+  } catch(e){ document.getElementById('createProjectError').textContent='Ошибка соединения'; }
 });
 
-document.getElementById('backToHomeFromMyBtn').addEventListener('click', () => {
-  myProjectsPage.classList.add('hidden');
-  homePage.classList.remove('hidden');
-});
-document.getElementById('backToHomeFromCreateBtn').addEventListener('click', () => {
-  createProjectPage.classList.add('hidden');
-  homePage.classList.remove('hidden');
-});
+document.getElementById('backToHomeFromMyBtn').addEventListener('click', ()=>{ myProjectsPage.classList.add('hidden'); homePage.classList.remove('hidden'); });
+document.getElementById('backToHomeFromCreateBtn').addEventListener('click', ()=>{ createProjectPage.classList.add('hidden'); homePage.classList.remove('hidden'); });
 
-async function loadMyProjects() {
+async function loadMyProjects(){
   const token = localStorage.getItem('token');
   try {
-    const res = await fetch(API_BASE + '/projects', { headers: { 'Authorization': 'Bearer ' + token } });
-    if (!res.ok) throw new Error('Ошибка загрузки');
+    const res = await fetch(API_BASE+'/projects', {headers:{'Authorization':'Bearer '+token}});
+    if(!res.ok) throw new Error('Ошибка загрузки');
     const projects = await res.json();
     let html = '<table><tr><th>Название</th><th>Напряжение</th><th>Дата создания</th><th>Действия</th></tr>';
-    if (projects.length === 0) {
-      html = '<p>У вас пока нет проектов. <a href="#" id="createFromMyLink">Создать новый</a></p>';
-    } else {
-      projects.forEach(p => {
-        html += `<tr>
-          <td><span class="clickable project-link" data-id="${p.id}">${p.name}</span></td>
-          <td>${p.voltage} В</td>
-          <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>
-          <td><button class="small danger delete-my-project-btn" data-id="${p.id}">Удалить</button></td>
-        </tr>`;
-      });
-      html += '</table>';
-    }
+    if(projects.length===0) html='<p>У вас пока нет проектов. <a href="#" id="createFromMyLink">Создать новый</a></p>';
+    else projects.forEach(p=>{ html+=`<tr><td><span class="clickable project-link" data-id="${p.id}">${p.name}</span></td><td>${p.voltage} В</td><td>${new Date(p.created_at).toLocaleString('ru-RU')}</td><td><button class="small danger delete-my-project-btn" data-id="${p.id}">Удалить</button></td></tr>`; });
+    html+='</table>';
     document.getElementById('myProjectsTable').innerHTML = html;
-    const createLink = document.getElementById('createFromMyLink');
-    if (createLink) {
-      createLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        myProjectsPage.classList.add('hidden');
-        createProjectPage.classList.remove('hidden');
-      });
-    }
-  } catch (e) {
-    document.getElementById('myProjectsTable').innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
-  }
+    const cl = document.getElementById('createFromMyLink');
+    if(cl) cl.addEventListener('click', (e)=>{ e.preventDefault(); myProjectsPage.classList.add('hidden'); createProjectPage.classList.remove('hidden'); });
+  } catch(e){ document.getElementById('myProjectsTable').innerHTML='<p style="color:red;">Ошибка загрузки</p>'; }
 }
 
-document.getElementById('myProjectsTable').addEventListener('click', async (e) => {
-  if (e.target.classList.contains('delete-my-project-btn')) {
-    const projectId = e.target.dataset.id;
-    if (!projectId) return;
-    if (!confirm('Удалить проект?')) return;
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(API_BASE + '/projects/' + projectId, {
-        method: 'DELETE',
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
-      if (!res.ok) { alert('Ошибка удаления'); return; }
+document.getElementById('myProjectsTable').addEventListener('click', async (e)=>{
+  if(e.target.classList.contains('delete-my-project-btn')){
+    const projectId=e.target.dataset.id; if(!projectId) return;
+    if(!confirm('Удалить проект?')) return;
+    const token=localStorage.getItem('token');
+    try{
+      await fetch(API_BASE+'/projects/'+projectId, {method:'DELETE', headers:{'Authorization':'Bearer '+token}});
       loadMyProjects();
-    } catch (e) { alert('Ошибка соединения'); }
+    } catch(e){ alert('Ошибка удаления'); }
   }
 });
 
-// Админ-панель
-adminLink.addEventListener('click', (e)=>{
-  e.preventDefault();
-  previousPage = 'admin';
-  homePage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
-  allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
-  adminPage.classList.remove('hidden');
-  loadUsers();
-});
-
-// Все проекты (админ)
-allProjectsLink.addEventListener('click', (e)=>{
-  e.preventDefault();
-  previousPage = 'allProjects';
-  homePage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
-  adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
-  allProjectsPage.classList.remove('hidden');
-  loadAllProjects();
-});
-
-document.getElementById('backToHomeBtn').addEventListener('click', ()=>{
-  adminPage.classList.add('hidden');
-  homePage.classList.remove('hidden');
-});
-document.getElementById('backToHomeFromProjectsBtn').addEventListener('click', ()=>{
-  allProjectsPage.classList.add('hidden');
-  homePage.classList.remove('hidden');
-});
-
-async function loadUsers(){
-  const token = localStorage.getItem('token');
-  try {
-    const res = await fetch(API_BASE+'/admin/users',{headers:{'Authorization':'Bearer '+token}});
-    if(!res.ok) throw new Error('Ошибка загрузки');
-    const users = await res.json();
-    let html = '<table><tr><th>ID</th><th>Имя</th><th>Роль</th><th>Статус</th><th>Создан</th><th>Действия</th></tr>';
-    users.forEach(u=>{
-      html += `<tr>
-        <td>${u.id}</td>
-        <td><a href="#" class="user-detail-link" data-id="${u.id}">${u.username}</a></td>
-        <td>${u.role}</td>
-        <td>${u.is_blocked?'Заблокирован':'Активен'}</td>
-        <td>${new Date(u.created_at).toLocaleString('ru-RU')}</td>
-        <td>
-          <button class="small block-btn" data-id="${u.id}">${u.is_blocked?'Разблок.':'Блокир.'}</button>
-          <button class="small reset-btn" data-id="${u.id}">Сброс пароля</button>
-          <button class="small danger delete-btn" data-id="${u.id}">Удалить</button>
-        </td>
-      </tr>`;
-    });
-    html += '</table>';
-    document.getElementById('usersTable').innerHTML = html;
-  } catch(e){ document.getElementById('usersTable').innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; }
-}
-
+// ========== АДМИН-ПРОЕКТЫ ==========
 async function loadAllProjects(){
   const token = localStorage.getItem('token');
   try {
-    const res = await fetch(API_BASE+'/projects',{headers:{'Authorization':'Bearer '+token}});
+    const res = await fetch(API_BASE+'/projects', {headers:{'Authorization':'Bearer '+token}});
     if(!res.ok) throw new Error('Ошибка загрузки');
     const projects = await res.json();
     let html = '<table><tr><th>Название</th><th>Создатель</th><th>Напряжение</th><th>Дата создания</th><th>Действия</th></tr>';
-    projects.forEach(p=>{
-      html += `<tr>
-        <td><span class="clickable project-link" data-id="${p.id}">${p.name}</span></td>
-        <td>${p.created_by || 'неизвестно'}</td>
-        <td>${p.voltage} В</td>
-        <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>
-        <td><button class="small danger delete-project-btn" data-id="${p.id}">Удалить</button></td>
-      </tr>`;
-    });
-    html += '</table>';
+    projects.forEach(p=>{ html+=`<tr><td><span class="clickable project-link" data-id="${p.id}">${p.name}</span></td><td>${p.created_by||'неизвестно'}</td><td>${p.voltage} В</td><td>${new Date(p.created_at).toLocaleString('ru-RU')}</td><td><button class="small danger delete-project-btn" data-id="${p.id}">Удалить</button></td></tr>`; });
+    html+='</table>';
     document.getElementById('allProjectsTable').innerHTML = html;
-  } catch(e){ document.getElementById('allProjectsTable').innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; }
+  } catch(e){ document.getElementById('allProjectsTable').innerHTML='<p style="color:red;">Ошибка загрузки</p>'; }
 }
 
 document.getElementById('allProjectsTable').addEventListener('click', async (e)=>{
   if(e.target.classList.contains('delete-project-btn')){
-    const projectId = e.target.dataset.id;
-    if(!projectId) return;
+    const projectId=e.target.dataset.id; if(!projectId) return;
     if(!confirm('Удалить проект?')) return;
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(API_BASE+'/projects/'+projectId, {
-        method: 'DELETE',
-        headers: {'Authorization':'Bearer '+token}
-      });
-      if(!res.ok) { alert('Ошибка удаления'); return; }
+    const token=localStorage.getItem('token');
+    try{
+      await fetch(API_BASE+'/projects/'+projectId, {method:'DELETE', headers:{'Authorization':'Bearer '+token}});
       loadAllProjects();
-    } catch(e){ alert('Ошибка соединения'); }
+    } catch(e){ alert('Ошибка удаления'); }
   }
 });
 
-document.getElementById('usersTable').addEventListener('click', async (e)=>{
-  const id = e.target.dataset.id;
-  if(!id) return;
+// ========== ПОЛЬЗОВАТЕЛИ ==========
+async function loadUsers(){
   const token = localStorage.getItem('token');
+  try {
+    const res = await fetch(API_BASE+'/admin/users', {headers:{'Authorization':'Bearer '+token}});
+    if(!res.ok) throw new Error('Ошибка загрузки');
+    const users = await res.json();
+    let html = '<table><tr><th>ID</th><th>Имя</th><th>Роль</th><th>Статус</th><th>Создан</th><th>Действия</th></tr>';
+    users.forEach(u=>{
+      html+=`<tr><td>${u.id}</td><td><a href="#" class="user-detail-link" data-id="${u.id}">${u.username}</a></td><td>${u.role}</td><td>${u.is_blocked?'Заблокирован':'Активен'}</td><td>${new Date(u.created_at).toLocaleString('ru-RU')}</td><td><button class="small block-btn" data-id="${u.id}">${u.is_blocked?'Разблок.':'Блокир.'}</button><button class="small reset-btn" data-id="${u.id}">Сброс пароля</button><button class="small danger delete-btn" data-id="${u.id}">Удалить</button></td></tr>`;
+    });
+    html+='</table>';
+    document.getElementById('usersTable').innerHTML = html;
+  } catch(e){ document.getElementById('usersTable').innerHTML='<p style="color:red;">Ошибка загрузки</p>'; }
+}
+
+document.getElementById('usersTable').addEventListener('click', async (e)=>{
+  const id=e.target.dataset.id; if(!id) return;
+  const token=localStorage.getItem('token');
   if(e.target.classList.contains('block-btn')){
     await fetch(API_BASE+'/admin/users/'+id+'/block',{method:'POST',headers:{'Authorization':'Bearer '+token}});
     loadUsers();
   } else if(e.target.classList.contains('reset-btn')){
     const newPass = prompt('Введите новый пароль (не менее 4 символов):');
     if(!newPass) return;
-    await fetch(API_BASE+'/admin/users/'+id+'/reset-password',{
-      method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
-      body:JSON.stringify({newPassword:newPass})
-    });
+    await fetch(API_BASE+'/admin/users/'+id+'/reset-password',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({newPassword:newPass})});
     alert('Пароль изменён');
   } else if(e.target.classList.contains('delete-btn')){
     if(!confirm('Удалить пользователя?')) return;
@@ -486,49 +467,41 @@ document.getElementById('usersTable').addEventListener('click', async (e)=>{
   }
 });
 
-document.addEventListener('click', async (e)=>{
-  if(e.target.classList.contains('project-link')){
-    const projectId = e.target.dataset.id;
-    previousPage = (document.getElementById('allProjectsPage').classList.contains('hidden') ? 'myProjects' : 'allProjects');
-    showProject(projectId);
-  }
-});
-
 async function showUserDetail(id){
-  const token = localStorage.getItem('token');
+  const token=localStorage.getItem('token');
   try {
-    const res = await fetch(API_BASE+'/admin/users/'+id,{headers:{'Authorization':'Bearer '+token}});
+    const res = await fetch(API_BASE+'/admin/users/'+id, {headers:{'Authorization':'Bearer '+token}});
     if(!res.ok) throw new Error('Ошибка');
     const user = await res.json();
     document.getElementById('detailUsername').textContent = user.username;
-    let html = `<p>Роль: ${user.role}</p><p>Статус: ${user.is_blocked?'Заблокирован':'Активен'}</p>
-                <p>Создан: ${new Date(user.created_at).toLocaleString('ru-RU')}</p>`;
-    html += '<h3>Проекты</h3>';
-    if(user.projects && user.projects.length>0){
-      html += '<ul>';
-      user.projects.forEach(p=>{
-        html += `<li><span class="clickable project-link" data-id="${p.id}">${p.name}</span> (${p.voltage}В, создан ${new Date(p.created_at).toLocaleString('ru-RU')})</li>`;
-      });
-      html += '</ul>';
-    } else html += '<p>Нет проектов</p>';
-    html += '<h3>Последние сессии</h3>';
-    if(user.sessions && user.sessions.length>0){
-      html += '<table><tr><th>Вход</th><th>Выход</th></tr>';
-      user.sessions.forEach(s=>{
-        html += `<tr><td>${new Date(s.login_time).toLocaleString('ru-RU')}</td><td>${s.logout_time?new Date(s.logout_time).toLocaleString('ru-RU'):'—'}</td></tr>`;
-      });
-      html += '</table>';
-    } else html += '<p>Нет данных</p>';
+    let html = `<p>Роль: ${user.role}</p><p>Статус: ${user.is_blocked?'Заблокирован':'Активен'}</p><p>Создан: ${new Date(user.created_at).toLocaleString('ru-RU')}</p>`;
+    html+='<h3>Проекты</h3>';
+    if(user.projects&&user.projects.length>0){
+      html+='<ul>'+user.projects.map(p=>`<li><span class="clickable project-link" data-id="${p.id}">${p.name}</span> (${p.voltage}В, создан ${new Date(p.created_at).toLocaleString('ru-RU')})</li>`).join('')+'</ul>';
+    } else html+='<p>Нет проектов</p>';
+    html+='<h3>Последние сессии</h3>';
+    if(user.sessions&&user.sessions.length>0){
+      html+='<table><tr><th>Вход</th><th>Выход</th></tr>'+user.sessions.map(s=>`<tr><td>${new Date(s.login_time).toLocaleString('ru-RU')}</td><td>${s.logout_time?new Date(s.logout_time).toLocaleString('ru-RU'):'—'}</td></tr>`).join('')+'</table>';
+    } else html+='<p>Нет данных</p>';
     document.getElementById('detailInfo').innerHTML = html;
-    homePage.classList.add('hidden'); adminPage.classList.add('hidden'); allProjectsPage.classList.add('hidden'); projectPage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
+    hideAll();
     userDetailPage.classList.remove('hidden');
-    previousPage = 'userDetail';
+    previousPage='userDetail';
   } catch(e){ alert('Ошибка загрузки данных пользователя'); }
 }
 
 document.getElementById('backToUsersBtn').addEventListener('click', ()=>{
   userDetailPage.classList.add('hidden');
   adminPage.classList.remove('hidden');
+});
+
+// ========== ПРОЕКТЫ (страница проекта) ==========
+document.addEventListener('click', async (e)=>{
+  if(e.target.classList.contains('project-link')){
+    const projectId = e.target.dataset.id;
+    previousPage = (document.getElementById('allProjectsPage').classList.contains('hidden')) ? 'myProjects' : 'allProjects';
+    showProject(projectId);
+  }
 });
 
 async function showProject(projectId){
@@ -538,95 +511,151 @@ async function showProject(projectId){
     if(!res.ok) throw new Error('Проект не найден');
     const project = await res.json();
     document.getElementById('projectName').textContent = project.name;
-    document.getElementById('projectVoltage').textContent = project.voltage + ' В';
-    document.getElementById('projectCreator').textContent = project.created_by || 'неизвестно';
-
-    // Загружаем блоки проекта
+    document.getElementById('projectVoltage').textContent = project.voltage+' В';
+    document.getElementById('projectCreator').textContent = project.created_by||'неизвестно';
     const blocksRes = await fetch(API_BASE+'/projects/'+projectId+'/blocks',{headers:{'Authorization':'Bearer '+token}});
-    let blocksHtml = '';
+    let blocksHtml='';
     if(blocksRes.ok){
-      const blocks = await blocksRes.json();
+      const blocks=await blocksRes.json();
       if(blocks.length>0){
-        blocksHtml = '<table><tr><th>Название</th><th>Параметры</th></tr>';
-        blocks.forEach(b=>{
-          const paramsStr = b.parameters.map(p=>`${p.param_name}=${p.param_value}`).join('; ') || '—';
-          blocksHtml += `<tr><td>${b.block_name}</td><td>${paramsStr}</td></tr>`;
-        });
-        blocksHtml += '</table>';
+        blocksHtml='<table><tr><th>Название</th><th>Параметры</th></tr>'+blocks.map(b=>`<tr><td>${b.block_name}</td><td>${b.parameters.map(p=>`${p.param_name}=${p.param_value}`).join('; ')||'—'}</td></tr>`).join('')+'</table>';
       }
-    } else blocksHtml = '<p style="color:red;">Ошибка загрузки блоков</p>';
-    
-    // Всегда показываем кнопку "Новый блок"
-    document.getElementById('projectBlocks').innerHTML = blocksHtml + 
-      '<button id="addBlockBtn">+ Новый блок</button>';
-    
-    // Вешаем обработчик показа формы
-    document.getElementById('addBlockBtn').addEventListener('click', () => {
+    } else blocksHtml='<p style="color:red;">Ошибка загрузки блоков</p>';
+    document.getElementById('projectBlocks').innerHTML = blocksHtml+'<button id="addBlockBtn">+ Новый блок</button>';
+    document.getElementById('addBlockBtn').addEventListener('click', ()=>{
       document.getElementById('blockFormContainer').classList.remove('hidden');
       document.getElementById('addBlockBtn').classList.add('hidden');
     });
-
-    // Заполняем список шаблонов в форме
     const templateSelect = document.getElementById('templateSelect');
-    templateSelect.innerHTML = '<option value="">Без шаблона</option>';
-    templates.forEach(t => {
-      const opt = document.createElement('option');
-      opt.value = t.id;
-      opt.textContent = t.name;
-      templateSelect.appendChild(opt);
-    });
-
-    // Сохраняем projectId в data-атрибуте формы
-    document.getElementById('blockFormContainer').dataset.projectId = projectId;
-
-    // Показываем страницу проекта
-    homePage.classList.add('hidden'); adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden');
-    allProjectsPage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
+    templateSelect.innerHTML='<option value="">Без шаблона</option>';
+    templates.forEach(t=>{ const opt=document.createElement('option'); opt.value=t.id; opt.textContent=t.name; templateSelect.appendChild(opt); });
+    document.getElementById('blockFormContainer').dataset.projectId=projectId;
+    hideAll();
     projectPage.classList.remove('hidden');
   } catch(e){ alert('Ошибка загрузки проекта'); }
 }
 
-// Обработчики добавления блока
-document.getElementById('saveBlockBtn').addEventListener('click', async () => {
-  const projectId = document.getElementById('blockFormContainer').dataset.projectId;
-  const blockName = document.getElementById('blockNameInput').value.trim();
-  if (!blockName) { document.getElementById('blockError').textContent = 'Введите название блока'; return; }
-  const templateId = document.getElementById('templateSelect').value || null;
-  const token = localStorage.getItem('token');
+document.getElementById('saveBlockBtn').addEventListener('click', async ()=>{
+  const projectId=document.getElementById('blockFormContainer').dataset.projectId;
+  const blockName=document.getElementById('blockNameInput').value.trim();
+  if(!blockName){ document.getElementById('blockError').textContent='Введите название блока'; return; }
+  const templateId=document.getElementById('templateSelect').value||null;
+  const token=localStorage.getItem('token');
   try {
-    const res = await fetch(API_BASE + '/projects/' + projectId + '/blocks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ block_name: blockName, template_id: templateId, order_index: 0 })
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      document.getElementById('blockError').textContent = err.error || 'Ошибка добавления';
-      return;
-    }
-    // Скрываем форму, очищаем поля, обновляем отображение блоков
+    const res = await fetch(API_BASE+'/projects/'+projectId+'/blocks',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({block_name:blockName, template_id:templateId, order_index:0})});
+    if(!res.ok){ const err=await res.json(); document.getElementById('blockError').textContent=err.error||'Ошибка добавления'; return; }
     document.getElementById('blockFormContainer').classList.add('hidden');
     document.getElementById('addBlockBtn').classList.remove('hidden');
-    document.getElementById('blockNameInput').value = '';
-    document.getElementById('blockError').textContent = '';
-    // Перерисовываем проект
+    document.getElementById('blockNameInput').value='';
+    document.getElementById('blockError').textContent='';
     showProject(projectId);
-  } catch (e) { document.getElementById('blockError').textContent = 'Ошибка соединения'; }
+  } catch(e){ document.getElementById('blockError').textContent='Ошибка соединения'; }
 });
-
-document.getElementById('cancelBlockBtn').addEventListener('click', () => {
+document.getElementById('cancelBlockBtn').addEventListener('click', ()=>{
   document.getElementById('blockFormContainer').classList.add('hidden');
   document.getElementById('addBlockBtn').classList.remove('hidden');
-  document.getElementById('blockError').textContent = '';
-  document.getElementById('blockNameInput').value = '';
+  document.getElementById('blockError').textContent='';
+  document.getElementById('blockNameInput').value='';
 });
-
 document.getElementById('backFromProjectBtn').addEventListener('click', ()=>{
   projectPage.classList.add('hidden');
-  if(previousPage === 'userDetail') userDetailPage.classList.remove('hidden');
-  else if(previousPage === 'allProjects') allProjectsPage.classList.remove('hidden');
-  else if(previousPage === 'myProjects') myProjectsPage.classList.remove('hidden');
+  if(previousPage==='userDetail') userDetailPage.classList.remove('hidden');
+  else if(previousPage==='allProjects') allProjectsPage.classList.remove('hidden');
+  else if(previousPage==='myProjects') myProjectsPage.classList.remove('hidden');
   else homePage.classList.remove('hidden');
+});
+
+// ========== ШАБЛОНЫ ==========
+async function loadTemplatesList() {
+  const token=localStorage.getItem('token');
+  try {
+    const res=await fetch(API_BASE+'/block-templates', {headers:{'Authorization':'Bearer '+token}});
+    if(!res.ok) throw new Error('Ошибка загрузки');
+    templates=await res.json();
+    let html='<table><tr><th>Название</th><th>Описание</th><th>Действия</th></tr>';
+    if(templates.length===0) html='<p>Нет шаблонов.</p>';
+    else templates.forEach(t=>{ html+=`<tr><td>${t.name}</td><td>${t.description||''}</td><td><button class="small edit-template-btn" data-id="${t.id}">Редактировать</button><button class="small danger delete-template-btn" data-id="${t.id}">Удалить</button></td></tr>`; });
+    html+='</table>';
+    document.getElementById('templatesTable').innerHTML=html;
+  } catch(e){ document.getElementById('templatesTable').innerHTML='<p style="color:red;">Ошибка загрузки</p>'; }
+}
+
+document.getElementById('templatesTable').addEventListener('click', async (e)=>{
+  const id=e.target.dataset.id;
+  if(e.target.classList.contains('edit-template-btn')){
+    openTemplateModal(id);
+  } else if(e.target.classList.contains('delete-template-btn')){
+    if(!confirm('Удалить шаблон?')) return;
+    const token=localStorage.getItem('token');
+    try {
+      await fetch(API_BASE+'/block-templates/'+id, {method:'DELETE', headers:{'Authorization':'Bearer '+token}});
+      loadTemplatesList();
+    } catch(e){ alert('Ошибка удаления'); }
+  }
+});
+
+function openTemplateModal(id=null) {
+  editingTemplateId = id;
+  modalError.textContent = '';
+  document.getElementById('addParamBtn').style.display = 'block';
+  if (id) {
+    modalTitle.textContent = 'Редактировать шаблон';
+    const t = templates.find(t=>t.id==id);
+    if(!t) return;
+    modalTemplateName.value = t.name;
+    modalTemplateDesc.value = t.description||'';
+    modalParams.innerHTML = t.parameters.map(p=>`<div class="param-row"><input type="text" class="param-name" value="${p.param_name}" placeholder="Название"><input type="text" class="param-value" value="${p.param_value}" placeholder="Значение"><button class="small danger remove-param-btn">×</button></div>`).join('');
+  } else {
+    modalTitle.textContent = 'Новый шаблон';
+    modalTemplateName.value = '';
+    modalTemplateDesc.value = '';
+    modalParams.innerHTML = '';
+  }
+  templateModal.classList.remove('hidden');
+}
+
+document.getElementById('addParamBtn').addEventListener('click', ()=>{
+  const row = document.createElement('div');
+  row.className = 'param-row';
+  row.innerHTML = '<input type="text" class="param-name" placeholder="Название"><input type="text" class="param-value" placeholder="Значение"><button class="small danger remove-param-btn">×</button>';
+  modalParams.appendChild(row);
+  row.querySelector('.remove-param-btn').addEventListener('click', ()=>{ row.remove(); });
+});
+
+document.getElementById('modalParams').addEventListener('click', (e)=>{
+  if(e.target.classList.contains('remove-param-btn')){
+    e.target.parentElement.remove();
+  }
+});
+
+document.getElementById('saveTemplateBtn').addEventListener('click', async ()=>{
+  const name = modalTemplateName.value.trim();
+  if(!name) { modalError.textContent = 'Введите название'; return; }
+  const description = modalTemplateDesc.value.trim();
+  const params = [];
+  document.querySelectorAll('.param-row').forEach(row=>{
+    const pn = row.querySelector('.param-name').value.trim();
+    const pv = row.querySelector('.param-value').value;
+    if(pn) params.push({ param_name: pn, param_value: pv, display_order: 0 });
+  });
+  const token = localStorage.getItem('token');
+  const url = editingTemplateId ? API_BASE+'/block-templates/'+editingTemplateId : API_BASE+'/block-templates';
+  const method = editingTemplateId ? 'PUT' : 'POST';
+  try {
+    const res = await fetch(url, {method, headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({name, description, parameters:params})});
+    if(!res.ok){ const err=await res.json(); modalError.textContent=err.error||'Ошибка'; return; }
+    templateModal.classList.add('hidden');
+    loadTemplatesList();
+  } catch(e){ modalError.textContent='Ошибка соединения'; }
+});
+
+document.getElementById('cancelTemplateBtn').addEventListener('click', ()=>{
+  templateModal.classList.add('hidden');
+});
+
+document.getElementById('backToHomeFromTemplatesBtn').addEventListener('click', ()=>{
+  templatesPage.classList.add('hidden');
+  homePage.classList.remove('hidden');
 });
 
 window.addEventListener('load', ()=>{
