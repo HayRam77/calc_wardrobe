@@ -34,6 +34,9 @@
   .card { background: white; border: 1px solid #ccc; padding: 15px; margin: 10px 0; }
   .clickable { color: #1a5f7a; cursor: pointer; text-decoration: underline; }
   .danger { background: #c0392b; color: white; border: none; }
+  .form-group { margin-bottom: 15px; }
+  .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
+  .form-group input, .form-group select { width: 100%; padding: 8px; box-sizing: border-box; }
 </style>
 </head>
 <body>
@@ -50,6 +53,8 @@
 <div id="topMenu" class="top-menu hidden">
   <div class="left">
     <h1>Калькулятор шкафа</h1>
+    <a href="#" id="myProjectsLink">Мои проекты</a>
+    <a href="#" id="createProjectLink">Создать проект</a>
     <a href="#" id="adminLink" class="hidden">Управление<br>пользователями</a>
     <a href="#" id="allProjectsLink" class="hidden">Все<br>проекты</a>
   </div>
@@ -62,6 +67,32 @@
 <div id="mainContent" class="content hidden">
   <!-- Главная страница -->
   <div id="homePage"><p>Добро пожаловать в калькулятор шкафа.</p></div>
+
+  <!-- Мои проекты (для всех) -->
+  <div id="myProjectsPage" class="hidden">
+    <h2>Мои проекты</h2>
+    <div id="myProjectsTable"></div>
+    <button id="backToHomeFromMyBtn">Назад</button>
+  </div>
+
+  <!-- Страница создания проекта -->
+  <div id="createProjectPage" class="hidden">
+    <h2>Создать проект</h2>
+    <div id="createProjectError" class="error"></div>
+    <div class="form-group">
+      <label>Название проекта</label>
+      <input type="text" id="newProjectName">
+    </div>
+    <div class="form-group">
+      <label>Напряжение</label>
+      <select id="newProjectVoltage">
+        <option value="380">3 фазы, 380 В</option>
+        <option value="220">1 фаза, 220 В</option>
+      </select>
+    </div>
+    <button id="saveProjectBtn">Создать</button>
+    <button id="backToHomeFromCreateBtn" style="background:#888; margin-left:10px;">Отмена</button>
+  </div>
 
   <!-- Админ-панель -->
   <div id="adminPage" class="hidden">
@@ -134,7 +165,11 @@ const menuUserInfo = document.getElementById('menuUserInfo');
 const logoutMenuBtn = document.getElementById('logoutMenuBtn');
 const adminLink = document.getElementById('adminLink');
 const allProjectsLink = document.getElementById('allProjectsLink');
+const myProjectsLink = document.getElementById('myProjectsLink');
+const createProjectLink = document.getElementById('createProjectLink');
 const homePage = document.getElementById('homePage');
+const myProjectsPage = document.getElementById('myProjectsPage');
+const createProjectPage = document.getElementById('createProjectPage');
 const adminPage = document.getElementById('adminPage');
 const allProjectsPage = document.getElementById('allProjectsPage');
 const userDetailPage = document.getElementById('userDetailPage');
@@ -190,6 +225,7 @@ function showApp(user){
   const loginTime = localStorage.getItem('loginTime');
   let t=''; if(loginTime){ const d=new Date(loginTime); t=d.toLocaleString('ru-RU'); }
   menuUserInfo.textContent = user.username + (t ? ' (вход: '+t+')' : '');
+  // Админские ссылки видны только админу
   if(user.role==='admin'){
     adminLink.classList.remove('hidden');
     allProjectsLink.classList.remove('hidden');
@@ -197,14 +233,130 @@ function showApp(user){
     adminLink.classList.add('hidden');
     allProjectsLink.classList.add('hidden');
   }
-  homePage.classList.remove('hidden'); adminPage.classList.add('hidden'); allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
-  startInactivityTimer(); // запускаем таймер
+  // Мои проекты и создать проект видны всем
+  myProjectsLink.classList.remove('hidden');
+  createProjectLink.classList.remove('hidden');
+  // Открываем домашнюю страницу
+  homePage.classList.remove('hidden');
+  myProjectsPage.classList.add('hidden');
+  createProjectPage.classList.add('hidden');
+  adminPage.classList.add('hidden');
+  allProjectsPage.classList.add('hidden');
+  userDetailPage.classList.add('hidden');
+  projectPage.classList.add('hidden');
+  startInactivityTimer();
 }
+
+// Переходы
+myProjectsLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  homePage.classList.add('hidden'); createProjectPage.classList.add('hidden'); adminPage.classList.add('hidden');
+  allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
+  myProjectsPage.classList.remove('hidden');
+  loadMyProjects();
+});
+
+createProjectLink.addEventListener('click', (e) => {
+  e.preventDefault();
+  homePage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); adminPage.classList.add('hidden');
+  allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
+  createProjectPage.classList.remove('hidden');
+});
+
+// Обработчики создания проекта
+document.getElementById('saveProjectBtn').addEventListener('click', async () => {
+  const name = document.getElementById('newProjectName').value.trim();
+  if (!name) { document.getElementById('createProjectError').textContent = 'Введите название'; return; }
+  const voltage = document.getElementById('newProjectVoltage').value;
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch(API_BASE + '/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ name, voltage })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      document.getElementById('createProjectError').textContent = err.error || 'Ошибка';
+      return;
+    }
+    // Успешно – переходим в "Мои проекты"
+    document.getElementById('newProjectName').value = '';
+    createProjectPage.classList.add('hidden');
+    myProjectsPage.classList.remove('hidden');
+    loadMyProjects();
+  } catch (e) { document.getElementById('createProjectError').textContent = 'Ошибка соединения'; }
+});
+
+document.getElementById('backToHomeFromMyBtn').addEventListener('click', () => {
+  myProjectsPage.classList.add('hidden');
+  homePage.classList.remove('hidden');
+});
+
+document.getElementById('backToHomeFromCreateBtn').addEventListener('click', () => {
+  createProjectPage.classList.add('hidden');
+  homePage.classList.remove('hidden');
+});
+
+// Загрузка "Мои проекты"
+async function loadMyProjects() {
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch(API_BASE + '/projects', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Ошибка загрузки');
+    const projects = await res.json();
+    let html = '<table><tr><th>Название</th><th>Напряжение</th><th>Дата создания</th><th>Действия</th></tr>';
+    if (projects.length === 0) {
+      html = '<p>У вас пока нет проектов. <a href="#" id="createFromMyLink">Создать новый</a></p>';
+    } else {
+      projects.forEach(p => {
+        html += `<tr>
+          <td><span class="clickable project-link" data-id="${p.id}">${p.name}</span></td>
+          <td>${p.voltage} В</td>
+          <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>
+          <td><button class="small danger delete-my-project-btn" data-id="${p.id}">Удалить</button></td>
+        </tr>`;
+      });
+      html += '</table>';
+    }
+    document.getElementById('myProjectsTable').innerHTML = html;
+    // Если пусто, то ссылка "создать новый" должна работать
+    const createLink = document.getElementById('createFromMyLink');
+    if (createLink) {
+      createLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        myProjectsPage.classList.add('hidden');
+        createProjectPage.classList.remove('hidden');
+      });
+    }
+  } catch (e) {
+    document.getElementById('myProjectsTable').innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
+  }
+}
+
+// Удаление своего проекта
+document.getElementById('myProjectsTable').addEventListener('click', async (e) => {
+  if (e.target.classList.contains('delete-my-project-btn')) {
+    const projectId = e.target.dataset.id;
+    if (!projectId) return;
+    if (!confirm('Удалить проект?')) return;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(API_BASE + '/projects/' + projectId, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) { alert('Ошибка удаления'); return; }
+      loadMyProjects();
+    } catch (e) { alert('Ошибка соединения'); }
+  }
+});
 
 // Админ-панель
 adminLink.addEventListener('click', (e)=>{
   e.preventDefault();
-  homePage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden'); allProjectsPage.classList.add('hidden');
+  homePage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
+  allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
   adminPage.classList.remove('hidden');
   loadUsers();
 });
@@ -212,13 +364,14 @@ adminLink.addEventListener('click', (e)=>{
 // Все проекты (админ)
 allProjectsLink.addEventListener('click', (e)=>{
   e.preventDefault();
-  homePage.classList.add('hidden'); adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
+  homePage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
+  adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
   allProjectsPage.classList.remove('hidden');
   loadAllProjects();
 });
 
 document.getElementById('backToHomeBtn').addEventListener('click', ()=>{
-  adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden'); allProjectsPage.classList.add('hidden');
+  adminPage.classList.add('hidden');
   homePage.classList.remove('hidden');
 });
 
@@ -275,7 +428,7 @@ async function loadAllProjects(){
   } catch(e){ document.getElementById('allProjectsTable').innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; }
 }
 
-// Обработчик удаления проектов
+// Удаление проектов админом
 document.getElementById('allProjectsTable').addEventListener('click', async (e)=>{
   if(e.target.classList.contains('delete-project-btn')){
     const projectId = e.target.dataset.id;
@@ -319,7 +472,7 @@ document.getElementById('usersTable').addEventListener('click', async (e)=>{
   }
 });
 
-// Клик по проекту в любом месте
+// Клик по проекту
 document.addEventListener('click', async (e)=>{
   if(e.target.classList.contains('project-link')){
     const projectId = e.target.dataset.id;
@@ -353,7 +506,7 @@ async function showUserDetail(id){
       html += '</table>';
     } else html += '<p>Нет данных</p>';
     document.getElementById('detailInfo').innerHTML = html;
-    homePage.classList.add('hidden'); adminPage.classList.add('hidden'); allProjectsPage.classList.add('hidden'); projectPage.classList.add('hidden');
+    homePage.classList.add('hidden'); adminPage.classList.add('hidden'); allProjectsPage.classList.add('hidden'); projectPage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
     userDetailPage.classList.remove('hidden');
     previousPage = 'userDetail';
   } catch(e){ alert('Ошибка загрузки данных пользователя'); }
@@ -387,7 +540,7 @@ async function showProject(projectId){
       } else blocksHtml += '<p>Блоков нет</p>';
     } else blocksHtml += '<p>Ошибка загрузки блоков</p>';
     document.getElementById('projectBlocks').innerHTML = blocksHtml;
-    homePage.classList.add('hidden'); adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); allProjectsPage.classList.add('hidden');
+    homePage.classList.add('hidden'); adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); allProjectsPage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
     projectPage.classList.remove('hidden');
     previousPage = 'project';
   } catch(e){ alert('Ошибка загрузки проекта'); }
@@ -395,22 +548,29 @@ async function showProject(projectId){
 
 document.getElementById('backFromProjectBtn').addEventListener('click', ()=>{
   projectPage.classList.add('hidden');
+  // Возвращаемся в то место, откуда пришли
   if(previousPage === 'userDetail'){
     userDetailPage.classList.remove('hidden');
   } else if(previousPage === 'allProjects'){
     allProjectsPage.classList.remove('hidden');
+  } else if(previousPage === 'myProjects'){
+    myProjectsPage.classList.remove('hidden');
   } else {
     homePage.classList.remove('hidden');
   }
 });
 
-// Инициализация при загрузке
+// Обновим previousPage при переходе с разных страниц
+myProjectsLink.addEventListener('click', () => { previousPage = 'myProjects'; });
+allProjectsLink.addEventListener('click', () => { previousPage = 'allProjects'; });
+adminLink.addEventListener('click', () => { previousPage = 'admin'; });
+
 window.addEventListener('load', ()=>{
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user')||'null');
   if(token&&user) {
     showApp(user);
-    startInactivityTimer(); // на случай если уже вошли (после обновления)
+    startInactivityTimer();
   }
 });
 </script>
