@@ -68,14 +68,14 @@
   <!-- Главная страница -->
   <div id="homePage"><p>Добро пожаловать в калькулятор шкафа.</p></div>
 
-  <!-- Мои проекты (для всех) -->
+  <!-- Мои проекты -->
   <div id="myProjectsPage" class="hidden">
     <h2>Мои проекты</h2>
     <div id="myProjectsTable"></div>
     <button id="backToHomeFromMyBtn">Назад</button>
   </div>
 
-  <!-- Страница создания проекта -->
+  <!-- Создание проекта -->
   <div id="createProjectPage" class="hidden">
     <h2>Создать проект</h2>
     <div id="createProjectError" class="error"></div>
@@ -120,7 +120,24 @@
     <h2>Проект: <span id="projectName"></span></h2>
     <p>Напряжение: <span id="projectVoltage"></span></p>
     <p>Создатель: <span id="projectCreator"></span></p>
-    <div id="projectBlocks"></div>
+    <div id="projectBlocks">
+      <!-- динамически заполняется -->
+    </div>
+    <!-- Форма добавления блока (изначально скрыта) -->
+    <div id="blockFormContainer" class="hidden" style="margin-top:15px; padding:10px; border:1px solid #ccc; background:white;">
+      <h4>Новый блок</h4>
+      <div class="form-group">
+        <label>Название блока</label>
+        <input type="text" id="blockNameInput">
+      </div>
+      <div class="form-group">
+        <label>Шаблон</label>
+        <select id="templateSelect"><option value="">Без шаблона</option></select>
+      </div>
+      <button id="saveBlockBtn">Добавить</button>
+      <button id="cancelBlockBtn" style="background:#888; margin-left:8px;">Отмена</button>
+      <div id="blockError" class="error" style="margin-top:5px;"></div>
+    </div>
     <button id="backFromProjectBtn">← Назад</button>
   </div>
 </div>
@@ -130,10 +147,11 @@ const API_BASE = '/api';
 const AUTH = API_BASE + '/auth';
 let mode = 'login';
 let previousPage = null;
+let templates = [];
 
 // Авто-выход при бездействии
 let inactivityTimer;
-const INACTIVITY_LIMIT = 5 * 60 * 1000; // 5 минут
+const INACTIVITY_LIMIT = 5 * 60 * 1000;
 
 function resetInactivityTimer() {
   clearTimeout(inactivityTimer);
@@ -143,11 +161,7 @@ function resetInactivityTimer() {
   }, INACTIVITY_LIMIT);
 }
 
-function startInactivityTimer() {
-  resetInactivityTimer();
-}
-
-// События активности
+function startInactivityTimer() { resetInactivityTimer(); }
 ['click', 'mousemove', 'keydown', 'scroll', 'touchstart'].forEach(evt => {
   document.addEventListener(evt, resetInactivityTimer);
 });
@@ -220,12 +234,19 @@ async function performLogout(){
 }
 logoutMenuBtn.addEventListener('click',performLogout);
 
+async function loadTemplates() {
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch(API_BASE + '/block-templates', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (res.ok) templates = await res.json();
+  } catch(e) { templates = []; }
+}
+
 function showApp(user){
   authBlock.classList.add('hidden'); topMenu.classList.remove('hidden'); mainContent.classList.remove('hidden');
   const loginTime = localStorage.getItem('loginTime');
   let t=''; if(loginTime){ const d=new Date(loginTime); t=d.toLocaleString('ru-RU'); }
   menuUserInfo.textContent = user.username + (t ? ' (вход: '+t+')' : '');
-  // Админские ссылки видны только админу
   if(user.role==='admin'){
     adminLink.classList.remove('hidden');
     allProjectsLink.classList.remove('hidden');
@@ -233,10 +254,8 @@ function showApp(user){
     adminLink.classList.add('hidden');
     allProjectsLink.classList.add('hidden');
   }
-  // Мои проекты и создать проект видны всем
   myProjectsLink.classList.remove('hidden');
   createProjectLink.classList.remove('hidden');
-  // Открываем домашнюю страницу
   homePage.classList.remove('hidden');
   myProjectsPage.classList.add('hidden');
   createProjectPage.classList.add('hidden');
@@ -245,17 +264,20 @@ function showApp(user){
   userDetailPage.classList.add('hidden');
   projectPage.classList.add('hidden');
   startInactivityTimer();
+  loadTemplates(); // загружаем каталог шаблонов блоков
 }
 
-// Переходы
+// Навигация "Мои проекты"
 myProjectsLink.addEventListener('click', (e) => {
   e.preventDefault();
+  previousPage = 'myProjects';
   homePage.classList.add('hidden'); createProjectPage.classList.add('hidden'); adminPage.classList.add('hidden');
   allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
   myProjectsPage.classList.remove('hidden');
   loadMyProjects();
 });
 
+// Создание проекта
 createProjectLink.addEventListener('click', (e) => {
   e.preventDefault();
   homePage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); adminPage.classList.add('hidden');
@@ -263,7 +285,6 @@ createProjectLink.addEventListener('click', (e) => {
   createProjectPage.classList.remove('hidden');
 });
 
-// Обработчики создания проекта
 document.getElementById('saveProjectBtn').addEventListener('click', async () => {
   const name = document.getElementById('newProjectName').value.trim();
   if (!name) { document.getElementById('createProjectError').textContent = 'Введите название'; return; }
@@ -280,7 +301,6 @@ document.getElementById('saveProjectBtn').addEventListener('click', async () => 
       document.getElementById('createProjectError').textContent = err.error || 'Ошибка';
       return;
     }
-    // Успешно – переходим в "Мои проекты"
     document.getElementById('newProjectName').value = '';
     createProjectPage.classList.add('hidden');
     myProjectsPage.classList.remove('hidden');
@@ -292,13 +312,11 @@ document.getElementById('backToHomeFromMyBtn').addEventListener('click', () => {
   myProjectsPage.classList.add('hidden');
   homePage.classList.remove('hidden');
 });
-
 document.getElementById('backToHomeFromCreateBtn').addEventListener('click', () => {
   createProjectPage.classList.add('hidden');
   homePage.classList.remove('hidden');
 });
 
-// Загрузка "Мои проекты"
 async function loadMyProjects() {
   const token = localStorage.getItem('token');
   try {
@@ -320,7 +338,6 @@ async function loadMyProjects() {
       html += '</table>';
     }
     document.getElementById('myProjectsTable').innerHTML = html;
-    // Если пусто, то ссылка "создать новый" должна работать
     const createLink = document.getElementById('createFromMyLink');
     if (createLink) {
       createLink.addEventListener('click', (e) => {
@@ -334,7 +351,6 @@ async function loadMyProjects() {
   }
 }
 
-// Удаление своего проекта
 document.getElementById('myProjectsTable').addEventListener('click', async (e) => {
   if (e.target.classList.contains('delete-my-project-btn')) {
     const projectId = e.target.dataset.id;
@@ -355,6 +371,7 @@ document.getElementById('myProjectsTable').addEventListener('click', async (e) =
 // Админ-панель
 adminLink.addEventListener('click', (e)=>{
   e.preventDefault();
+  previousPage = 'admin';
   homePage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
   allProjectsPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
   adminPage.classList.remove('hidden');
@@ -364,6 +381,7 @@ adminLink.addEventListener('click', (e)=>{
 // Все проекты (админ)
 allProjectsLink.addEventListener('click', (e)=>{
   e.preventDefault();
+  previousPage = 'allProjects';
   homePage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
   adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); projectPage.classList.add('hidden');
   allProjectsPage.classList.remove('hidden');
@@ -374,7 +392,6 @@ document.getElementById('backToHomeBtn').addEventListener('click', ()=>{
   adminPage.classList.add('hidden');
   homePage.classList.remove('hidden');
 });
-
 document.getElementById('backToHomeFromProjectsBtn').addEventListener('click', ()=>{
   allProjectsPage.classList.add('hidden');
   homePage.classList.remove('hidden');
@@ -406,7 +423,6 @@ async function loadUsers(){
   } catch(e){ document.getElementById('usersTable').innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; }
 }
 
-// Загрузка всех проектов для админа
 async function loadAllProjects(){
   const token = localStorage.getItem('token');
   try {
@@ -428,7 +444,6 @@ async function loadAllProjects(){
   } catch(e){ document.getElementById('allProjectsTable').innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; }
 }
 
-// Удаление проектов админом
 document.getElementById('allProjectsTable').addEventListener('click', async (e)=>{
   if(e.target.classList.contains('delete-project-btn')){
     const projectId = e.target.dataset.id;
@@ -446,7 +461,6 @@ document.getElementById('allProjectsTable').addEventListener('click', async (e)=
   }
 });
 
-// Делегирование событий в таблице пользователей
 document.getElementById('usersTable').addEventListener('click', async (e)=>{
   const id = e.target.dataset.id;
   if(!id) return;
@@ -472,10 +486,10 @@ document.getElementById('usersTable').addEventListener('click', async (e)=>{
   }
 });
 
-// Клик по проекту
 document.addEventListener('click', async (e)=>{
   if(e.target.classList.contains('project-link')){
     const projectId = e.target.dataset.id;
+    previousPage = (document.getElementById('allProjectsPage').classList.contains('hidden') ? 'myProjects' : 'allProjects');
     showProject(projectId);
   }
 });
@@ -526,44 +540,94 @@ async function showProject(projectId){
     document.getElementById('projectName').textContent = project.name;
     document.getElementById('projectVoltage').textContent = project.voltage + ' В';
     document.getElementById('projectCreator').textContent = project.created_by || 'неизвестно';
+
+    // Загружаем блоки проекта
     const blocksRes = await fetch(API_BASE+'/projects/'+projectId+'/blocks',{headers:{'Authorization':'Bearer '+token}});
-    let blocksHtml = '<h3>Блоки</h3>';
+    let blocksHtml = '';
     if(blocksRes.ok){
       const blocks = await blocksRes.json();
       if(blocks.length>0){
-        blocksHtml += '<table><tr><th>Название</th><th>Параметры</th></tr>';
+        blocksHtml = '<table><tr><th>Название</th><th>Параметры</th></tr>';
         blocks.forEach(b=>{
           const paramsStr = b.parameters.map(p=>`${p.param_name}=${p.param_value}`).join('; ') || '—';
           blocksHtml += `<tr><td>${b.block_name}</td><td>${paramsStr}</td></tr>`;
         });
         blocksHtml += '</table>';
-      } else blocksHtml += '<p>Блоков нет</p>';
-    } else blocksHtml += '<p>Ошибка загрузки блоков</p>';
-    document.getElementById('projectBlocks').innerHTML = blocksHtml;
-    homePage.classList.add('hidden'); adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden'); allProjectsPage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
+      }
+    } else blocksHtml = '<p style="color:red;">Ошибка загрузки блоков</p>';
+    
+    // Всегда показываем кнопку "Новый блок"
+    document.getElementById('projectBlocks').innerHTML = blocksHtml + 
+      '<button id="addBlockBtn">+ Новый блок</button>';
+    
+    // Вешаем обработчик показа формы
+    document.getElementById('addBlockBtn').addEventListener('click', () => {
+      document.getElementById('blockFormContainer').classList.remove('hidden');
+      document.getElementById('addBlockBtn').classList.add('hidden');
+    });
+
+    // Заполняем список шаблонов в форме
+    const templateSelect = document.getElementById('templateSelect');
+    templateSelect.innerHTML = '<option value="">Без шаблона</option>';
+    templates.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.name;
+      templateSelect.appendChild(opt);
+    });
+
+    // Сохраняем projectId в data-атрибуте формы
+    document.getElementById('blockFormContainer').dataset.projectId = projectId;
+
+    // Показываем страницу проекта
+    homePage.classList.add('hidden'); adminPage.classList.add('hidden'); userDetailPage.classList.add('hidden');
+    allProjectsPage.classList.add('hidden'); myProjectsPage.classList.add('hidden'); createProjectPage.classList.add('hidden');
     projectPage.classList.remove('hidden');
-    previousPage = 'project';
   } catch(e){ alert('Ошибка загрузки проекта'); }
 }
 
-document.getElementById('backFromProjectBtn').addEventListener('click', ()=>{
-  projectPage.classList.add('hidden');
-  // Возвращаемся в то место, откуда пришли
-  if(previousPage === 'userDetail'){
-    userDetailPage.classList.remove('hidden');
-  } else if(previousPage === 'allProjects'){
-    allProjectsPage.classList.remove('hidden');
-  } else if(previousPage === 'myProjects'){
-    myProjectsPage.classList.remove('hidden');
-  } else {
-    homePage.classList.remove('hidden');
-  }
+// Обработчики добавления блока
+document.getElementById('saveBlockBtn').addEventListener('click', async () => {
+  const projectId = document.getElementById('blockFormContainer').dataset.projectId;
+  const blockName = document.getElementById('blockNameInput').value.trim();
+  if (!blockName) { document.getElementById('blockError').textContent = 'Введите название блока'; return; }
+  const templateId = document.getElementById('templateSelect').value || null;
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch(API_BASE + '/projects/' + projectId + '/blocks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ block_name: blockName, template_id: templateId, order_index: 0 })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      document.getElementById('blockError').textContent = err.error || 'Ошибка добавления';
+      return;
+    }
+    // Скрываем форму, очищаем поля, обновляем отображение блоков
+    document.getElementById('blockFormContainer').classList.add('hidden');
+    document.getElementById('addBlockBtn').classList.remove('hidden');
+    document.getElementById('blockNameInput').value = '';
+    document.getElementById('blockError').textContent = '';
+    // Перерисовываем проект
+    showProject(projectId);
+  } catch (e) { document.getElementById('blockError').textContent = 'Ошибка соединения'; }
 });
 
-// Обновим previousPage при переходе с разных страниц
-myProjectsLink.addEventListener('click', () => { previousPage = 'myProjects'; });
-allProjectsLink.addEventListener('click', () => { previousPage = 'allProjects'; });
-adminLink.addEventListener('click', () => { previousPage = 'admin'; });
+document.getElementById('cancelBlockBtn').addEventListener('click', () => {
+  document.getElementById('blockFormContainer').classList.add('hidden');
+  document.getElementById('addBlockBtn').classList.remove('hidden');
+  document.getElementById('blockError').textContent = '';
+  document.getElementById('blockNameInput').value = '';
+});
+
+document.getElementById('backFromProjectBtn').addEventListener('click', ()=>{
+  projectPage.classList.add('hidden');
+  if(previousPage === 'userDetail') userDetailPage.classList.remove('hidden');
+  else if(previousPage === 'allProjects') allProjectsPage.classList.remove('hidden');
+  else if(previousPage === 'myProjects') myProjectsPage.classList.remove('hidden');
+  else homePage.classList.remove('hidden');
+});
 
 window.addEventListener('load', ()=>{
   const token = localStorage.getItem('token');
