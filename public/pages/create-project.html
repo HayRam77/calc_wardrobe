@@ -1,5 +1,5 @@
 <h2>Создать проект</h2>
-<div id="createProjectError" style="color:red;"></div>
+<div id="createProjectError" class="error"></div>
 <div class="form-group">
   <label>Название проекта</label>
   <input type="text" id="newProjectName">
@@ -34,9 +34,8 @@ document.getElementById('saveProjectBtn').addEventListener('click', async () => 
     if (!res.ok) { const err = await res.json(); document.getElementById('createProjectError').textContent = err.error || 'Ошибка'; return; }
     history.pushState(null, '', '/projects');
     loadPage('/projects');
-  } catch (e) { document.getElementById('createProjectError').textContent = 'Ошибка соединения'; }
+  } catch(e) { document.getElementById('createProjectError').textContent = 'Ошибка соединения'; }
 });
-
 document.getElementById('cancelCreateProjectBtn').addEventListener('click', () => {
   history.pushState(null, '', '/projects');
   loadPage('/projects');

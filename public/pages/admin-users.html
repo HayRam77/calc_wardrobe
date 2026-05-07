@@ -1,6 +1,5 @@
 <h2>Управление пользователями</h2>
 <div id="usersTable"></div>
-
 <script>
 async function loadUsers() {
   const token = localStorage.getItem('token');
@@ -27,7 +26,6 @@ async function loadUsers() {
     html += '</table>';
     container.innerHTML = html;
 
-    // Обработчики кнопок
     container.querySelectorAll('.block-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const id = e.target.dataset.id;
@@ -65,22 +63,14 @@ async function loadUsers() {
     container.querySelectorAll('.user-detail-link').forEach(link => {
       link.addEventListener('click', async (e) => {
         e.preventDefault();
-        const id = link.dataset.id;
-        showUserDetail(id); // функция определена ниже (или можно глобально)
+        const userId = link.dataset.id;
+        // Заглушка - показать alert с ID, позже можно страницу
+        alert('Детали пользователя ID=' + userId);
       });
     });
-  } catch (e) {
+  } catch(e) {
     container.innerHTML = '<p style="color:red;">Ошибка загрузки пользователей</p>';
   }
 }
-
-// Функция показа деталей пользователя (можно вынести в глобальный скрипт, но пока оставим локально)
-async function showUserDetail(userId) {
-  // тут нужен контейнер для деталей, но мы можем открыть модальное окно или новую страницу. 
-  // Для простоты откроем страницу /user/:id, которую мы ещё не сделали. 
-  // Пока используем промпт.
-  alert('Функция показа деталей будет добавлена позже');
-}
-
 loadUsers();
 </script>

@@ -1,6 +1,5 @@
 <h2>Мои проекты</h2>
 <div id="myProjectsTable"></div>
-
 <script>
 async function loadMyProjects() {
   const token = localStorage.getItem('token');
@@ -18,18 +17,18 @@ async function loadMyProjects() {
       });
       return;
     }
-    let html = '<table><tr><th>Название</th><th>Примечание</th><th>Дата создания</th><th></th></tr>';
+    let html = '<table><tr><th>Название</th><th>Примечание</th><th>Создатель</th><th>Дата создания</th><th></th></tr>';
     projects.forEach(p => {
       html += `<tr>
         <td><a href="/project/${p.id}" class="project-link">${p.name}</a></td>
         <td>${p.remark || ''}</td>
+        <td>${p.created_by || ''}</td>
         <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>
         <td><button class="small danger delete-btn" data-id="${p.id}">Удалить</button></td>
       </tr>`;
     });
     html += '</table>';
     container.innerHTML = html;
-
     container.querySelectorAll('.delete-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const id = e.target.dataset.id;
