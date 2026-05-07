@@ -8,8 +8,13 @@ async function loadUsers() {
     const res = await fetch('/api/admin/users', { headers: { 'Authorization': 'Bearer ' + token } });
     if (!res.ok) throw new Error('Ошибка загрузки');
     const users = await res.json();
+    // Получаем текущего пользователя, чтобы скрыть кнопку удаления для самого себя
+    const currentUser = JSON.parse(localStorage.getItem('user'));
     let html = '<table><tr><th>ID</th><th>Имя</th><th>Роль</th><th>Статус</th><th>Создан</th><th>Действия</th></tr>';
     users.forEach(u => {
+      const isSelf = currentUser && currentUser.id === u.id;
+      const isAdmin = u.role === 'admin';
+      const deleteDisabled = isSelf || isAdmin;
       html += `<tr>
         <td>${u.id}</td>
         <td><a href="#" class="user-detail-link" data-id="${u.id}">${u.username}</a></td>
@@ -19,13 +24,14 @@ async function loadUsers() {
         <td>
           <button class="small block-btn" data-id="${u.id}">${u.is_blocked ? 'Разблок.' : 'Блокир.'}</button>
           <button class="small reset-btn" data-id="${u.id}">Сброс пароля</button>
-          <button class="small danger delete-btn" data-id="${u.id}">Удалить</button>
+          <button class="small danger delete-btn" data-id="${u.id}" ${deleteDisabled ? 'disabled' : ''}>Удалить</button>
         </td>
       </tr>`;
     });
     html += '</table>';
     container.innerHTML = html;
 
+    // Обработчики
     container.querySelectorAll('.block-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const id = e.target.dataset.id;
@@ -49,22 +55,28 @@ async function loadUsers() {
         alert('Пароль изменён');
       });
     });
-    container.querySelectorAll('.delete-btn').forEach(btn => {
+    container.querySelectorAll('.delete-btn:not([disabled])').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const id = e.target.dataset.id;
         if (!confirm('Удалить пользователя?')) return;
-        await fetch('/api/admin/users/' + id, {
-          method: 'DELETE',
-          headers: { 'Authorization': 'Bearer ' + token }
-        });
-        loadUsers();
+        try {
+          const res = await fetch('/api/admin/users/' + id, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+          if (!res.ok) {
+            const err = await res.json();
+            alert(err.error || 'Ошибка удаления');
+            return;
+          }
+          loadUsers();
+        } catch(e) { alert('Ошибка соединения'); }
       });
     });
     container.querySelectorAll('.user-detail-link').forEach(link => {
       link.addEventListener('click', async (e) => {
         e.preventDefault();
         const userId = link.dataset.id;
-        // Заглушка - показать alert с ID, позже можно страницу
         alert('Детали пользователя ID=' + userId);
       });
     });
