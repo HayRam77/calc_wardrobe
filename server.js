@@ -18,7 +18,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectsRoutes);
 app.use('/api/block-templates', blockTemplatesRoutes);
 app.use('/api/projects/:projectId/blocks', projectBlocksRoutes);
-app.use('/api/projects/:projectId/cabinets', cabinetsRoutes); // новый маршрут
+app.use('/api/projects/:projectId/cabinets', cabinetsRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.listen(PORT, '127.0.0.1', () => {

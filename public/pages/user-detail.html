@@ -3,7 +3,6 @@
   <div id="detailInfo"></div>
   <button onclick="history.back()" style="margin-top:15px;">← Назад</button>
 </div>
-
 <script>
 (function() {
   const pathParts = location.pathname.split('/');
@@ -12,55 +11,23 @@
   async function loadUserDetail() {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch('/api/admin/users/' + userId, {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
+      const res = await fetch('/api/admin/users/' + userId, { headers: { 'Authorization': 'Bearer ' + token } });
       if (!res.ok) throw new Error('Ошибка загрузки');
       const user = await res.json();
-      
       document.getElementById('detailUsername').textContent = user.username;
-      
-      let html = `<p><strong>Роль:</strong> ${user.role}</p>`;
-      html += `<p><strong>Статус:</strong> ${user.is_blocked ? 'Заблокирован' : 'Активен'}</p>`;
-      html += `<p><strong>Дата создания:</strong> ${new Date(user.created_at).toLocaleString('ru-RU')}</p>`;
-      
+      let html = `<p><strong>Роль:</strong> ${user.role}</p><p><strong>Статус:</strong> ${user.is_blocked ? 'Заблокирован' : 'Активен'}</p><p><strong>Дата создания:</strong> ${new Date(user.created_at).toLocaleString('ru-RU')}</p>`;
       html += '<h3>Проекты</h3>';
       if (user.projects && user.projects.length > 0) {
-        html += '<ul>';
-        user.projects.forEach(p => {
-          html += `<li><a href="/project/${p.id}" class="project-link">${p.name}</a> (${p.voltage}В, создан ${new Date(p.created_at).toLocaleString('ru-RU')})</li>`;
-        });
-        html += '</ul>';
-      } else {
-        html += '<p>Нет проектов</p>';
-      }
-      
+        html += '<ul>' + user.projects.map(p => `<li><a href="/project/${p.id}" class="project-link">${p.name}</a> (${p.voltage}В, создан ${new Date(p.created_at).toLocaleString('ru-RU')})</li>`).join('') + '</ul>';
+      } else html += '<p>Нет проектов</p>';
       html += '<h3>Последние сессии</h3>';
       if (user.sessions && user.sessions.length > 0) {
-        html += '<table><tr><th>Вход</th><th>Выход</th></tr>';
-        user.sessions.forEach(s => {
-          html += `<tr><td>${new Date(s.login_time).toLocaleString('ru-RU')}</td><td>${s.logout_time ? new Date(s.logout_time).toLocaleString('ru-RU') : '—'}</td></tr>`;
-        });
-        html += '</table>';
-      } else {
-        html += '<p>Нет данных</p>';
-      }
-      
+        html += '<table><tr><th>Вход</th><th>Выход</th></tr>' + user.sessions.map(s => `<tr><td>${new Date(s.login_time).toLocaleString('ru-RU')}</td><td>${s.logout_time ? new Date(s.logout_time).toLocaleString('ru-RU') : '—'}</td></tr>`).join('') + '</table>';
+      } else html += '<p>Нет данных</p>';
       document.getElementById('detailInfo').innerHTML = html;
-      
-      document.querySelectorAll('.project-link').forEach(link => {
-        link.addEventListener('click', function(e) {
-          e.preventDefault();
-          const href = this.getAttribute('href');
-          history.pushState(null, '', href);
-          loadPage(href);
-        });
-      });
-    } catch(e) {
-      document.getElementById('userDetailContent').innerHTML = '<p style="color:red;">Ошибка загрузки данных пользователя</p>';
-    }
+      document.querySelectorAll('.project-link').forEach(link => { link.addEventListener('click', function(e) { e.preventDefault(); navigateTo(this.getAttribute('href')); }); });
+    } catch(e) { document.getElementById('userDetailContent').innerHTML = '<p style="color:red;">Ошибка загрузки данных пользователя</p>'; }
   }
-
   loadUserDetail();
 })();
 </script>
