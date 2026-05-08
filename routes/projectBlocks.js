@@ -5,21 +5,26 @@ const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
 
-// Получить все блоки проекта с параметрами
+// Получить все блоки проекта (можно фильтровать по cabinet_id)
 router.get('/', async (req, res) => {
+  const projectId = req.params.projectId;
+  const { cabinet_id } = req.query;
   try {
-    const projectId = req.params.projectId;
-    const blocks = await pool.query(
-      'SELECT * FROM project_blocks WHERE project_id = $1 ORDER BY order_index',
-      [projectId]
-    );
+    let query = 'SELECT * FROM project_blocks WHERE project_id = $1';
+    const params = [projectId];
+    if (cabinet_id) {
+      query += ' AND cabinet_id = $2';
+      params.push(cabinet_id);
+    }
+    query += ' ORDER BY order_index';
+    const blocks = await pool.query(query, params);
     const result = [];
     for (const block of blocks.rows) {
-      const params = await pool.query(
+      const p = await pool.query(
         'SELECT param_name, param_value FROM project_block_params WHERE project_block_id = $1',
         [block.id]
       );
-      result.push({ ...block, parameters: params.rows });
+      result.push({ ...block, parameters: p.rows });
     }
     res.json(result);
   } catch (err) {
@@ -27,27 +32,30 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Добавить блок в проект (на основе шаблона или пустой)
+// Добавить блок
 router.post('/', async (req, res) => {
   const projectId = req.params.projectId;
-  const { block_name, template_id, order_index } = req.body;
+  const { block_name, template_id, order_index, cabinet_id } = req.body;
   if (!block_name) return res.status(400).json({ error: 'Имя блока обязательно' });
+  if (!cabinet_id) return res.status(400).json({ error: 'cabinet_id обязателен' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Проверяем существование проекта
     const proj = await client.query('SELECT id FROM projects WHERE id = $1', [projectId]);
     if (proj.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Проект не найден' });
     }
-    // Создаём блок
+    const cab = await client.query('SELECT id FROM cabinets WHERE id = $1 AND project_id = $2', [cabinet_id, projectId]);
+    if (cab.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Шкаф не найден в проекте' });
+    }
     const blockRes = await client.query(
-      'INSERT INTO project_blocks (project_id, template_id, block_name, order_index) VALUES ($1, $2, $3, $4) RETURNING *',
-      [projectId, template_id || null, block_name, order_index || 0]
+      'INSERT INTO project_blocks (project_id, cabinet_id, template_id, block_name, order_index) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [projectId, cabinet_id, template_id || null, block_name, order_index || 0]
     );
     const newBlock = blockRes.rows[0];
-    // Если указан шаблон, копируем параметры
     if (template_id) {
       const params = await client.query(
         'SELECT param_name, param_value FROM block_parameters WHERE template_id = $1 ORDER BY display_order',
@@ -61,7 +69,6 @@ router.post('/', async (req, res) => {
       }
     }
     await client.query('COMMIT');
-    // Возвращаем созданный блок с параметрами
     const fullBlock = await pool.query('SELECT * FROM project_blocks WHERE id = $1', [newBlock.id]);
     const params = await pool.query('SELECT param_name, param_value FROM project_block_params WHERE project_block_id = $1', [newBlock.id]);
     res.status(201).json({ ...fullBlock.rows[0], parameters: params.rows });
@@ -73,7 +80,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Изменить название блока и/или order_index
+// Обновить название блока и order_index
 router.put('/:blockId', async (req, res) => {
   const { block_name, order_index } = req.body;
   try {
@@ -111,16 +118,14 @@ router.get('/:blockId/params', async (req, res) => {
   }
 });
 
-// Обновить параметры блока (передаётся массив [{param_name, param_value}])
+// Обновить параметры блока
 router.put('/:blockId/params', async (req, res) => {
-  const { parameters } = req.body; // массив {param_name, param_value}
+  const { parameters } = req.body;
   if (!parameters || !Array.isArray(parameters)) return res.status(400).json({ error: 'parameters должен быть массивом' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Удаляем старые параметры
     await client.query('DELETE FROM project_block_params WHERE project_block_id = $1', [req.params.blockId]);
-    // Вставляем новые
     for (const p of parameters) {
       await client.query(
         'INSERT INTO project_block_params (project_block_id, param_name, param_value) VALUES ($1, $2, $3)',

@@ -6,6 +6,7 @@ const projectsRoutes = require('./routes/projects');
 const blockTemplatesRoutes = require('./routes/blockTemplates');
 const projectBlocksRoutes = require('./routes/projectBlocks');
 const adminRoutes = require('./routes/admin');
+const cabinetsRoutes = require('./routes/cabinets');
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3001;
@@ -17,6 +18,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectsRoutes);
 app.use('/api/block-templates', blockTemplatesRoutes);
 app.use('/api/projects/:projectId/blocks', projectBlocksRoutes);
+app.use('/api/projects/:projectId/cabinets', cabinetsRoutes); // новый маршрут
 app.use('/api/admin', adminRoutes);
 
 app.listen(PORT, '127.0.0.1', () => {
