@@ -30,6 +30,7 @@ async function loadUsers() {
     html += '</table>';
     container.innerHTML = html;
 
+    // Блокировка/разблокировка
     container.querySelectorAll('.block-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const id = e.target.dataset.id;
@@ -40,6 +41,7 @@ async function loadUsers() {
         loadUsers();
       });
     });
+    // Сброс пароля
     container.querySelectorAll('.reset-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const id = e.target.dataset.id;
@@ -53,6 +55,7 @@ async function loadUsers() {
         alert('Пароль изменён');
       });
     });
+    // Удаление (только не админов и не себя)
     container.querySelectorAll('.delete-btn:not([disabled])').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const id = e.target.dataset.id;
@@ -71,11 +74,12 @@ async function loadUsers() {
         } catch(e) { alert('Ошибка соединения'); }
       });
     });
-    // Вот здесь исправляем: вместо alert делаем переход
+    // Переход на детальную страницу пользователя (вот здесь теперь navigateTo, а не alert)
     container.querySelectorAll('.user-detail-link').forEach(link => {
       link.addEventListener('click', (e) => {
         e.preventDefault();
         const userId = link.dataset.id;
+        // Используем глобальную функцию navigateTo из index.html
         navigateTo('/admin/users/' + userId);
       });
     });
