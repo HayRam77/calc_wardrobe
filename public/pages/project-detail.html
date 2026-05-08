@@ -5,14 +5,12 @@
     <p>Создатель: <span id="projectCreator"></span></p>
     <p>Примечание: <span id="projectRemark"></span></p>
   </div>
-
   <h3>Шкафы</h3>
   <div id="cabinetsList"></div>
   <div style="margin-top:10px;">
     <input type="text" id="newCabinetName" placeholder="Название шкафа">
     <button id="addCabinetBtn">+ Добавить шкаф</button>
   </div>
-
   <div id="cabinetDetail" class="hidden" style="margin-top:20px; border:1px solid #ccc; padding:15px; background:#fafafa;">
     <h4>Шкаф: <span id="cabinetName"></span></h4>
     <div id="cabinetBlocks"></div>
@@ -26,184 +24,144 @@
     </div>
   </div>
 </div>
-
 <script>
-const pathParts = location.pathname.split('/');
-const projectId = pathParts[pathParts.length - 1];
-let cabinets = [];
-let selectedCabinetId = null;
+(function() {
+  const pathParts = location.pathname.split('/');
+  const projectId = pathParts[pathParts.length - 1];
+  let cabinets = [];
+  let selectedCabinetId = null;
 
-// используем глобальную переменную templates из index.html (не объявляем повторно)
-
-async function loadProject() {
-  const token = localStorage.getItem('token');
-  try {
-    const res = await fetch('/api/projects/' + projectId, { headers: { 'Authorization': 'Bearer ' + token } });
-    if (!res.ok) throw new Error('Проект не найден');
-    const project = await res.json();
-    document.getElementById('projectName').textContent = project.name;
-    document.getElementById('projectVoltage').textContent = project.voltage + ' В';
-    document.getElementById('projectCreator').textContent = project.created_by || 'неизвестно';
-    document.getElementById('projectRemark').textContent = project.remark || '';
-  } catch(e) {
-    document.getElementById('projectContent').innerHTML = '<p>Ошибка загрузки проекта</p>';
+  async function loadProject() {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/projects/' + projectId, { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) throw new Error('Проект не найден');
+      const project = await res.json();
+      document.getElementById('projectName').textContent = project.name;
+      document.getElementById('projectVoltage').textContent = project.voltage + ' В';
+      document.getElementById('projectCreator').textContent = project.created_by || 'неизвестно';
+      document.getElementById('projectRemark').textContent = project.remark || '';
+    } catch(e) { document.getElementById('projectContent').innerHTML = '<p>Ошибка загрузки проекта</p>'; }
   }
-}
 
-async function loadCabinets() {
-  const token = localStorage.getItem('token');
-  try {
-    const res = await fetch('/api/projects/' + projectId + '/cabinets', { headers: { 'Authorization': 'Bearer ' + token } });
-    if (!res.ok) throw new Error('Ошибка загрузки шкафов');
-    cabinets = await res.json();
-    renderCabinets();
-  } catch(e) {
-    document.getElementById('cabinetsList').innerHTML = '<p style="color:red;">Ошибка загрузки шкафов</p>';
+  async function loadCabinets() {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/projects/' + projectId + '/cabinets', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) throw new Error('Ошибка загрузки шкафов');
+      cabinets = await res.json();
+      renderCabinets();
+    } catch(e) { document.getElementById('cabinetsList').innerHTML = '<p style="color:red;">Ошибка загрузки шкафов</p>'; }
   }
-}
 
-function renderCabinets() {
-  const container = document.getElementById('cabinetsList');
-  if (cabinets.length === 0) {
-    container.innerHTML = '<p>Нет шкафов</p>';
-    return;
-  }
-  let html = '<table><tr><th>Название</th><th>Действия</th></tr>';
-  cabinets.forEach(cab => {
-    html += `<tr>
-      <td><a href="#" class="cabinet-link" data-id="${cab.id}">${cab.name}</a></td>
-      <td>
-        <button class="small edit-cabinet-btn" data-id="${cab.id}">✎</button>
-        <button class="small danger delete-cabinet-btn" data-id="${cab.id}">🗑</button>
-      </td>
-    </tr>`;
-  });
-  html += '</table>';
-  container.innerHTML = html;
-
-  container.querySelectorAll('.cabinet-link').forEach(link => {
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      const id = link.dataset.id;
-      selectCabinet(id);
-    });
-  });
-  container.querySelectorAll('.edit-cabinet-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.id;
-      const newName = prompt('Новое название шкафа:');
-      if (newName) updateCabinet(id, newName);
-    });
-  });
-  container.querySelectorAll('.delete-cabinet-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.id;
-      if (!confirm('Удалить шкаф и все его компоненты?')) return;
-      const token = localStorage.getItem('token');
-      await fetch('/api/projects/' + projectId + '/cabinets/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
-      loadCabinets();
-      document.getElementById('cabinetDetail').classList.add('hidden');
-    });
-  });
-}
-
-async function selectCabinet(id) {
-  selectedCabinetId = id;
-  document.getElementById('cabinetDetail').classList.remove('hidden');
-  const cab = cabinets.find(c => c.id == id);
-  if (cab) document.getElementById('cabinetName').textContent = cab.name;
-  loadCabinetBlocks(id);
-}
-
-async function loadCabinetBlocks(cabinetId) {
-  const token = localStorage.getItem('token');
-  try {
-    const res = await fetch('/api/projects/' + projectId + '/blocks?cabinet_id=' + cabinetId, { headers: { 'Authorization': 'Bearer ' + token } });
-    if (!res.ok) throw new Error('Ошибка загрузки блоков');
-    const blocks = await res.json();
-    const container = document.getElementById('cabinetBlocks');
-    if (blocks.length === 0) {
-      container.innerHTML = '<p>Нет компонентов</p>';
-      return;
-    }
-    let html = '<table><tr><th>Название</th><th>Параметры</th></tr>';
-    blocks.forEach(b => {
-      const paramsStr = b.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ') || '—';
-      html += `<tr><td>${b.block_name}</td><td>${paramsStr}</td></tr>`;
+  function renderCabinets() {
+    const container = document.getElementById('cabinetsList');
+    if (cabinets.length === 0) { container.innerHTML = '<p>Нет шкафов</p>'; return; }
+    let html = '<table><tr><th>Название</th><th>Действия</th></tr>';
+    cabinets.forEach(cab => {
+      html += `<tr>
+        <td><a href="#" class="cabinet-link" data-id="${cab.id}">${cab.name}</a></td>
+        <td>
+          <button class="small edit-cabinet-btn" data-id="${cab.id}">✎</button>
+          <button class="small danger delete-cabinet-btn" data-id="${cab.id}">🗑</button>
+        </td>
+      </tr>`;
     });
     html += '</table>';
     container.innerHTML = html;
-  } catch(e) {
-    document.getElementById('cabinetBlocks').innerHTML = '<p style="color:red;">Ошибка</p>';
-  }
-}
 
-document.getElementById('addCabinetBtn').addEventListener('click', async () => {
-  const name = document.getElementById('newCabinetName').value.trim();
-  if (!name) return alert('Введите название шкафа');
-  const token = localStorage.getItem('token');
-  await fetch('/api/projects/' + projectId + '/cabinets', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body: JSON.stringify({ name })
-  });
-  document.getElementById('newCabinetName').value = '';
-  loadCabinets();
-});
-
-document.getElementById('addBlockToCabinetBtn').addEventListener('click', () => {
-  document.getElementById('blockForm').classList.remove('hidden');
-  const sel = document.getElementById('templateSelect');
-  sel.innerHTML = '<option value="">Без шаблона</option>';
-  if (typeof templates !== 'undefined') {
-    templates.forEach(t => {
-      const opt = document.createElement('option');
-      opt.value = t.id;
-      opt.textContent = t.name;
-      sel.appendChild(opt);
+    container.querySelectorAll('.cabinet-link').forEach(link => {
+      link.addEventListener('click', (e) => { e.preventDefault(); selectCabinet(link.dataset.id); });
+    });
+    container.querySelectorAll('.edit-cabinet-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const newName = prompt('Новое название шкафа:');
+        if (newName) updateCabinet(btn.dataset.id, newName);
+      });
+    });
+    container.querySelectorAll('.delete-cabinet-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Удалить шкаф и все его компоненты?')) return;
+        const token = localStorage.getItem('token');
+        await fetch('/api/projects/' + projectId + '/cabinets/' + btn.dataset.id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
+        loadCabinets();
+        document.getElementById('cabinetDetail').classList.add('hidden');
+      });
     });
   }
-});
 
-document.getElementById('cancelBlockBtn').addEventListener('click', () => {
-  document.getElementById('blockForm').classList.add('hidden');
-  document.getElementById('blockError').textContent = '';
-});
+  async function selectCabinet(id) {
+    selectedCabinetId = id;
+    document.getElementById('cabinetDetail').classList.remove('hidden');
+    const cab = cabinets.find(c => c.id == id);
+    if (cab) document.getElementById('cabinetName').textContent = cab.name;
+    loadCabinetBlocks(id);
+  }
 
-document.getElementById('saveBlockBtn').addEventListener('click', async () => {
-  const blockName = document.getElementById('blockNameInput').value.trim();
-  if (!blockName) { document.getElementById('blockError').textContent = 'Введите название'; return; }
-  const templateId = document.getElementById('templateSelect').value || null;
-  const token = localStorage.getItem('token');
-  try {
-    const res = await fetch('/api/projects/' + projectId + '/blocks', {
+  async function loadCabinetBlocks(cabinetId) {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/projects/' + projectId + '/blocks?cabinet_id=' + cabinetId, { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) throw new Error('Ошибка загрузки блоков');
+      const blocks = await res.json();
+      const container = document.getElementById('cabinetBlocks');
+      if (blocks.length === 0) { container.innerHTML = '<p>Нет компонентов</p>'; return; }
+      let html = '<table><tr><th>Название</th><th>Параметры</th></tr>';
+      blocks.forEach(b => {
+        const paramsStr = b.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ') || '—';
+        html += `<tr><td>${b.block_name}</td><td>${paramsStr}</td></tr>`;
+      });
+      html += '</table>';
+      container.innerHTML = html;
+    } catch(e) { document.getElementById('cabinetBlocks').innerHTML = '<p style="color:red;">Ошибка</p>'; }
+  }
+
+  document.getElementById('addCabinetBtn').addEventListener('click', async () => {
+    const name = document.getElementById('newCabinetName').value.trim();
+    if (!name) return alert('Введите название шкафа');
+    const token = localStorage.getItem('token');
+    await fetch('/api/projects/' + projectId + '/cabinets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({
-        block_name: blockName,
-        cabinet_id: selectedCabinetId,
-        template_id: templateId,
-        order_index: 0
-      })
+      body: JSON.stringify({ name })
     });
-    if (!res.ok) { const err = await res.json(); document.getElementById('blockError').textContent = err.error || 'Ошибка'; return; }
-    document.getElementById('blockForm').classList.add('hidden');
-    document.getElementById('blockNameInput').value = '';
-    loadCabinetBlocks(selectedCabinetId);
-  } catch(e) { document.getElementById('blockError').textContent = 'Ошибка соединения'; }
-});
-
-async function updateCabinet(id, newName) {
-  const token = localStorage.getItem('token');
-  await fetch('/api/projects/' + projectId + '/cabinets/' + id, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-    body: JSON.stringify({ name: newName })
+    document.getElementById('newCabinetName').value = '';
+    loadCabinets();
   });
-  loadCabinets();
-}
 
-// Инициализация
-loadProject();
-loadCabinets();
+  document.getElementById('addBlockToCabinetBtn').addEventListener('click', () => {
+    document.getElementById('blockForm').classList.remove('hidden');
+    const sel = document.getElementById('templateSelect');
+    sel.innerHTML = '<option value="">Без шаблона</option>';
+    if (typeof templates !== 'undefined') {
+      templates.forEach(t => { const opt = document.createElement('option'); opt.value = t.id; opt.textContent = t.name; sel.appendChild(opt); });
+    }
+  });
+  document.getElementById('cancelBlockBtn').addEventListener('click', () => { document.getElementById('blockForm').classList.add('hidden'); });
+  document.getElementById('saveBlockBtn').addEventListener('click', async () => {
+    const blockName = document.getElementById('blockNameInput').value.trim();
+    if (!blockName) { document.getElementById('blockError').textContent = 'Введите название'; return; }
+    const templateId = document.getElementById('templateSelect').value || null;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/projects/' + projectId + '/blocks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ block_name: blockName, cabinet_id: selectedCabinetId, template_id: templateId, order_index: 0 })
+      });
+      if (!res.ok) { const err = await res.json(); document.getElementById('blockError').textContent = err.error || 'Ошибка'; return; }
+      document.getElementById('blockForm').classList.add('hidden');
+      loadCabinetBlocks(selectedCabinetId);
+    } catch(e) { document.getElementById('blockError').textContent = 'Ошибка соединения'; }
+  });
+
+  async function updateCabinet(id, newName) {
+    const token = localStorage.getItem('token');
+    await fetch('/api/projects/' + projectId + '/cabinets/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ name: newName }) });
+    loadCabinets();
+  }
+
+  loadProject();
+  loadCabinets();
+})();
 </script>
