@@ -5,20 +5,13 @@
 <title>Калькулятор шкафа</title>
 <style>
   body { font-family: 'Segoe UI', Arial; margin: 0; padding: 0; background: #f4f7fb; }
-  .top-menu {
-    background: #1a5f7a; color: white;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 20px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  }
+  .top-menu { background: #1a5f7a; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
   .top-menu .left { display: flex; align-items: center; gap: 20px; }
   .top-menu .left h1 { margin: 0; font-size: 20px; }
   .top-menu .left a { color: white; text-decoration: none; font-size: 13px; padding: 4px 8px; border-radius: 4px; line-height: 1.2; }
   .top-menu .left a:hover { background: rgba(255,255,255,0.2); }
   .top-menu .right { display: flex; align-items: center; gap: 15px; font-size: 13px; }
-  .top-menu .right button {
-    background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);
-    color: white; padding: 5px 12px; border-radius: 4px; cursor: pointer;
-  }
+  .top-menu .right button { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: white; padding: 5px 12px; border-radius: 4px; cursor: pointer; }
   .content { padding: 20px; }
   .hidden { display: none !important; }
   .auth-container { max-width: 400px; margin: 60px auto; padding: 20px; background: white; border-radius: 8px; }
@@ -39,18 +32,11 @@
   .form-group input, .form-group select { width: 100%; padding: 8px; box-sizing: border-box; }
   .param-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: center; }
   .param-row input { flex: 1; }
-  .modal-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center;
-  }
-  .modal {
-    background: white; border-radius: 8px; padding: 20px; min-width: 400px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto;
-  }
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; }
+  .modal { background: white; border-radius: 8px; padding: 20px; min-width: 400px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto; }
 </style>
 </head>
 <body>
-
 <div id="authBlock" class="auth-container">
   <h2 id="authTitle">Вход</h2>
   <div id="authError" class="error"></div>
@@ -77,20 +63,12 @@
 
 <div id="contentContainer" class="content hidden"></div>
 
-<!-- Модальное окно компонентов -->
 <div id="templateModal" class="modal-overlay hidden">
   <div class="modal">
     <h3 id="modalTitle">Новый компонент</h3>
-    <div class="form-group">
-      <label>Название</label>
-      <input type="text" id="modalTemplateName">
-    </div>
-    <div class="form-group">
-      <label>Описание</label>
-      <input type="text" id="modalTemplateDesc">
-    </div>
-    <h4>Параметры</h4>
-    <div id="modalParams"></div>
+    <div class="form-group"><label>Название</label><input type="text" id="modalTemplateName"></div>
+    <div class="form-group"><label>Описание</label><input type="text" id="modalTemplateDesc"></div>
+    <h4>Параметры</h4><div id="modalParams"></div>
     <button id="addParamBtn" class="small" style="margin-top:8px;">+ Параметр</button>
     <div id="modalError" class="error" style="margin-top:8px;"></div>
     <div style="margin-top:15px; text-align:right;">
@@ -104,21 +82,14 @@
 const API_BASE = '/api';
 const AUTH = API_BASE + '/auth';
 let currentUser = null;
-
-// Таймер бездействия
 let inactivityTimer;
 const INACTIVITY_LIMIT = 5 * 60 * 1000;
 function resetInactivityTimer() {
   clearTimeout(inactivityTimer);
-  inactivityTimer = setTimeout(async () => {
-    await performLogout();
-  }, INACTIVITY_LIMIT);
+  inactivityTimer = setTimeout(async () => { await performLogout(); }, INACTIVITY_LIMIT);
 }
-['click', 'mousemove', 'keydown', 'scroll', 'touchstart'].forEach(evt => {
-  document.addEventListener(evt, resetInactivityTimer);
-});
+['click', 'mousemove', 'keydown', 'scroll', 'touchstart'].forEach(evt => document.addEventListener(evt, resetInactivityTimer));
 
-// Авторизация
 let mode = 'login';
 document.getElementById('toggleAuth').addEventListener('click', () => {
   mode = mode === 'login' ? 'register' : 'login';
@@ -132,10 +103,7 @@ document.getElementById('authBtn').addEventListener('click', async () => {
   if (!u||!p) { document.getElementById('authError').textContent='Заполните все поля'; return; }
   const endpoint = mode === 'login' ? '/login' : '/register';
   try {
-    const res = await fetch(AUTH+endpoint, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({username:u,password:p})
-    });
+    const res = await fetch(AUTH+endpoint, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:u,password:p}) });
     const data = await res.json();
     if(!res.ok) { document.getElementById('authError').textContent=data.error||'Ошибка'; return; }
     if(data.token){
@@ -151,11 +119,9 @@ document.getElementById('authBtn').addEventListener('click', async () => {
       if (currentUser.role === 'admin') navigateTo('/admin/all-projects');
       else navigateTo('/projects');
     } else {
-      mode='login'; document.getElementById('authTitle').textContent='Вход';
-      document.getElementById('authBtn').textContent='Войти';
+      mode='login'; document.getElementById('authTitle').textContent='Вход'; document.getElementById('authBtn').textContent='Войти';
       document.getElementById('toggleAuth').textContent='Нет аккаунта? Зарегистрироваться';
-      document.getElementById('authError').textContent='';
-      document.getElementById('username').value=''; document.getElementById('password').value='';
+      document.getElementById('authError').textContent=''; document.getElementById('username').value=''; document.getElementById('password').value='';
       alert('Регистрация успешна! Теперь войдите.');
     }
   } catch(e) { document.getElementById('authError').textContent='Ошибка соединения'; }
@@ -193,11 +159,7 @@ function updateMenu() {
   }
 }
 
-// Роутер SPA
-function navigateTo(url) {
-  history.pushState(null, '', url);
-  loadPage(url);
-}
+function navigateTo(url) { history.pushState(null, '', url); loadPage(url); }
 async function loadPage(url) {
   const container = document.getElementById('contentContainer');
   container.innerHTML = '';
@@ -213,11 +175,10 @@ async function loadPage(url) {
     else if (url.match(/^\/admin\/users\/\d+$/)) file = 'user-detail.html';
     else file = 'projects.html';
 
-    const res = await fetch('/pages/' + file);
+    const res = await fetch('/pages/' + file + '?_=' + Date.now());
     if (!res.ok) throw new Error('Страница не найдена');
     const html = await res.text();
     container.innerHTML = html;
-    // Выполняем скрипты из загруженного HTML
     container.querySelectorAll('script').forEach(oldScript => {
       const newScript = document.createElement('script');
       if (oldScript.src) {
@@ -241,10 +202,7 @@ document.querySelectorAll('.top-menu a').forEach(link => {
   });
 });
 
-window.addEventListener('popstate', () => {
-  loadPage(location.pathname || '/projects');
-});
-
+window.addEventListener('popstate', () => { loadPage(location.pathname || '/projects'); });
 window.addEventListener('load', () => {
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user') || 'null');
@@ -259,21 +217,17 @@ window.addEventListener('load', () => {
   }
 });
 
-// Глобальные функции для компонентов
 let templates = [];
 let editingTemplateId = null;
-
 async function loadTemplatesGlobal() {
   const token = localStorage.getItem('token');
+  if (!token) return;
   try {
     const res = await fetch('/api/block-templates', { headers: { 'Authorization': 'Bearer ' + token } });
     if (res.ok) templates = await res.json();
   } catch(e) {}
 }
-
-function closeTemplateModal() {
-  document.getElementById('templateModal').classList.add('hidden');
-}
+function closeTemplateModal() { document.getElementById('templateModal').classList.add('hidden'); }
 function openTemplateModal(id=null) {
   editingTemplateId = id;
   document.getElementById('modalError').textContent = '';
@@ -297,7 +251,6 @@ function openTemplateModal(id=null) {
   }
   document.getElementById('templateModal').classList.remove('hidden');
 }
-
 document.getElementById('addParamBtn').addEventListener('click', () => {
   const row = document.createElement('div');
   row.className = 'param-row';
@@ -305,13 +258,8 @@ document.getElementById('addParamBtn').addEventListener('click', () => {
   document.getElementById('modalParams').appendChild(row);
   row.querySelector('.remove-param-btn').addEventListener('click', () => row.remove());
 });
-
-document.getElementById('modalParams').addEventListener('click', (e) => {
-  if (e.target.classList.contains('remove-param-btn')) e.target.parentElement.remove();
-});
-
+document.getElementById('modalParams').addEventListener('click', (e) => { if (e.target.classList.contains('remove-param-btn')) e.target.parentElement.remove(); });
 document.getElementById('cancelTemplateBtn').addEventListener('click', closeTemplateModal);
-
 document.getElementById('saveTemplateBtn').addEventListener('click', async () => {
   const name = document.getElementById('modalTemplateName').value.trim();
   if (!name) { document.getElementById('modalError').textContent = 'Введите название'; return; }
@@ -333,11 +281,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     if (location.pathname === '/component') loadPage('/component');
   } catch(e) { document.getElementById('modalError').textContent = 'Ошибка соединения'; }
 });
-
-document.getElementById('templateModal').addEventListener('click', function(e) {
-  if (e.target === this) closeTemplateModal();
-});
-
+document.getElementById('templateModal').addEventListener('click', function(e) { if (e.target === this) closeTemplateModal(); });
 loadTemplatesGlobal();
 </script>
 </body>
