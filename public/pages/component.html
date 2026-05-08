@@ -1,5 +1,5 @@
-<h2>Шаблоны блоков</h2>
-<button id="addTemplateBtn">+ Добавить шаблон</button>
+<h2>Компоненты</h2>
+<button id="addTemplateBtn">+ Добавить компонент</button>
 <div id="templatesTable" style="margin-top:15px;"></div>
 <script>
 async function loadTemplatesList() {
@@ -11,7 +11,7 @@ async function loadTemplatesList() {
     const templates = await res.json();
     let html = '<table><tr><th>Название</th><th>Описание</th><th>Действия</th></tr>';
     if (templates.length === 0) {
-      html = '<p>Нет шаблонов.</p>';
+      html = '<p>Нет компонентов.</p>';
     } else {
       templates.forEach(t => {
         html += `<tr>
@@ -30,13 +30,13 @@ async function loadTemplatesList() {
     container.querySelectorAll('.edit-template-btn').forEach(btn => {
       btn.addEventListener('click', function() {
         const id = this.dataset.id;
-        openTemplateModal(id); // глобальная функция из index.html
+        openTemplateModal(id);
       });
     });
     container.querySelectorAll('.delete-template-btn').forEach(btn => {
       btn.addEventListener('click', async function() {
         const id = this.dataset.id;
-        if (!confirm('Удалить шаблон?')) return;
+        if (!confirm('Удалить компонент?')) return;
         const token = localStorage.getItem('token');
         try {
           await fetch('/api/block-templates/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
@@ -45,7 +45,7 @@ async function loadTemplatesList() {
       });
     });
   } catch(e) {
-    container.innerHTML = '<p style="color:red;">Ошибка загрузки шаблонов</p>';
+    container.innerHTML = '<p style="color:red;">Ошибка загрузки компонентов</p>';
   }
 }
 document.getElementById('addTemplateBtn').addEventListener('click', () => openTemplateModal());

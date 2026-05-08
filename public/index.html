@@ -67,7 +67,7 @@
     <a href="/create-project" id="createProjectLink">Создать проект</a>
     <a href="/admin/users" id="adminLink" class="hidden">Управление<br>пользователями</a>
     <a href="/admin/all-projects" id="allProjectsLink" class="hidden">Все<br>проекты</a>
-    <a href="/templates" id="templatesLink" class="hidden">Шаблоны</a>
+    <a href="/component" id="templatesLink" class="hidden">Компоненты</a>
   </div>
   <div class="right">
     <span id="menuUserInfo"></span>
@@ -77,10 +77,10 @@
 
 <div id="contentContainer" class="content hidden"></div>
 
-<!-- Модальное окно шаблонов (глобальное, используется в templates.html) -->
+<!-- Модальное окно шаблонов (глобальное, используется в component.html) -->
 <div id="templateModal" class="modal-overlay hidden">
   <div class="modal">
-    <h3 id="modalTitle">Новый шаблон</h3>
+    <h3 id="modalTitle">Новый компонент</h3>
     <div class="form-group">
       <label>Название</label>
       <input type="text" id="modalTemplateName">
@@ -112,7 +112,7 @@ function resetInactivityTimer() {
   clearTimeout(inactivityTimer);
   inactivityTimer = setTimeout(async () => {
     await performLogout();
-    alert('Вы были выведены из системы из-за бездействия.');
+    
   }, INACTIVITY_LIMIT);
 }
 ['click', 'mousemove', 'keydown', 'scroll', 'touchstart'].forEach(evt => {
@@ -209,7 +209,7 @@ async function loadPage(url) {
     else if (url === '/create-project') file = 'create-project.html';
     else if (url === '/admin/users') file = 'admin-users.html';
     else if (url === '/admin/all-projects') file = 'admin-all-projects.html';
-    else if (url === '/templates') file = 'templates.html';
+    else if (url === '/component') file = 'component.html';
     else if (url.startsWith('/project/')) file = 'project-detail.html';
     else file = 'projects.html';
 
@@ -259,7 +259,7 @@ window.addEventListener('load', () => {
   }
 });
 
-// Глобальные функции для шаблонов (используются в templates.html)
+// Глобальные функции для шаблонов (используются в component.html)
 let templates = [];
 let editingTemplateId = null;
 
@@ -280,7 +280,7 @@ function openTemplateModal(id=null) {
   if (id) {
     const t = templates.find(t => t.id == id);
     if (!t) return;
-    document.getElementById('modalTitle').textContent = 'Редактировать шаблон';
+    document.getElementById('modalTitle').textContent = 'Редактировать компонент';
     document.getElementById('modalTemplateName').value = t.name;
     document.getElementById('modalTemplateDesc').value = t.description || '';
     document.getElementById('modalParams').innerHTML = t.parameters.map(p =>
@@ -290,7 +290,7 @@ function openTemplateModal(id=null) {
         <button class="small danger remove-param-btn">×</button>
       </div>`).join('');
   } else {
-    document.getElementById('modalTitle').textContent = 'Новый шаблон';
+    document.getElementById('modalTitle').textContent = 'Новый компонент';
     document.getElementById('modalTemplateName').value = '';
     document.getElementById('modalTemplateDesc').value = '';
     document.getElementById('modalParams').innerHTML = '';
@@ -330,7 +330,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     if (!res.ok) { const err = await res.json(); document.getElementById('modalError').textContent = err.error || 'Ошибка'; return; }
     closeTemplateModal();
     loadTemplatesGlobal();
-    if (location.pathname === '/templates') loadPage('/templates');
+    if (location.pathname === '/component') loadPage('/component');
   } catch(e) { document.getElementById('modalError').textContent = 'Ошибка соединения'; }
 });
 
