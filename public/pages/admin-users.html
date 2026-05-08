@@ -74,12 +74,11 @@ async function loadUsers() {
         } catch(e) { alert('Ошибка соединения'); }
       });
     });
-    // Переход на детальную страницу пользователя (вот здесь теперь navigateTo, а не alert)
+    // Переход на детальную страницу (НЕ alert!)
     container.querySelectorAll('.user-detail-link').forEach(link => {
       link.addEventListener('click', (e) => {
         e.preventDefault();
         const userId = link.dataset.id;
-        // Используем глобальную функцию navigateTo из index.html
         navigateTo('/admin/users/' + userId);
       });
     });
