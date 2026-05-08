@@ -8,7 +8,6 @@ async function loadUsers() {
     const res = await fetch('/api/admin/users', { headers: { 'Authorization': 'Bearer ' + token } });
     if (!res.ok) throw new Error('Ошибка загрузки');
     const users = await res.json();
-    // Получаем текущего пользователя, чтобы скрыть кнопку удаления для самого себя
     const currentUser = JSON.parse(localStorage.getItem('user'));
     let html = '<table><tr><th>ID</th><th>Имя</th><th>Роль</th><th>Статус</th><th>Создан</th><th>Действия</th></tr>';
     users.forEach(u => {
@@ -31,7 +30,6 @@ async function loadUsers() {
     html += '</table>';
     container.innerHTML = html;
 
-    // Обработчики
     container.querySelectorAll('.block-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const id = e.target.dataset.id;
@@ -73,11 +71,12 @@ async function loadUsers() {
         } catch(e) { alert('Ошибка соединения'); }
       });
     });
+    // Вот здесь исправляем: вместо alert делаем переход
     container.querySelectorAll('.user-detail-link').forEach(link => {
-      link.addEventListener('click', async (e) => {
+      link.addEventListener('click', (e) => {
         e.preventDefault();
         const userId = link.dataset.id;
-        alert('Детали пользователя ID=' + userId);
+        navigateTo('/admin/users/' + userId);
       });
     });
   } catch(e) {

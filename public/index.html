@@ -77,7 +77,7 @@
 
 <div id="contentContainer" class="content hidden"></div>
 
-<!-- Модальное окно шаблонов (глобальное, используется в component.html) -->
+<!-- Модальное окно компонентов -->
 <div id="templateModal" class="modal-overlay hidden">
   <div class="modal">
     <h3 id="modalTitle">Новый компонент</h3>
@@ -112,7 +112,6 @@ function resetInactivityTimer() {
   clearTimeout(inactivityTimer);
   inactivityTimer = setTimeout(async () => {
     await performLogout();
-    
   }, INACTIVITY_LIMIT);
 }
 ['click', 'mousemove', 'keydown', 'scroll', 'touchstart'].forEach(evt => {
@@ -211,6 +210,7 @@ async function loadPage(url) {
     else if (url === '/admin/all-projects') file = 'admin-all-projects.html';
     else if (url === '/component') file = 'component.html';
     else if (url.startsWith('/project/')) file = 'project-detail.html';
+    else if (url.match(/^\/admin\/users\/\d+$/)) file = 'user-detail.html';
     else file = 'projects.html';
 
     const res = await fetch('/pages/' + file);
@@ -259,7 +259,7 @@ window.addEventListener('load', () => {
   }
 });
 
-// Глобальные функции для шаблонов (используются в component.html)
+// Глобальные функции для компонентов
 let templates = [];
 let editingTemplateId = null;
 
