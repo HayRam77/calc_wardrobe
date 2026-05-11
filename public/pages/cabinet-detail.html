@@ -100,6 +100,7 @@
     if (typeof manufacturers !== 'undefined') manufacturers.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; manSel.appendChild(o); });
   }
 
+  // Кнопка "Выбрать компонент"
   document.getElementById('selectComponentBtn').addEventListener('click', () => {
     const modal = document.getElementById('templateListModal');
     const listDiv = document.getElementById('templateListContent');
@@ -107,32 +108,53 @@
     if (typeof templates === 'undefined' || templates.length === 0) {
       listDiv.innerHTML = '<p>Нет доступных компонентов</p>';
     } else {
-      const ul = document.createElement('ul');
+      let html = '<table style="width:100%; border-collapse:collapse;">';
+      html += '<tr><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Параметры</th><th>Описание</th></tr>';
       templates.forEach(t => {
-        const li = document.createElement('li');
-        li.style.cursor = 'pointer';
-        li.innerHTML = `<strong>${t.name}</strong> | арт: ${t.article||'—'} | произв: ${t.manufacturer_name||''}`;
-        li.addEventListener('click', async () => {
+        const paramsStr = (t.parameters && t.parameters.length > 0) 
+          ? t.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ') 
+          : '—';
+        html += `<tr class="clickable" data-id="${t.id}" style="cursor:pointer;">
+          <td>${t.type_name || '—'}</td>
+          <td><strong>${t.name}</strong></td>
+          <td>${t.manufacturer_name || '—'}</td>
+          <td>${t.article || '—'}</td>
+          <td>${paramsStr}</td>
+          <td>${t.description || '—'}</td>
+        </tr>`;
+      });
+      html += '</table>';
+      listDiv.innerHTML = html;
+
+      // Обработчики клика по строкам
+      listDiv.querySelectorAll('tr.clickable').forEach(row => {
+        row.addEventListener('click', async () => {
+          const id = row.dataset.id;
           const token = localStorage.getItem('token');
           try {
             const res = await fetch('/api/projects/' + projectId + '/blocks', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-              body: JSON.stringify({ block_name: t.name, cabinet_id: cabinetId, template_id: t.id, order_index: 0 })
+              body: JSON.stringify({
+                block_name: templates.find(t => t.id == id).name,
+                cabinet_id: cabinetId,
+                template_id: id,
+                order_index: 0
+              })
             });
             if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка'); return; }
             modal.style.display = 'none';
             loadCabinet();
           } catch(e) { alert('Ошибка соединения'); }
         });
-        ul.appendChild(li);
       });
-      listDiv.appendChild(ul);
     }
     modal.style.display = 'block';
   });
+
   document.getElementById('closeTemplateListBtn').addEventListener('click', () => { document.getElementById('templateListModal').style.display = 'none'; });
 
+  // Кнопка "Добавить новый компонент"
   document.getElementById('newComponentBtn').addEventListener('click', () => {
     document.getElementById('newComponentForm').style.display = 'block';
     document.getElementById('blockError').textContent = '';
@@ -155,7 +177,6 @@
     const token = localStorage.getItem('token');
 
     let templateId = null;
-    // Создаём/находим шаблон в библиотеке
     try {
       const tmplRes = await fetch('/api/block-templates', {
         method: 'POST',
@@ -166,13 +187,11 @@
         const newTmpl = await tmplRes.json();
         templateId = newTmpl.id;
       } else {
-        // Возможно, уже есть
         const existing = templates.find(t => t.name === blockName);
         if (existing) templateId = existing.id;
       }
     } catch(e) {}
 
-    // Добавляем блок в шкаф
     try {
       const blockRes = await fetch('/api/projects/' + projectId + '/blocks', {
         method: 'POST',
