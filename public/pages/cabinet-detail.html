@@ -15,7 +15,6 @@
   <!-- Форма для нового компонента (изначально скрыта) -->
   <div id="newComponentForm" style="display:none; margin-top:10px; padding:10px; border:1px solid #ccc; background:#f9f9f9;">
     <input type="text" id="blockNameInput" placeholder="Название компонента" style="margin-right:10px;">
-    <select id="templateSelect"><option value="">Без шаблона</option></select>
     <button id="saveNewBlockBtn">Добавить</button>
     <button id="cancelNewBlockBtn">Отмена</button>
     <div id="blockError" style="color:red; margin-top:5px;"></div>
@@ -95,7 +94,6 @@
         li.style.cursor = 'pointer';
         li.style.margin = '5px 0';
         li.addEventListener('click', async () => {
-          // Добавляем блок от имени шаблона
           const token = localStorage.getItem('token');
           try {
             const res = await fetch('/api/projects/' + projectId + '/blocks', {
@@ -131,17 +129,9 @@
   // --- Кнопка "Добавить новый компонент" ---
   document.getElementById('newComponentBtn').addEventListener('click', () => {
     document.getElementById('newComponentForm').style.display = 'block';
-    // Заполняем выпадающий список шаблонов (если есть глобальный templates)
-    const sel = document.getElementById('templateSelect');
-    sel.innerHTML = '<option value="">Без шаблона</option>';
-    if (typeof templates !== 'undefined' && templates.length > 0) {
-      templates.forEach(t => {
-        const opt = document.createElement('option');
-        opt.value = t.id;
-        opt.textContent = t.name;
-        sel.appendChild(opt);
-      });
-    }
+    document.getElementById('blockError').textContent = '';
+    document.getElementById('blockNameInput').value = '';
+    document.getElementById('blockNameInput').focus();
   });
 
   document.getElementById('cancelNewBlockBtn').addEventListener('click', () => {
@@ -155,7 +145,6 @@
     const errorDiv = document.getElementById('blockError');
     errorDiv.textContent = '';
     if (!blockName) { errorDiv.textContent = 'Введите название компонента'; return; }
-    const templateId = document.getElementById('templateSelect').value || null;
     const token = localStorage.getItem('token');
     try {
       const res = await fetch('/api/projects/' + projectId + '/blocks', {
@@ -164,7 +153,7 @@
         body: JSON.stringify({
           block_name: blockName,
           cabinet_id: cabinetId,
-          template_id: templateId,
+          template_id: null, // шаблоны не используются
           order_index: 0
         })
       });
