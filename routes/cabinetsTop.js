@@ -5,7 +5,6 @@ const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
 
-// Получить шкаф по ID (доступен автору проекта и админу)
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -23,13 +22,15 @@ router.get('/:id', async (req, res) => {
     }
 
     const blocks = await pool.query(`
-      SELECT pb.*, 
+      SELECT pb.id, pb.block_name, pb.order_index,
+             bt.manufacturer, bt.article, bt.description AS template_description,
              COALESCE(json_agg(json_build_object('param_name', pbp.param_name, 'param_value', pbp.param_value))
                       FILTER (WHERE pbp.param_name IS NOT NULL), '[]') AS parameters
       FROM project_blocks pb
+      LEFT JOIN block_templates bt ON pb.template_id = bt.id
       LEFT JOIN project_block_params pbp ON pbp.project_block_id = pb.id
       WHERE pb.cabinet_id = $1
-      GROUP BY pb.id
+      GROUP BY pb.id, bt.manufacturer, bt.article, bt.description
       ORDER BY pb.order_index
     `, [id]);
 
