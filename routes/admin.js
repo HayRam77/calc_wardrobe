@@ -147,22 +147,6 @@ router.delete('/cabinets/:id', async (req, res) => {
 });
 
 // Перенести шкаф в другой проект
-router.put('/cabinets/:id/move', async (req, res) => {
-  const { project_id } = req.body;
-  if (!project_id) return res.status(400).json({ error: 'project_id обязателен' });
-  try {
-    const result = await pool.query(
-      'UPDATE cabinets SET project_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      [project_id, req.params.id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Шкаф не найден' });
-    // Также обновляем project_id у всех блоков этого шкафа
-    await pool.query('UPDATE project_blocks SET project_id = $1 WHERE cabinet_id = $2', [project_id, req.params.id]);
-    res.json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // Копировать шкаф с новым именем
 router.post('/cabinets/:id/copy', async (req, res) => {
@@ -206,5 +190,22 @@ router.post('/cabinets/:id/copy', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+// Перенос шкафа в другой проект
+router.put('/cabinets/:id/move', async (req, res) => {
+  const { project_id } = req.body;
+  const { id } = req.params;
+  if (!project_id) return res.status(400).json({ error: 'Не указан project_id' });
+  try {
+    const result = await pool.query(
+      'UPDATE cabinets SET project_id = $1 WHERE id = $2 RETURNING *',
+      [project_id, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Шкаф не найден' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });

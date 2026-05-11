@@ -6,6 +6,18 @@
 
   <h3>Компоненты</h3>
   <div id="cabinetBlocks"></div>
+
+  <button id="addBlockBtn" style="margin-top:15px;">+ Добавить компонент</button>
+  <div id="blockForm" style="display:none; margin-top:10px; padding:10px; border:1px solid #ccc; background:#f9f9f9;">
+    <input type="text" id="blockNameInput" placeholder="Название компонента" style="margin-right:10px;">
+    <select id="templateSelect">
+      <option value="">Без шаблона</option>
+    </select>
+    <button id="saveBlockBtn">Добавить</button>
+    <button id="cancelBlockBtn">Отмена</button>
+    <div id="blockError" style="color:red; margin-top:5px;"></div>
+  </div>
+
   <button onclick="history.back()" style="margin-top:15px;">← Назад</button>
 </div>
 
@@ -13,18 +25,20 @@
 (function() {
   const pathParts = location.pathname.split('/');
   const cabinetId = pathParts[pathParts.length - 1];
+  let projectId = null;
 
   async function loadCabinet() {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch('/api/admin/cabinets/' + cabinetId, {
+      const res = await fetch('/api/cabinets/' + cabinetId, {
         headers: { 'Authorization': 'Bearer ' + token }
       });
       if (!res.ok) throw new Error('Ошибка загрузки');
       const data = await res.json();
       
+      projectId = data.project_id;
       document.getElementById('cabinetName').textContent = data.name;
-      document.getElementById('cabinetCreator').textContent = data.creator || 'неизвестно';
+      document.getElementById('cabinetCreator').textContent = data.project_owner_id || 'неизвестно';
       document.getElementById('cabinetCreated').textContent = new Date(data.created_at).toLocaleString('ru-RU');
       
       const projectLink = document.getElementById('projectLink');
@@ -35,22 +49,80 @@
         navigateTo(this.getAttribute('href'));
       });
 
-      const blocksContainer = document.getElementById('cabinetBlocks');
-      if (data.blocks && data.blocks.length > 0) {
-        let html = '<table><tr><th>Название</th><th>Параметры</th></tr>';
-        data.blocks.forEach(b => {
-          const paramsStr = b.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ') || '—';
-          html += `<tr><td>${b.block_name}</td><td>${paramsStr}</td></tr>`;
-        });
-        html += '</table>';
-        blocksContainer.innerHTML = html;
-      } else {
-        blocksContainer.innerHTML = '<p>Нет компонентов</p>';
-      }
+      renderBlocks(data.blocks || []);
     } catch(e) {
       document.getElementById('cabinetContent').innerHTML = '<p style="color:red;">Ошибка загрузки шкафа</p>';
     }
   }
+
+  function renderBlocks(blocks) {
+    const container = document.getElementById('cabinetBlocks');
+    if (blocks.length === 0) {
+      container.innerHTML = '<p>Нет компонентов</p>';
+      return;
+    }
+    let html = '<table><tr><th>Название</th><th>Параметры</th></tr>';
+    blocks.forEach(b => {
+      const paramsStr = Array.isArray(b.parameters) ? b.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ') : '—';
+      html += `<tr><td>${b.block_name}</td><td>${paramsStr}</td></tr>`;
+    });
+    html += '</table>';
+    container.innerHTML = html;
+  }
+
+  // Заполняем список шаблонов из глобального templates (если есть)
+  function populateTemplateSelect() {
+    const sel = document.getElementById('templateSelect');
+    sel.innerHTML = '<option value="">Без шаблона</option>';
+    if (typeof templates !== 'undefined' && templates.length > 0) {
+      templates.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        sel.appendChild(opt);
+      });
+    }
+  }
+
+  document.getElementById('addBlockBtn').addEventListener('click', () => {
+    document.getElementById('blockForm').style.display = 'block';
+    populateTemplateSelect();
+  });
+
+  document.getElementById('cancelBlockBtn').addEventListener('click', () => {
+    document.getElementById('blockForm').style.display = 'none';
+    document.getElementById('blockError').textContent = '';
+  });
+
+  document.getElementById('saveBlockBtn').addEventListener('click', async () => {
+    const blockName = document.getElementById('blockNameInput').value.trim();
+    const errorDiv = document.getElementById('blockError');
+    errorDiv.textContent = '';
+    if (!blockName) { errorDiv.textContent = 'Введите название компонента'; return; }
+    const templateId = document.getElementById('templateSelect').value || null;
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/projects/' + projectId + '/blocks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          block_name: blockName,
+          cabinet_id: cabinetId,
+          template_id: templateId,
+          order_index: 0
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        errorDiv.textContent = err.error || 'Ошибка';
+        return;
+      }
+      document.getElementById('blockForm').style.display = 'none';
+      document.getElementById('blockNameInput').value = '';
+      // Перезагружаем данные шкафа, чтобы обновить список
+      loadCabinet();
+    } catch(e) { errorDiv.textContent = 'Ошибка соединения'; }
+  });
 
   loadCabinet();
 })();
