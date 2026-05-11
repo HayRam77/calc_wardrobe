@@ -7,15 +7,25 @@
   <h3>Компоненты</h3>
   <div id="cabinetBlocks"></div>
 
-  <button id="addBlockBtn" style="margin-top:15px;">+ Добавить компонент</button>
-  <div id="blockForm" style="display:none; margin-top:10px; padding:10px; border:1px solid #ccc; background:#f9f9f9;">
+  <div style="margin-top:15px; display:flex; gap:10px;">
+    <button id="selectComponentBtn">Выбрать компонент</button>
+    <button id="newComponentBtn">Добавить новый компонент</button>
+  </div>
+
+  <!-- Форма для нового компонента (изначально скрыта) -->
+  <div id="newComponentForm" style="display:none; margin-top:10px; padding:10px; border:1px solid #ccc; background:#f9f9f9;">
     <input type="text" id="blockNameInput" placeholder="Название компонента" style="margin-right:10px;">
-    <select id="templateSelect">
-      <option value="">Без шаблона</option>
-    </select>
-    <button id="saveBlockBtn">Добавить</button>
-    <button id="cancelBlockBtn">Отмена</button>
+    <select id="templateSelect"><option value="">Без шаблона</option></select>
+    <button id="saveNewBlockBtn">Добавить</button>
+    <button id="cancelNewBlockBtn">Отмена</button>
     <div id="blockError" style="color:red; margin-top:5px;"></div>
+  </div>
+
+  <!-- Модальное окно выбора шаблона (список компонентов) -->
+  <div id="templateListModal" style="display:none; position:fixed; top:20%; left:50%; transform:translate(-50%,0); background:white; border:1px solid #ccc; padding:20px; z-index:1000; max-height:60%; overflow-y:auto;">
+    <h3>Выберите компонент</h3>
+    <div id="templateListContent"></div>
+    <button id="closeTemplateListBtn" style="margin-top:10px;">Закрыть</button>
   </div>
 
   <button onclick="history.back()" style="margin-top:15px;">← Назад</button>
@@ -70,8 +80,58 @@
     container.innerHTML = html;
   }
 
-  // Заполняем список шаблонов из глобального templates (если есть)
-  function populateTemplateSelect() {
+  // --- Кнопка "Выбрать компонент" ---
+  document.getElementById('selectComponentBtn').addEventListener('click', () => {
+    const modal = document.getElementById('templateListModal');
+    const listDiv = document.getElementById('templateListContent');
+    listDiv.innerHTML = '';
+    if (typeof templates === 'undefined' || templates.length === 0) {
+      listDiv.innerHTML = '<p>Нет доступных компонентов</p>';
+    } else {
+      const ul = document.createElement('ul');
+      templates.forEach(t => {
+        const li = document.createElement('li');
+        li.textContent = t.name + (t.description ? ' (' + t.description + ')' : '');
+        li.style.cursor = 'pointer';
+        li.style.margin = '5px 0';
+        li.addEventListener('click', async () => {
+          // Добавляем блок от имени шаблона
+          const token = localStorage.getItem('token');
+          try {
+            const res = await fetch('/api/projects/' + projectId + '/blocks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+              body: JSON.stringify({
+                block_name: t.name,
+                cabinet_id: cabinetId,
+                template_id: t.id,
+                order_index: 0
+              })
+            });
+            if (!res.ok) {
+              const err = await res.json();
+              alert(err.error || 'Ошибка');
+              return;
+            }
+            modal.style.display = 'none';
+            loadCabinet();
+          } catch(e) { alert('Ошибка соединения'); }
+        });
+        ul.appendChild(li);
+      });
+      listDiv.appendChild(ul);
+    }
+    modal.style.display = 'block';
+  });
+
+  document.getElementById('closeTemplateListBtn').addEventListener('click', () => {
+    document.getElementById('templateListModal').style.display = 'none';
+  });
+
+  // --- Кнопка "Добавить новый компонент" ---
+  document.getElementById('newComponentBtn').addEventListener('click', () => {
+    document.getElementById('newComponentForm').style.display = 'block';
+    // Заполняем выпадающий список шаблонов (если есть глобальный templates)
     const sel = document.getElementById('templateSelect');
     sel.innerHTML = '<option value="">Без шаблона</option>';
     if (typeof templates !== 'undefined' && templates.length > 0) {
@@ -82,19 +142,15 @@
         sel.appendChild(opt);
       });
     }
-  }
-
-  document.getElementById('addBlockBtn').addEventListener('click', () => {
-    document.getElementById('blockForm').style.display = 'block';
-    populateTemplateSelect();
   });
 
-  document.getElementById('cancelBlockBtn').addEventListener('click', () => {
-    document.getElementById('blockForm').style.display = 'none';
+  document.getElementById('cancelNewBlockBtn').addEventListener('click', () => {
+    document.getElementById('newComponentForm').style.display = 'none';
     document.getElementById('blockError').textContent = '';
+    document.getElementById('blockNameInput').value = '';
   });
 
-  document.getElementById('saveBlockBtn').addEventListener('click', async () => {
+  document.getElementById('saveNewBlockBtn').addEventListener('click', async () => {
     const blockName = document.getElementById('blockNameInput').value.trim();
     const errorDiv = document.getElementById('blockError');
     errorDiv.textContent = '';
@@ -117,9 +173,8 @@
         errorDiv.textContent = err.error || 'Ошибка';
         return;
       }
-      document.getElementById('blockForm').style.display = 'none';
+      document.getElementById('newComponentForm').style.display = 'none';
       document.getElementById('blockNameInput').value = '';
-      // Перезагружаем данные шкафа, чтобы обновить список
       loadCabinet();
     } catch(e) { errorDiv.textContent = 'Ошибка соединения'; }
   });
