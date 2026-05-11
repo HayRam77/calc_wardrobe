@@ -25,7 +25,9 @@
 <script>
 document.getElementById('saveProjectBtn').addEventListener('click', async () => {
   const name = document.getElementById('newProjectName').value.trim();
-  if (!name) { document.getElementById('createProjectError').textContent = 'Введите название проекта'; return; }
+  const errorDiv = document.getElementById('createProjectError');
+  errorDiv.textContent = '';
+  if (!name) { errorDiv.textContent = 'Введите название проекта'; return; }
   const voltage = document.getElementById('newProjectVoltage').value;
   const remark = document.getElementById('newProjectRemark').value.trim();
   const cabinet_name = document.getElementById('newCabinetName').value.trim();
@@ -36,10 +38,14 @@ document.getElementById('saveProjectBtn').addEventListener('click', async () => 
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({ name, voltage, remark, cabinet_name })
     });
-    if (!res.ok) { const err = await res.json(); document.getElementById('createProjectError').textContent = err.error || 'Ошибка'; return; }
+    const data = await res.json().catch(() => ({ error: 'Неизвестная ошибка' }));
+    if (!res.ok) {
+      errorDiv.textContent = data.error || 'Ошибка сервера';
+      return;
+    }
     history.pushState(null, '', '/projects');
     loadPage('/projects');
-  } catch(e) { document.getElementById('createProjectError').textContent = 'Ошибка соединения'; }
+  } catch(e) { errorDiv.textContent = 'Ошибка соединения с сервером'; }
 });
 document.getElementById('cancelCreateProjectBtn').addEventListener('click', () => {
   history.pushState(null, '', '/projects');

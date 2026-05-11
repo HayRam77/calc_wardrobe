@@ -5,7 +5,7 @@ const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
 
-// Создать проект (добавляем cabinet_name)
+// Создать проект
 router.post('/', async (req, res) => {
   const { name, voltage, remark, cabinet_name } = req.body;
   if (!name) return res.status(400).json({ error: 'Имя проекта обязательно' });
@@ -17,14 +17,17 @@ router.post('/', async (req, res) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Проект с таким именем уже существует' });
+    }
     res.status(500).json({ error: err.message });
   }
 });
 
-// Список проектов (админ видит все, пользователь — свои)
+// Список проектов
 router.get('/', async (req, res) => {
   try {
-    const query = req.user.role === 'admin'
+    const query = req.user.role === 'admin' 
       ? 'SELECT p.*, u.username as created_by FROM projects p LEFT JOIN users u ON p.user_id = u.id ORDER BY p.updated_at DESC'
       : 'SELECT p.*, u.username as created_by FROM projects p LEFT JOIN users u ON p.user_id = u.id WHERE p.user_id = $1 ORDER BY p.updated_at DESC';
     const params = req.user.role === 'admin' ? [] : [req.user.userId];
@@ -59,7 +62,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Обновить проект (добавляем возможность менять cabinet_name)
+// Обновить проект
 router.put('/:id', async (req, res) => {
   const { name, voltage, simultaneity_factor, remark, cabinet_name } = req.body;
   try {
@@ -79,6 +82,9 @@ router.put('/:id', async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ error: 'Проект не найден' });
     res.json(result.rows[0]);
   } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Проект с таким именем уже существует' });
+    }
     res.status(500).json({ error: err.message });
   }
 });
