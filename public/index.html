@@ -69,6 +69,7 @@
 
 <div id="contentContainer" class="content hidden"></div>
 
+<!-- Модальное окно компонента -->
 <div id="templateModal" class="modal-overlay hidden">
   <div class="modal">
     <h3 id="modalTitle">Новый компонент</h3>
@@ -79,6 +80,9 @@
     <div class="form-group"><label>Описание</label><input type="text" id="modalTemplateDesc"></div>
     <div class="form-group"><label>Цена, руб.</label><input type="number" id="modalPrice" step="0.01"></div>
     <div class="form-group"><label>Трудозатраты, мин.</label><input type="number" id="modalLabor" step="1"></div>
+    <h4>Параметры</h4>
+    <div id="modalParams"></div>
+    <button id="addParamBtn" class="small" style="margin-top:8px;">+ Параметр</button>
     <div id="modalError" class="error" style="margin-top:8px;"></div>
     <div style="margin-top:15px; text-align:right;">
       <button id="saveTemplateBtn">Сохранить</button>
@@ -263,16 +267,19 @@ async function loadTemplatesGlobal() {
 
 function closeTemplateModal() { document.getElementById('templateModal').classList.add('hidden'); }
 async function openTemplateModal(id=null) {
-  // загружаем актуальные справочники
   await loadTemplatesGlobal();
   editingTemplateId = id;
   document.getElementById('modalError').textContent = '';
+  // Заполняем типы и производители
   const typeSel = document.getElementById('modalType');
   typeSel.innerHTML = '<option value="">--</option>';
   componentTypes.forEach(t => { const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; typeSel.appendChild(o); });
   const manSel = document.getElementById('modalManufacturer');
   manSel.innerHTML = '<option value="">--</option>';
   manufacturers.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; manSel.appendChild(o); });
+
+  // Очищаем параметры
+  document.getElementById('modalParams').innerHTML = '';
 
   if (id) {
     const t = templates.find(t => t.id == id);
@@ -285,6 +292,12 @@ async function openTemplateModal(id=null) {
     document.getElementById('modalArticle').value = t.article || '';
     document.getElementById('modalPrice').value = t.price || '';
     document.getElementById('modalLabor').value = t.labor || '';
+    // Загружаем параметры
+    if (t.parameters && t.parameters.length > 0) {
+      t.parameters.forEach(p => {
+        addParamRow(p.param_name, p.param_value);
+      });
+    }
   } else {
     document.getElementById('modalTitle').textContent = 'Новый компонент';
     document.getElementById('modalTemplateName').value = '';
@@ -298,7 +311,23 @@ async function openTemplateModal(id=null) {
   document.getElementById('templateModal').classList.remove('hidden');
 }
 
+function addParamRow(name='', value='') {
+  const row = document.createElement('div');
+  row.className = 'param-row';
+  row.innerHTML = `<input type="text" class="param-name" value="${name}" placeholder="Название">
+                   <input type="text" class="param-value" value="${value}" placeholder="Значение">
+                   <button class="small danger remove-param-btn">×</button>`;
+  document.getElementById('modalParams').appendChild(row);
+  row.querySelector('.remove-param-btn').addEventListener('click', () => row.remove());
+}
+
+document.getElementById('addParamBtn').addEventListener('click', () => addParamRow());
+document.getElementById('modalParams').addEventListener('click', (e) => {
+  if (e.target.classList.contains('remove-param-btn')) e.target.parentElement.remove();
+});
+
 document.getElementById('cancelTemplateBtn').addEventListener('click', closeTemplateModal);
+
 document.getElementById('saveTemplateBtn').addEventListener('click', async () => {
   const name = document.getElementById('modalTemplateName').value.trim();
   if (!name) { document.getElementById('modalError').textContent = 'Введите название'; return; }
@@ -308,6 +337,14 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
   const article = document.getElementById('modalArticle').value.trim();
   const price = parseFloat(document.getElementById('modalPrice').value) || null;
   const labor = parseInt(document.getElementById('modalLabor').value) || null;
+  // Собираем параметры
+  const parameters = [];
+  document.querySelectorAll('.param-row').forEach(row => {
+    const pn = row.querySelector('.param-name').value.trim();
+    const pv = row.querySelector('.param-value').value;
+    if (pn) parameters.push({ param_name: pn, param_value: pv });
+  });
+
   const token = localStorage.getItem('token');
   const url = editingTemplateId ? '/api/block-templates/' + editingTemplateId : '/api/block-templates';
   const method = editingTemplateId ? 'PUT' : 'POST';
@@ -315,7 +352,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ name, description: desc, type_id, manufacturer_id, article, price, labor })
+      body: JSON.stringify({ name, description: desc, type_id, manufacturer_id, article, price, labor, parameters })
     });
     if (!res.ok) { const err = await res.json(); document.getElementById('modalError').textContent = err.error || 'Ошибка'; return; }
     closeTemplateModal();
@@ -323,7 +360,9 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     if (location.pathname === '/component') loadPage('/component');
   } catch(e) { document.getElementById('modalError').textContent = 'Ошибка соединения'; }
 });
+
 document.getElementById('templateModal').addEventListener('click', function(e) { if (e.target === this) closeTemplateModal(); });
+loadTemplatesGlobal();
 </script>
 </body>
 </html>

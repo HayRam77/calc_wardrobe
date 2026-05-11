@@ -2,6 +2,9 @@
 <div style="margin-bottom:10px;">
   <input type="text" id="newTypeName" placeholder="Название типа">
   <button id="addTypeBtn">Добавить</button>
+  <button id="exportTypesBtn">Экспорт Excel</button>
+  <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls">
+  <button id="importTypesBtn">Импорт Excel</button>
 </div>
 <div id="typesTable"></div>
 <script>
@@ -23,7 +26,6 @@
         btn.addEventListener('click', async (e) => {
           if (!confirm('Удалить тип?')) return;
           await fetch('/api/component-types/' + e.target.dataset.id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
-          // Обновляем глобальный массив типов
           if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
           loadTypes();
         });
@@ -41,9 +43,54 @@
     });
     if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка'); return; }
     document.getElementById('newTypeName').value = '';
-    // Обновляем глобальный массив типов
     if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
     loadTypes();
+  });
+
+  // Экспорт через fetch и скачивание файла
+  document.getElementById('exportTypesBtn').addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/component-types/export', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Ошибка экспорта');
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'component_types.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch(e) { alert('Ошибка соединения'); }
+  });
+
+  // Импорт
+  const fileInput = document.getElementById('importFile');
+  document.getElementById('importTypesBtn').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch('/api/component-types/import', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Ошибка'); return; }
+      alert(`Добавлено ${data.added} из ${data.total}`);
+      if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
+      loadTypes();
+    } catch(e) { alert('Ошибка импорта'); }
+    fileInput.value = '';
   });
 
   loadTypes();

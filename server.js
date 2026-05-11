@@ -1,9 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const fileUpload = require('express-fileupload');
 const authRoutes = require('./routes/auth');
 const projectsRoutes = require('./routes/projects');
-const blockTemplatesRoutes = require('./routes/blockTemplates');
+const blockTemplatesRoutes = require('./routes/blockTemplates2');
 const projectBlocksRoutes = require('./routes/projectBlocks');
 const adminRoutes = require('./routes/admin');
 const cabinetsRoutes = require('./routes/cabinets');
@@ -16,6 +17,7 @@ const PORT = process.env.SERVER_PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+app.use(fileUpload());
 
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectsRoutes);
