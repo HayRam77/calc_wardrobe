@@ -1,0 +1,57 @@
+<div id="cabinetContent">
+  <h2>Шкаф: <span id="cabinetName"></span></h2>
+  <p>Проект: <a href="#" id="projectLink"></a></p>
+  <p>Создатель: <span id="cabinetCreator"></span></p>
+  <p>Дата создания: <span id="cabinetCreated"></span></p>
+
+  <h3>Компоненты</h3>
+  <div id="cabinetBlocks"></div>
+  <button onclick="history.back()" style="margin-top:15px;">← Назад</button>
+</div>
+
+<script>
+(function() {
+  const pathParts = location.pathname.split('/');
+  const cabinetId = pathParts[pathParts.length - 1];
+
+  async function loadCabinet() {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/admin/cabinets/' + cabinetId, {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!res.ok) throw new Error('Ошибка загрузки');
+      const data = await res.json();
+      
+      document.getElementById('cabinetName').textContent = data.name;
+      document.getElementById('cabinetCreator').textContent = data.creator || 'неизвестно';
+      document.getElementById('cabinetCreated').textContent = new Date(data.created_at).toLocaleString('ru-RU');
+      
+      const projectLink = document.getElementById('projectLink');
+      projectLink.textContent = data.project_name;
+      projectLink.href = '/project/' + data.project_id;
+      projectLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        navigateTo(this.getAttribute('href'));
+      });
+
+      const blocksContainer = document.getElementById('cabinetBlocks');
+      if (data.blocks && data.blocks.length > 0) {
+        let html = '<table><tr><th>Название</th><th>Параметры</th></tr>';
+        data.blocks.forEach(b => {
+          const paramsStr = b.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ') || '—';
+          html += `<tr><td>${b.block_name}</td><td>${paramsStr}</td></tr>`;
+        });
+        html += '</table>';
+        blocksContainer.innerHTML = html;
+      } else {
+        blocksContainer.innerHTML = '<p>Нет компонентов</p>';
+      }
+    } catch(e) {
+      document.getElementById('cabinetContent').innerHTML = '<p style="color:red;">Ошибка загрузки шкафа</p>';
+    }
+  }
+
+  loadCabinet();
+})();
+</script>

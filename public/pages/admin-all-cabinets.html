@@ -18,7 +18,7 @@
     let html = '<table><tr><th>Название шкафа</th><th>Проект</th><th>Создатель</th><th>Дата создания</th></tr>';
     cabinets.forEach(c => {
       html += `<tr>
-        <td><a href="/project/${c.project_id}" class="cabinet-link">${c.cabinet_name}</a></td>
+        <td><a href="/cabinet/${c.id}" class="cabinet-link">${c.cabinet_name}</a></td>
         <td>${c.project_name}</td>
         <td>${c.creator || 'неизвестно'}</td>
         <td>${new Date(c.created_at).toLocaleString('ru-RU')}</td>

@@ -175,6 +175,7 @@ async function loadPage(url) {
     else if (url === '/admin/all-projects') file = 'admin-all-projects.html';
     else if (url === '/admin/all-cabinets') file = 'admin-all-cabinets.html';
     else if (url === '/component') file = 'component.html';
+    else if (url.startsWith('/cabinet/')) file = 'cabinet-detail.html';
     else if (url.startsWith('/project/')) file = 'project-detail.html';
     else if (url.match(/^\/admin\/users\/\d+$/)) file = 'user-detail.html';
     else file = 'projects.html';

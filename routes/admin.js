@@ -99,3 +99,38 @@ router.get('/cabinets', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Получить конкретный шкаф (админ)
+router.get('/cabinets/:id', async (req, res) => {
+  try {
+    const cabinet = await pool.query(`
+      SELECT c.*, p.name AS project_name, p.id AS project_id,
+             u.username AS creator
+      FROM cabinets c
+      JOIN projects p ON c.project_id = p.id
+      LEFT JOIN users u ON p.user_id = u.id
+      WHERE c.id = $1
+    `, [req.params.id]);
+    if (cabinet.rows.length === 0) return res.status(404).json({ error: 'Шкаф не найден' });
+
+    const blocks = await pool.query(`
+      SELECT pb.*, 
+             (SELECT json_agg(json_build_object('param_name', pbp.param_name, 'param_value', pbp.param_value))
+              FROM project_block_params pbp WHERE pbp.project_block_id = pb.id) AS parameters
+      FROM project_blocks pb
+      WHERE pb.cabinet_id = $1
+      ORDER BY pb.order_index
+    `, [req.params.id]);
+
+    const result = {
+      ...cabinet.rows[0],
+      blocks: blocks.rows.map(b => ({
+        ...b,
+        parameters: b.parameters || []
+      }))
+    };
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
