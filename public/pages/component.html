@@ -18,7 +18,7 @@
       const res = await fetch('/api/block-templates', { headers: { 'Authorization': 'Bearer ' + token } });
       if (!res.ok) throw new Error('Ошибка загрузки');
       const templates = await res.json();
-      let html = '<table><tr><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th><th>Трудозатраты, мин.</th><th>Параметры</th><th></th></tr>';
+      let html = '<table><tr><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th><th>Параметры</th><th></th></tr>';
       if (templates.length === 0) {
         html = '<p>Нет компонентов.</p>';
       } else {
@@ -32,7 +32,6 @@
             <td>${t.manufacturer_name || ''}</td>
             <td>${t.article || ''}</td>
             <td>${t.price != null ? t.price : ''}</td>
-            <td>${t.labor != null ? t.labor : ''}</td>
             <td>${paramsStr}</td>
             <td>
               <button class="small edit-template-btn" data-id="${t.id}">Редактировать</button>
