@@ -23,6 +23,8 @@
         btn.addEventListener('click', async (e) => {
           if (!confirm('Удалить тип?')) return;
           await fetch('/api/component-types/' + e.target.dataset.id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
+          // Обновляем глобальный массив
+          if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
           loadTypes();
         });
       });
@@ -39,6 +41,8 @@
     });
     if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка'); return; }
     document.getElementById('newTypeName').value = '';
+    // Обновляем глобальный массив
+    if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
     loadTypes();
   });
 

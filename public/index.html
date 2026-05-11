@@ -69,7 +69,6 @@
 
 <div id="contentContainer" class="content hidden"></div>
 
-<!-- Модальное окно компонента -->
 <div id="templateModal" class="modal-overlay hidden">
   <div class="modal">
     <h3 id="modalTitle">Новый компонент</h3>
@@ -245,12 +244,17 @@ let editingTemplateId = null;
 
 async function loadTemplatesGlobal() {
   const token = localStorage.getItem('token');
+  if (!token) return;
   try {
     const [tRes, ctRes, mRes] = await Promise.all([
       fetch('/api/block-templates', { headers: { 'Authorization': 'Bearer ' + token } }),
       fetch('/api/component-types', { headers: { 'Authorization': 'Bearer ' + token } }),
       fetch('/api/manufacturers', { headers: { 'Authorization': 'Bearer ' + token } })
     ]);
+    if (tRes.status === 401 || ctRes.status === 401 || mRes.status === 401) {
+      performLogout();
+      return;
+    }
     if (tRes.ok) templates = await tRes.json();
     if (ctRes.ok) componentTypes = await ctRes.json();
     if (mRes.ok) manufacturers = await mRes.json();
@@ -258,7 +262,9 @@ async function loadTemplatesGlobal() {
 }
 
 function closeTemplateModal() { document.getElementById('templateModal').classList.add('hidden'); }
-function openTemplateModal(id=null) {
+async function openTemplateModal(id=null) {
+  // загружаем актуальные справочники
+  await loadTemplatesGlobal();
   editingTemplateId = id;
   document.getElementById('modalError').textContent = '';
   const typeSel = document.getElementById('modalType');
@@ -318,7 +324,6 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
   } catch(e) { document.getElementById('modalError').textContent = 'Ошибка соединения'; }
 });
 document.getElementById('templateModal').addEventListener('click', function(e) { if (e.target === this) closeTemplateModal(); });
-
 </script>
 </body>
 </html>

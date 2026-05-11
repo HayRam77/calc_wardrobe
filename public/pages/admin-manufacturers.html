@@ -23,6 +23,7 @@
         btn.addEventListener('click', async (e) => {
           if (!confirm('Удалить?')) return;
           await fetch('/api/manufacturers/' + e.target.dataset.id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
+          if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
           loadManufacturers();
         });
       });
@@ -39,6 +40,7 @@
     });
     if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка'); return; }
     document.getElementById('newManufName').value = '';
+    if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
     loadManufacturers();
   });
 
