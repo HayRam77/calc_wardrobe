@@ -38,9 +38,12 @@ router.post('/', async (req, res) => {
   const { block_name, template_id, order_index, cabinet_id } = req.body;
   if (!block_name) return res.status(400).json({ error: 'Имя блока обязательно' });
   if (!cabinet_id) return res.status(400).json({ error: 'cabinet_id обязателен' });
+  
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Проверяем существование проекта и шкафа
     const proj = await client.query('SELECT id FROM projects WHERE id = $1', [projectId]);
     if (proj.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -51,15 +54,38 @@ router.post('/', async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Шкаф не найден в проекте' });
     }
+
+    let finalTemplateId = template_id || null;
+
+    // Если шаблон не указан, но имя задано, автоматически создаём новый шаблон (библиотеку)
+    if (!finalTemplateId && block_name) {
+      // Проверим, существует ли уже шаблон с таким именем
+      const existing = await client.query('SELECT id FROM block_templates WHERE name = $1', [block_name]);
+      if (existing.rows.length > 0) {
+        finalTemplateId = existing.rows[0].id;
+      } else {
+        // Создаём новый шаблон
+        const newTmpl = await client.query(
+          "INSERT INTO block_templates (name, description, created_by) VALUES ($1, '', $2) RETURNING id",
+          [block_name, req.user.userId]
+        );
+        finalTemplateId = newTmpl.rows[0].id;
+        // Параметры не копируем, оставляем пустыми
+      }
+    }
+
+    // Создаём блок, привязываем к cabinet_id и полученному шаблону
     const blockRes = await client.query(
       'INSERT INTO project_blocks (project_id, cabinet_id, template_id, block_name, order_index) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [projectId, cabinet_id, template_id || null, block_name, order_index || 0]
+      [projectId, cabinet_id, finalTemplateId, block_name, order_index || 0]
     );
     const newBlock = blockRes.rows[0];
-    if (template_id) {
+
+    // Если template_id был указан изначально, копируем параметры
+    if (finalTemplateId) {
       const params = await client.query(
         'SELECT param_name, param_value FROM block_parameters WHERE template_id = $1 ORDER BY display_order',
-        [template_id]
+        [finalTemplateId]
       );
       for (const p of params.rows) {
         await client.query(
@@ -68,12 +94,17 @@ router.post('/', async (req, res) => {
         );
       }
     }
+
     await client.query('COMMIT');
+    // Возвращаем созданный блок с параметрами
     const fullBlock = await pool.query('SELECT * FROM project_blocks WHERE id = $1', [newBlock.id]);
-    const params = await pool.query('SELECT param_name, param_value FROM project_block_params WHERE project_block_id = $1', [newBlock.id]);
-    res.status(201).json({ ...fullBlock.rows[0], parameters: params.rows });
+    const blockParams = await pool.query('SELECT param_name, param_value FROM project_block_params WHERE project_block_id = $1', [newBlock.id]);
+    res.status(201).json({ ...fullBlock.rows[0], parameters: blockParams.rows });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Такой компонент уже существует' });
+    }
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
