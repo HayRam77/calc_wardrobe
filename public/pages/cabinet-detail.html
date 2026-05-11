@@ -12,7 +12,7 @@
     <button id="newComponentBtn">Добавить новый компонент</button>
   </div>
 
-  <!-- Форма для нового компонента (изначально скрыта) -->
+  <!-- Форма для нового компонента -->
   <div id="newComponentForm" style="display:none; margin-top:10px; padding:10px; border:1px solid #ccc; background:#f9f9f9;">
     <input type="text" id="blockNameInput" placeholder="Название компонента" style="margin-right:10px;">
     <button id="saveNewBlockBtn">Добавить</button>
@@ -20,7 +20,7 @@
     <div id="blockError" style="color:red; margin-top:5px;"></div>
   </div>
 
-  <!-- Модальное окно выбора шаблона (список компонентов) -->
+  <!-- Модальное окно выбора шаблона -->
   <div id="templateListModal" style="display:none; position:fixed; top:20%; left:50%; transform:translate(-50%,0); background:white; border:1px solid #ccc; padding:20px; z-index:1000; max-height:60%; overflow-y:auto;">
     <h3>Выберите компонент</h3>
     <div id="templateListContent"></div>
@@ -70,13 +70,33 @@
       container.innerHTML = '<p>Нет компонентов</p>';
       return;
     }
-    let html = '<table><tr><th>Название</th><th>Параметры</th></tr>';
+    let html = '<table><tr><th>Название</th><th>Параметры</th><th></th></tr>';
     blocks.forEach(b => {
       const paramsStr = Array.isArray(b.parameters) ? b.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ') : '—';
-      html += `<tr><td>${b.block_name}</td><td>${paramsStr}</td></tr>`;
+      html += `<tr>
+        <td>${b.block_name}</td>
+        <td>${paramsStr}</td>
+        <td><button class="small danger delete-block-btn" data-id="${b.id}">Удалить</button></td>
+      </tr>`;
     });
     html += '</table>';
     container.innerHTML = html;
+
+    // Обработчики удаления
+    container.querySelectorAll('.delete-block-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const blockId = e.target.dataset.id;
+        if (!confirm('Удалить компонент?')) return;
+        const token = localStorage.getItem('token');
+        try {
+          await fetch('/api/projects/' + projectId + '/blocks/' + blockId, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+          loadCabinet();
+        } catch(e) { alert('Ошибка удаления'); }
+      });
+    });
   }
 
   // --- Кнопка "Выбрать компонент" ---
@@ -153,7 +173,7 @@
         body: JSON.stringify({
           block_name: blockName,
           cabinet_id: cabinetId,
-          template_id: null, // шаблоны не используются
+          template_id: null,
           order_index: 0
         })
       });

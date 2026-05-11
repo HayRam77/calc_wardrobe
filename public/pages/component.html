@@ -1,53 +1,83 @@
 <h2>Компоненты</h2>
 <button id="addTemplateBtn">+ Добавить компонент</button>
 <div id="templatesTable" style="margin-top:15px;"></div>
-<script>
-async function loadTemplatesList() {
-  const token = localStorage.getItem('token');
-  const container = document.getElementById('templatesTable');
-  try {
-    const res = await fetch('/api/block-templates', { headers: { 'Authorization': 'Bearer ' + token } });
-    if (!res.ok) throw new Error('Ошибка загрузки');
-    const templates = await res.json();
-    let html = '<table><tr><th>Название</th><th>Описание</th><th>Действия</th></tr>';
-    if (templates.length === 0) {
-      html = '<p>Нет компонентов.</p>';
-    } else {
-      templates.forEach(t => {
-        html += `<tr>
-          <td>${t.name}</td>
-          <td>${t.description || ''}</td>
-          <td>
-            <button class="small edit-template-btn" data-id="${t.id}">Редактировать</button>
-            <button class="small danger delete-template-btn" data-id="${t.id}">Удалить</button>
-          </td>
-        </tr>`;
-      });
-    }
-    html += '</table>';
-    container.innerHTML = html;
 
-    container.querySelectorAll('.edit-template-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const id = this.dataset.id;
-        openTemplateModal(id);
+<!-- Модальное окно для добавления/редактирования компонента (только название и описание) -->
+<div id="templateModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3 id="modalTitle">Новый компонент</h3>
+    <div class="form-group">
+      <label>Название</label>
+      <input type="text" id="modalTemplateName">
+    </div>
+    <div class="form-group">
+      <label>Описание (необязательно)</label>
+      <input type="text" id="modalTemplateDesc">
+    </div>
+    <!-- Параметры убраны -->
+    <div id="modalError" class="error" style="margin-top:8px;"></div>
+    <div style="margin-top:15px; text-align:right;">
+      <button id="saveTemplateBtn">Сохранить</button>
+      <button id="cancelTemplateBtn" style="background:#888; margin-left:8px;">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Глобальные переменные (из index.html) – templates, editingTemplateId, openTemplateModal, closeTemplateModal, loadTemplatesGlobal
+  // Пока они доступны, просто оборачиваем в IIFE для безопасности
+
+  async function loadTemplatesList() {
+    const token = localStorage.getItem('token');
+    const container = document.getElementById('templatesTable');
+    if (!container) return;
+    try {
+      const res = await fetch('/api/block-templates', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) throw new Error('Ошибка загрузки');
+      const templates = await res.json();
+      let html = '<table><tr><th>Название</th><th>Описание</th><th>Действия</th></tr>';
+      if (templates.length === 0) {
+        html = '<p>Нет компонентов.</p>';
+      } else {
+        templates.forEach(t => {
+          html += `<tr>
+            <td>${t.name}</td>
+            <td>${t.description || ''}</td>
+            <td>
+              <button class="small edit-template-btn" data-id="${t.id}">Редактировать</button>
+              <button class="small danger delete-template-btn" data-id="${t.id}">Удалить</button>
+            </td>
+          </tr>`;
+        });
+      }
+      html += '</table>';
+      container.innerHTML = html;
+
+      // Обработчики редактирования/удаления
+      container.querySelectorAll('.edit-template-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const id = this.dataset.id;
+          openTemplateModal(id); // глобальная функция из index.html
+        });
       });
-    });
-    container.querySelectorAll('.delete-template-btn').forEach(btn => {
-      btn.addEventListener('click', async function() {
-        const id = this.dataset.id;
-        if (!confirm('Удалить компонент?')) return;
-        const token = localStorage.getItem('token');
-        try {
-          await fetch('/api/block-templates/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
-          loadTemplatesList();
-        } catch(e) { alert('Ошибка удаления'); }
+      container.querySelectorAll('.delete-template-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+          const id = this.dataset.id;
+          if (!confirm('Удалить компонент?')) return;
+          const token = localStorage.getItem('token');
+          try {
+            await fetch('/api/block-templates/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
+            loadTemplatesList();
+          } catch(e) { alert('Ошибка удаления'); }
+        });
       });
-    });
-  } catch(e) {
-    container.innerHTML = '<p style="color:red;">Ошибка загрузки компонентов</p>';
+    } catch(e) {
+      container.innerHTML = '<p style="color:red;">Ошибка загрузки компонентов</p>';
+    }
   }
-}
-document.getElementById('addTemplateBtn').addEventListener('click', () => openTemplateModal());
-loadTemplatesList();
+
+  document.getElementById('addTemplateBtn').addEventListener('click', () => openTemplateModal());
+  loadTemplatesList();
+})();
 </script>
