@@ -1,3 +1,4 @@
+const XLSX = require('xlsx');
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
@@ -47,3 +48,82 @@ router.get('/:id', async (req, res) => {
 });
 
 module.exports = router;
+
+// Экспорт компонентов шкафа в Excel
+router.get('/:id/export', async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Получаем блоки шкафа с данными шаблонов
+    const blocks = await pool.query(`
+      SELECT pb.block_name, bt.article, bt.description AS remark,
+             ct.name AS type_name, m.name AS manufacturer_name,
+             COALESCE(json_agg(json_build_object('param_name', pbp.param_name, 'param_value', pbp.param_value))
+                      FILTER (WHERE pbp.param_name IS NOT NULL), '[]') AS parameters
+      FROM project_blocks pb
+      LEFT JOIN block_templates bt ON pb.template_id = bt.id
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
+      LEFT JOIN project_block_params pbp ON pbp.project_block_id = pb.id
+      WHERE pb.cabinet_id = $1
+      GROUP BY pb.id, bt.article, bt.description, ct.name, m.name
+      ORDER BY pb.order_index
+    `, [id]);
+
+    // Преобразуем параметры в строку "ключ=значение; ..."
+    const rows = blocks.rows.map(b => ({
+      'Название': b.block_name,
+      'Тип': b.type_name || '',
+      'Производитель': b.manufacturer_name || '',
+      'Артикул': b.article || '',
+      'Примечание': b.remark || '',
+      'Параметры': Array.isArray(b.parameters) && b.parameters.length > 0
+        ? b.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ')
+        : ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Компоненты');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', 'attachment; filename="cabinet_components.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buf);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Импорт компонентов из Excel в шкаф
+router.post('/:id/import', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.files || !req.files.file) return res.status(400).json({ error: 'Файл не загружен' });
+    const file = req.files.file;
+    const workbook = XLSX.read(file.data, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(sheet);
+    let added = 0;
+    for (const row of data) {
+      const blockName = row['Название'] || row['block_name'] || '';
+      if (!blockName) continue;
+      // Пытаемся найти или создать шаблон
+      let templateId = null;
+      const existing = await pool.query('SELECT id FROM block_templates WHERE name = $1', [blockName]);
+      if (existing.rows.length > 0) {
+        templateId = existing.rows[0].id;
+      }
+      // Добавляем блок в шкаф
+      await pool.query(
+        `INSERT INTO project_blocks (project_id, cabinet_id, template_id, block_name, order_index)
+         SELECT c.project_id, $1, $2, $3, COALESCE((SELECT MAX(order_index)+1 FROM project_blocks WHERE cabinet_id = $1), 0)
+         FROM cabinets c WHERE c.id = $1
+         RETURNING *`,
+        [id, templateId, blockName]
+      );
+      added++;
+    }
+    res.json({ added, total: data.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
