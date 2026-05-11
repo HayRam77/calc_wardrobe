@@ -19,13 +19,33 @@
       const types = await res.json();
       let html = '<table><tr><th>Название</th><th></th></tr>';
       if (types.length === 0) html = '<p>Нет типов</p>';
-      else types.forEach(t => { html += `<tr><td>${t.name}</td><td><button class="small danger delete-type-btn" data-id="${t.id}">Удалить</button></td></tr>`; });
+      else types.forEach(t => { html += `<tr><td>${t.name}</td><td>
+        <button class="small edit-type-btn" data-id="${t.id}">✎</button>
+        <button class="small danger delete-type-btn" data-id="${t.id}">Удалить</button>
+      </td></tr>`; });
       html += '</table>';
       container.innerHTML = html;
+      // удаление
       container.querySelectorAll('.delete-type-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           if (!confirm('Удалить тип?')) return;
           await fetch('/api/component-types/' + e.target.dataset.id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
+          if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
+          loadTypes();
+        });
+      });
+      // редактирование
+      container.querySelectorAll('.edit-type-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.target.dataset.id;
+          const newName = prompt('Новое название типа:');
+          if (!newName) return;
+          const res = await fetch('/api/component-types/' + id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ name: newName.trim() })
+          });
+          if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка'); return; }
           if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
           loadTypes();
         });
@@ -47,17 +67,11 @@
     loadTypes();
   });
 
-  // Экспорт через fetch и скачивание файла
+  // Экспорт
   document.getElementById('exportTypesBtn').addEventListener('click', async () => {
     try {
-      const res = await fetch('/api/component-types/export', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        alert(err.error || 'Ошибка экспорта');
-        return;
-      }
+      const res = await fetch('/api/component-types/export', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка экспорта'); return; }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');

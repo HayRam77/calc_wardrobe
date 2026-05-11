@@ -27,6 +27,22 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.put('/:id', async (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Название типа обязательно' });
+  try {
+    const result = await pool.query(
+      'UPDATE component_types SET name = $1 WHERE id = $2 RETURNING *',
+      [name, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Тип не найден' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: 'Тип с таким названием уже существует' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     await pool.query('DELETE FROM component_types WHERE id = $1', [req.params.id]);
@@ -42,7 +58,6 @@ router.post('/import', async (req, res) => {
     const workbook = XLSX.read(file.data, { type: 'buffer' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-    // Пропускаем первую строку (заголовок) и фильтруем пустые
     const names = data.slice(1).flat().filter(v => v && typeof v === 'string').map(v => v.trim());
     let added = 0;
     for (const name of names) {
