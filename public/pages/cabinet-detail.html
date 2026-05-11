@@ -14,10 +14,11 @@
 
   <!-- Форма для нового компонента -->
   <div id="newComponentForm" style="display:none; margin-top:10px; padding:10px; border:1px solid #ccc; background:#f9f9f9;">
+    <div class="form-group"><label>Тип</label><select id="blockType"></select></div>
     <div class="form-group"><label>Название</label><input type="text" id="blockNameInput"></div>
-    <div class="form-group"><label>Производитель</label><input type="text" id="blockManufacturer"></div>
+    <div class="form-group"><label>Производитель</label><select id="blockManufacturer"></select></div>
     <div class="form-group"><label>Артикул</label><input type="text" id="blockArticle"></div>
-    <div class="form-group"><label>Примечание</label><input type="text" id="blockDescription"></div>
+    <div class="form-group"><label>Описание</label><input type="text" id="blockDescription"></div>
     <div class="form-group"><label>Цена, руб.</label><input type="number" id="blockPrice" step="0.01"></div>
     <div class="form-group"><label>Трудозатраты, мин.</label><input type="number" id="blockLabor" step="1"></div>
     <button id="saveNewBlockBtn">Добавить</button>
@@ -62,12 +63,13 @@
   function renderBlocks(blocks) {
     const container = document.getElementById('cabinetBlocks');
     if (blocks.length === 0) { container.innerHTML = '<p>Нет компонентов</p>'; return; }
-    let html = '<table><tr><th>Наименование</th><th>Артикул</th><th>Производитель</th><th>Примечание</th><th></th></tr>';
+    let html = '<table><tr><th>Тип</th><th>Наименование</th><th>Артикул</th><th>Производитель</th><th>Примечание</th><th></th></tr>';
     blocks.forEach(b => {
       html += `<tr>
+        <td>${b.type_name || ''}</td>
         <td>${b.block_name}</td>
         <td>${b.article || ''}</td>
-        <td>${b.manufacturer || ''}</td>
+        <td>${b.manufacturer_name || ''}</td>
         <td>${b.template_description || ''}</td>
         <td><button class="small danger delete-block-btn" data-id="${b.id}">Удалить</button></td>
       </tr>`;
@@ -87,7 +89,17 @@
     });
   }
 
-  // Кнопка "Выбрать компонент"
+  // Заполнение справочников (глобальные массивы componentTypes и manufacturers)
+  function populateSelects() {
+    const typeSel = document.getElementById('blockType');
+    typeSel.innerHTML = '<option value="">--</option>';
+    if (typeof componentTypes !== 'undefined') componentTypes.forEach(t => { const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; typeSel.appendChild(o); });
+
+    const manSel = document.getElementById('blockManufacturer');
+    manSel.innerHTML = '<option value="">--</option>';
+    if (typeof manufacturers !== 'undefined') manufacturers.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; manSel.appendChild(o); });
+  }
+
   document.getElementById('selectComponentBtn').addEventListener('click', () => {
     const modal = document.getElementById('templateListModal');
     const listDiv = document.getElementById('templateListContent');
@@ -99,7 +111,7 @@
       templates.forEach(t => {
         const li = document.createElement('li');
         li.style.cursor = 'pointer';
-        li.innerHTML = `<strong>${t.name}</strong> | арт: ${t.article||'—'} | произв: ${t.manufacturer||'—'} | прим: ${t.description||'—'}`;
+        li.innerHTML = `<strong>${t.name}</strong> | арт: ${t.article||'—'} | произв: ${t.manufacturer_name||''}`;
         li.addEventListener('click', async () => {
           const token = localStorage.getItem('token');
           try {
@@ -119,27 +131,23 @@
     }
     modal.style.display = 'block';
   });
-  document.getElementById('closeTemplateListBtn').addEventListener('click', () => {
-    document.getElementById('templateListModal').style.display = 'none';
-  });
+  document.getElementById('closeTemplateListBtn').addEventListener('click', () => { document.getElementById('templateListModal').style.display = 'none'; });
 
-  // Кнопка "Добавить новый компонент"
   document.getElementById('newComponentBtn').addEventListener('click', () => {
     document.getElementById('newComponentForm').style.display = 'block';
     document.getElementById('blockError').textContent = '';
-    ['blockNameInput','blockManufacturer','blockArticle','blockDescription','blockPrice','blockLabor'].forEach(id => document.getElementById(id).value = '');
+    ['blockNameInput','blockArticle','blockDescription','blockPrice','blockLabor'].forEach(id => document.getElementById(id).value = '');
+    populateSelects();
     document.getElementById('blockNameInput').focus();
   });
-  document.getElementById('cancelNewBlockBtn').addEventListener('click', () => {
-    document.getElementById('newComponentForm').style.display = 'none';
-    document.getElementById('blockError').textContent = '';
-  });
+  document.getElementById('cancelNewBlockBtn').addEventListener('click', () => { document.getElementById('newComponentForm').style.display = 'none'; });
   document.getElementById('saveNewBlockBtn').addEventListener('click', async () => {
     const blockName = document.getElementById('blockNameInput').value.trim();
     const errorDiv = document.getElementById('blockError');
     errorDiv.textContent = '';
-    if (!blockName) { errorDiv.textContent = 'Введите название компонента'; return; }
-    const manufacturer = document.getElementById('blockManufacturer').value.trim();
+    if (!blockName) { errorDiv.textContent = 'Введите название'; return; }
+    const type_id = document.getElementById('blockType').value || null;
+    const manufacturer_id = document.getElementById('blockManufacturer').value || null;
     const article = document.getElementById('blockArticle').value.trim();
     const description = document.getElementById('blockDescription').value.trim();
     const price = parseFloat(document.getElementById('blockPrice').value) || null;
@@ -147,24 +155,24 @@
     const token = localStorage.getItem('token');
 
     let templateId = null;
-    // 1. Создаем шаблон в библиотеке (получаем id)
+    // Создаём/находим шаблон в библиотеке
     try {
       const tmplRes = await fetch('/api/block-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ name: blockName, manufacturer, article, description, price, labor })
+        body: JSON.stringify({ name: blockName, type_id, manufacturer_id, article, description, price, labor })
       });
       if (tmplRes.ok) {
         const newTmpl = await tmplRes.json();
         templateId = newTmpl.id;
       } else {
-        // если уже существует, попробуем найти по имени
+        // Возможно, уже есть
         const existing = templates.find(t => t.name === blockName);
         if (existing) templateId = existing.id;
       }
-    } catch(e) { /* не критично */ }
+    } catch(e) {}
 
-    // 2. Создаем блок с template_id
+    // Добавляем блок в шкаф
     try {
       const blockRes = await fetch('/api/projects/' + projectId + '/blocks', {
         method: 'POST',
@@ -176,7 +184,6 @@
 
     document.getElementById('newComponentForm').style.display = 'none';
     loadCabinet();
-    // обновим глобальный список шаблонов (если доступно)
     if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
   });
 

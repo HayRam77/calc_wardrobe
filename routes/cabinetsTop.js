@@ -23,14 +23,17 @@ router.get('/:id', async (req, res) => {
 
     const blocks = await pool.query(`
       SELECT pb.id, pb.block_name, pb.order_index,
-             bt.manufacturer, bt.article, bt.description AS template_description,
+             bt.article, bt.description AS template_description,
+             ct.name AS type_name, m.name AS manufacturer_name,
              COALESCE(json_agg(json_build_object('param_name', pbp.param_name, 'param_value', pbp.param_value))
                       FILTER (WHERE pbp.param_name IS NOT NULL), '[]') AS parameters
       FROM project_blocks pb
       LEFT JOIN block_templates bt ON pb.template_id = bt.id
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
       LEFT JOIN project_block_params pbp ON pbp.project_block_id = pb.id
       WHERE pb.cabinet_id = $1
-      GROUP BY pb.id, bt.manufacturer, bt.article, bt.description
+      GROUP BY pb.id, bt.article, bt.description, ct.name, m.name
       ORDER BY pb.order_index
     `, [id]);
 

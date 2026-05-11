@@ -5,66 +5,61 @@ const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
 
-// Получить все шаблоны
+// GET – присоединяем имена типа и производителя
 router.get('/', async (req, res) => {
   try {
-    const templates = await pool.query(
-      'SELECT id, name, description, manufacturer, article, price, labor, created_by, created_at FROM block_templates ORDER BY name'
-    );
-    res.json(templates.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    const tmpls = await pool.query(`
+      SELECT bt.*, ct.name AS type_name, m.name AS manufacturer_name
+      FROM block_templates bt
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
+      ORDER BY bt.name
+    `);
+    res.json(tmpls.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Создать шаблон
+// POST – принимаем type_id и manufacturer_id
 router.post('/', async (req, res) => {
-  const { name, description, manufacturer, article, price, labor } = req.body;
+  const { name, description, type_id, manufacturer_id, article, price, labor } = req.body;
   if (!name) return res.status(400).json({ error: 'Название обязательно' });
   try {
     const result = await pool.query(
-      `INSERT INTO block_templates (name, description, manufacturer, article, price, labor, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [name, description || null, manufacturer || null, article || null, price || null, labor || null, req.user.userId]
+      `INSERT INTO block_templates (name, description, type_id, manufacturer_id, article, price, labor, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [name, description || null, type_id || null, manufacturer_id || null, article || null, price || null, labor || null, req.user.userId]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    if (err.code === '23505') {
-      return res.status(400).json({ error: 'Компонент с таким именем уже существует' });
-    }
+    if (err.code === '23505') return res.status(400).json({ error: 'Компонент с таким именем уже существует' });
     res.status(500).json({ error: err.message });
   }
 });
 
-// Обновить шаблон
+// PUT – только админ
 router.put('/:id', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Только для администратора' });
-  const { name, description, manufacturer, article, price, labor } = req.body;
+  const { name, description, type_id, manufacturer_id, article, price, labor } = req.body;
   if (!name) return res.status(400).json({ error: 'Название обязательно' });
   try {
     await pool.query(
-      `UPDATE block_templates SET name=$1, description=$2, manufacturer=$3, article=$4, price=$5, labor=$6
-       WHERE id=$7`,
-      [name, description || null, manufacturer || null, article || null, price || null, labor || null, req.params.id]
+      `UPDATE block_templates SET name=$1, description=$2, type_id=$3, manufacturer_id=$4, article=$5, price=$6, labor=$7
+       WHERE id=$8`,
+      [name, description || null, type_id || null, manufacturer_id || null, article || null, price || null, labor || null, req.params.id]
     );
     res.json({ success: true });
   } catch (err) {
-    if (err.code === '23505') {
-      return res.status(400).json({ error: 'Компонент с таким именем уже существует' });
-    }
+    if (err.code === '23505') return res.status(400).json({ error: 'Компонент с таким именем уже существует' });
     res.status(500).json({ error: err.message });
   }
 });
 
-// Удалить шаблон
 router.delete('/:id', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Только для администратора' });
   try {
     await pool.query('DELETE FROM block_templates WHERE id = $1', [req.params.id]);
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;
