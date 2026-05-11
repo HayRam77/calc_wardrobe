@@ -14,13 +14,17 @@
 
   <!-- Форма для нового компонента -->
   <div id="newComponentForm" style="display:none; margin-top:10px; padding:10px; border:1px solid #ccc; background:#f9f9f9;">
-    <input type="text" id="blockNameInput" placeholder="Название компонента" style="margin-right:10px;">
+    <div class="form-group"><label>Название</label><input type="text" id="blockNameInput"></div>
+    <div class="form-group"><label>Производитель</label><input type="text" id="blockManufacturer"></div>
+    <div class="form-group"><label>Артикул</label><input type="text" id="blockArticle"></div>
+    <div class="form-group"><label>Цена, руб.</label><input type="number" id="blockPrice" step="0.01"></div>
+    <div class="form-group"><label>Трудозатраты, мин.</label><input type="number" id="blockLabor" step="1"></div>
     <button id="saveNewBlockBtn">Добавить</button>
     <button id="cancelNewBlockBtn">Отмена</button>
     <div id="blockError" style="color:red; margin-top:5px;"></div>
   </div>
 
-  <!-- Модальное окно выбора шаблона -->
+  <!-- Модальное окно выбора существующего компонента -->
   <div id="templateListModal" style="display:none; position:fixed; top:20%; left:50%; transform:translate(-50%,0); background:white; border:1px solid #ccc; padding:20px; z-index:1000; max-height:60%; overflow-y:auto;">
     <h3>Выберите компонент</h3>
     <div id="templateListContent"></div>
@@ -39,67 +43,45 @@
   async function loadCabinet() {
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch('/api/cabinets/' + cabinetId, {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
+      const res = await fetch('/api/cabinets/' + cabinetId, { headers: { 'Authorization': 'Bearer ' + token } });
       if (!res.ok) throw new Error('Ошибка загрузки');
       const data = await res.json();
-      
       projectId = data.project_id;
       document.getElementById('cabinetName').textContent = data.name;
       document.getElementById('cabinetCreator').textContent = data.project_owner_id || 'неизвестно';
       document.getElementById('cabinetCreated').textContent = new Date(data.created_at).toLocaleString('ru-RU');
-      
       const projectLink = document.getElementById('projectLink');
       projectLink.textContent = data.project_name;
       projectLink.href = '/project/' + data.project_id;
-      projectLink.addEventListener('click', function(e) {
-        e.preventDefault();
-        navigateTo(this.getAttribute('href'));
-      });
-
+      projectLink.addEventListener('click', function(e) { e.preventDefault(); navigateTo(this.getAttribute('href')); });
       renderBlocks(data.blocks || []);
-    } catch(e) {
-      document.getElementById('cabinetContent').innerHTML = '<p style="color:red;">Ошибка загрузки шкафа</p>';
-    }
+    } catch(e) { document.getElementById('cabinetContent').innerHTML = '<p style="color:red;">Ошибка загрузки шкафа</p>'; }
   }
 
   function renderBlocks(blocks) {
     const container = document.getElementById('cabinetBlocks');
-    if (blocks.length === 0) {
-      container.innerHTML = '<p>Нет компонентов</p>';
-      return;
-    }
+    if (blocks.length === 0) { container.innerHTML = '<p>Нет компонентов</p>'; return; }
     let html = '<table><tr><th>Название</th><th>Параметры</th><th></th></tr>';
     blocks.forEach(b => {
       const paramsStr = Array.isArray(b.parameters) ? b.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ') : '—';
-      html += `<tr>
-        <td>${b.block_name}</td>
-        <td>${paramsStr}</td>
-        <td><button class="small danger delete-block-btn" data-id="${b.id}">Удалить</button></td>
-      </tr>`;
+      html += `<tr><td>${b.block_name}</td><td>${paramsStr}</td><td><button class="small danger delete-block-btn" data-id="${b.id}">Удалить</button></td></tr>`;
     });
     html += '</table>';
     container.innerHTML = html;
-
-    // Обработчики удаления
     container.querySelectorAll('.delete-block-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const blockId = e.target.dataset.id;
         if (!confirm('Удалить компонент?')) return;
         const token = localStorage.getItem('token');
         try {
-          await fetch('/api/projects/' + projectId + '/blocks/' + blockId, {
-            method: 'DELETE',
-            headers: { 'Authorization': 'Bearer ' + token }
-          });
+          await fetch('/api/projects/' + projectId + '/blocks/' + blockId, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
           loadCabinet();
         } catch(e) { alert('Ошибка удаления'); }
       });
     });
   }
 
-  // --- Кнопка "Выбрать компонент" ---
+  // Кнопка "Выбрать компонент"
   document.getElementById('selectComponentBtn').addEventListener('click', () => {
     const modal = document.getElementById('templateListModal');
     const listDiv = document.getElementById('templateListContent');
@@ -110,27 +92,17 @@
       const ul = document.createElement('ul');
       templates.forEach(t => {
         const li = document.createElement('li');
-        li.textContent = t.name + (t.description ? ' (' + t.description + ')' : '');
+        li.textContent = t.name + (t.manufacturer ? ' (' + t.manufacturer + ')' : '');
         li.style.cursor = 'pointer';
-        li.style.margin = '5px 0';
         li.addEventListener('click', async () => {
           const token = localStorage.getItem('token');
           try {
             const res = await fetch('/api/projects/' + projectId + '/blocks', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-              body: JSON.stringify({
-                block_name: t.name,
-                cabinet_id: cabinetId,
-                template_id: t.id,
-                order_index: 0
-              })
+              body: JSON.stringify({ block_name: t.name, cabinet_id: cabinetId, template_id: t.id, order_index: 0 })
             });
-            if (!res.ok) {
-              const err = await res.json();
-              alert(err.error || 'Ошибка');
-              return;
-            }
+            if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка'); return; }
             modal.style.display = 'none';
             loadCabinet();
           } catch(e) { alert('Ошибка соединения'); }
@@ -141,51 +113,57 @@
     }
     modal.style.display = 'block';
   });
-
   document.getElementById('closeTemplateListBtn').addEventListener('click', () => {
     document.getElementById('templateListModal').style.display = 'none';
   });
 
-  // --- Кнопка "Добавить новый компонент" ---
+  // Кнопка "Добавить новый компонент"
   document.getElementById('newComponentBtn').addEventListener('click', () => {
     document.getElementById('newComponentForm').style.display = 'block';
     document.getElementById('blockError').textContent = '';
     document.getElementById('blockNameInput').value = '';
+    document.getElementById('blockManufacturer').value = '';
+    document.getElementById('blockArticle').value = '';
+    document.getElementById('blockPrice').value = '';
+    document.getElementById('blockLabor').value = '';
     document.getElementById('blockNameInput').focus();
   });
-
   document.getElementById('cancelNewBlockBtn').addEventListener('click', () => {
     document.getElementById('newComponentForm').style.display = 'none';
     document.getElementById('blockError').textContent = '';
-    document.getElementById('blockNameInput').value = '';
   });
-
   document.getElementById('saveNewBlockBtn').addEventListener('click', async () => {
     const blockName = document.getElementById('blockNameInput').value.trim();
     const errorDiv = document.getElementById('blockError');
     errorDiv.textContent = '';
     if (!blockName) { errorDiv.textContent = 'Введите название компонента'; return; }
+    const manufacturer = document.getElementById('blockManufacturer').value.trim();
+    const article = document.getElementById('blockArticle').value.trim();
+    const price = parseFloat(document.getElementById('blockPrice').value) || null;
+    const labor = parseInt(document.getElementById('blockLabor').value) || null;
     const token = localStorage.getItem('token');
+
+    // 1. Создаём блок в шкафу
     try {
-      const res = await fetch('/api/projects/' + projectId + '/blocks', {
+      const blockRes = await fetch('/api/projects/' + projectId + '/blocks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({
-          block_name: blockName,
-          cabinet_id: cabinetId,
-          template_id: null,
-          order_index: 0
-        })
+        body: JSON.stringify({ block_name: blockName, cabinet_id: cabinetId, template_id: null, order_index: 0 })
       });
-      if (!res.ok) {
-        const err = await res.json();
-        errorDiv.textContent = err.error || 'Ошибка';
-        return;
-      }
-      document.getElementById('newComponentForm').style.display = 'none';
-      document.getElementById('blockNameInput').value = '';
-      loadCabinet();
-    } catch(e) { errorDiv.textContent = 'Ошибка соединения'; }
+      if (!blockRes.ok) { const err = await blockRes.json(); errorDiv.textContent = err.error || 'Ошибка'; return; }
+    } catch(e) { errorDiv.textContent = 'Ошибка соединения'; return; }
+
+    // 2. Авто-добавление в библиотеку (игнорируем ошибку, если уже существует)
+    try {
+      await fetch('/api/block-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ name: blockName, manufacturer, article, price, labor })
+      });
+    } catch(e) { /* библиотека не критична */ }
+
+    document.getElementById('newComponentForm').style.display = 'none';
+    loadCabinet();
   });
 
   loadCabinet();

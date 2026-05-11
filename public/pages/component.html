@@ -1,33 +1,9 @@
 <h2>Компоненты</h2>
-<button id="addTemplateBtn">+ Добавить новый компонент</button>
+<button id="addTemplateBtn">Добавить новый компонент</button>
 <div id="templatesTable" style="margin-top:15px;"></div>
-
-<!-- Модальное окно для добавления/редактирования компонента (только название и описание) -->
-<div id="templateModal" class="modal-overlay hidden">
-  <div class="modal">
-    <h3 id="modalTitle">Новый компонент</h3>
-    <div class="form-group">
-      <label>Название</label>
-      <input type="text" id="modalTemplateName">
-    </div>
-    <div class="form-group">
-      <label>Описание (необязательно)</label>
-      <input type="text" id="modalTemplateDesc">
-    </div>
-    <!-- Параметры убраны -->
-    <div id="modalError" class="error" style="margin-top:8px;"></div>
-    <div style="margin-top:15px; text-align:right;">
-      <button id="saveTemplateBtn">Сохранить</button>
-      <button id="cancelTemplateBtn" style="background:#888; margin-left:8px;">Отмена</button>
-    </div>
-  </div>
-</div>
 
 <script>
 (function() {
-  // Глобальные переменные (из index.html) – templates, editingTemplateId, openTemplateModal, closeTemplateModal, loadTemplatesGlobal
-  // Пока они доступны, просто оборачиваем в IIFE для безопасности
-
   async function loadTemplatesList() {
     const token = localStorage.getItem('token');
     const container = document.getElementById('templatesTable');
@@ -36,7 +12,7 @@
       const res = await fetch('/api/block-templates', { headers: { 'Authorization': 'Bearer ' + token } });
       if (!res.ok) throw new Error('Ошибка загрузки');
       const templates = await res.json();
-      let html = '<table><tr><th>Название</th><th>Описание</th><th>Действия</th></tr>';
+      let html = '<table><tr><th>Название</th><th>Описание</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th><th>Трудозатраты, мин.</th><th></th></tr>';
       if (templates.length === 0) {
         html = '<p>Нет компонентов.</p>';
       } else {
@@ -44,6 +20,10 @@
           html += `<tr>
             <td>${t.name}</td>
             <td>${t.description || ''}</td>
+            <td>${t.manufacturer || ''}</td>
+            <td>${t.article || ''}</td>
+            <td>${t.price != null ? t.price : ''}</td>
+            <td>${t.labor != null ? t.labor : ''}</td>
             <td>
               <button class="small edit-template-btn" data-id="${t.id}">Редактировать</button>
               <button class="small danger delete-template-btn" data-id="${t.id}">Удалить</button>
@@ -54,17 +34,15 @@
       html += '</table>';
       container.innerHTML = html;
 
-      // Обработчики редактирования/удаления
       container.querySelectorAll('.edit-template-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-          const id = this.dataset.id;
-          openTemplateModal(id); // глобальная функция из index.html
+          openTemplateModal(this.dataset.id);
         });
       });
       container.querySelectorAll('.delete-template-btn').forEach(btn => {
         btn.addEventListener('click', async function() {
-          const id = this.dataset.id;
           if (!confirm('Удалить компонент?')) return;
+          const id = this.dataset.id;
           const token = localStorage.getItem('token');
           try {
             await fetch('/api/block-templates/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
