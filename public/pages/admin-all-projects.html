@@ -10,11 +10,10 @@
       const res = await fetch('/api/projects', { headers: { 'Authorization': 'Bearer ' + token } });
       if (!res.ok) throw new Error('Ошибка загрузки');
       const projects = await res.json();
-      let html = '<table><tr><th>Название</th><th>Название шкафа</th><th>Примечание</th><th>Создатель</th><th>Дата создания</th><th></th></tr>';
+      let html = '<table><tr><th>Название</th><th>Примечание</th><th>Создатель</th><th>Дата создания</th><th></th></tr>';
       projects.forEach(p => {
         html += `<tr>
           <td><a href="/project/${p.id}" class="project-link">${p.name}</a></td>
-          <td>${p.cabinet_name || ''}</td>
           <td>${p.remark || ''}</td>
           <td>${p.created_by || 'неизвестно'}</td>
           <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>

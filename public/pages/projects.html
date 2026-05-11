@@ -2,8 +2,6 @@
 <div id="myProjectsTable"></div>
 <script>
 (function() {
-  let projectIdToDelete = null;
-
   async function loadMyProjects() {
     const token = localStorage.getItem('token');
     const container = document.getElementById('myProjectsTable');
@@ -18,11 +16,10 @@
         if (link) link.addEventListener('click', (e) => { e.preventDefault(); navigateTo('/create-project'); });
         return;
       }
-      let html = '<table><tr><th>Название</th><th>Название шкафа</th><th>Примечание</th><th>Создатель</th><th>Дата создания</th><th></th></tr>';
+      let html = '<table><tr><th>Название</th><th>Примечание</th><th>Создатель</th><th>Дата создания</th><th></th></tr>';
       projects.forEach(p => {
         html += `<tr>
           <td><a href="/project/${p.id}" class="project-link">${p.name}</a></td>
-          <td>${p.cabinet_name || ''}</td>
           <td>${p.remark || ''}</td>
           <td>${p.created_by || ''}</td>
           <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>
@@ -32,7 +29,6 @@
       html += '</table>';
       container.innerHTML = html;
 
-      // Удаление
       container.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const id = e.target.dataset.id;
@@ -44,7 +40,6 @@
           } catch(e) { alert('Ошибка удаления'); }
         });
       });
-      // Переходы
       container.querySelectorAll('.project-link').forEach(link => {
         link.addEventListener('click', function(e) {
           e.preventDefault();
