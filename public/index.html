@@ -52,6 +52,7 @@
     <a href="/projects" id="myProjectsLink">Мои проекты</a>
     <a href="/create-project" id="createProjectLink">Создать проект</a>
     <a href="/admin/users" id="adminLink" class="hidden">Управление<br>пользователями</a>
+                <a href="/admin/all-cabinets" id="allCabinetsLink" class="hidden">Все<br>шкафы</a>
     <a href="/admin/all-projects" id="allProjectsLink" class="hidden">Все<br>проекты</a>
     <a href="/component" id="templatesLink" class="hidden">Компоненты</a>
   </div>
@@ -149,11 +150,13 @@ function updateMenu() {
   if (user.role === 'admin') {
     document.getElementById('myProjectsLink').classList.add('hidden');
     document.getElementById('adminLink').classList.remove('hidden');
+                document.getElementById('allCabinetsLink').classList.remove('hidden');
     document.getElementById('allProjectsLink').classList.remove('hidden');
     document.getElementById('templatesLink').classList.remove('hidden');
   } else {
     document.getElementById('myProjectsLink').classList.remove('hidden');
     document.getElementById('adminLink').classList.add('hidden');
+                document.getElementById('allCabinetsLink').classList.add('hidden');
     document.getElementById('allProjectsLink').classList.add('hidden');
     document.getElementById('templatesLink').classList.add('hidden');
   }
@@ -170,6 +173,7 @@ async function loadPage(url) {
     else if (url === '/create-project') file = 'create-project.html';
     else if (url === '/admin/users') file = 'admin-users.html';
     else if (url === '/admin/all-projects') file = 'admin-all-projects.html';
+    else if (url === '/admin/all-cabinets') file = 'admin-all-cabinets.html';
     else if (url === '/component') file = 'component.html';
     else if (url.startsWith('/project/')) file = 'project-detail.html';
     else if (url.match(/^\/admin\/users\/\d+$/)) file = 'user-detail.html';

@@ -10,6 +10,7 @@
   <div style="margin-top:10px;">
     <input type="text" id="newCabinetName" placeholder="Название шкафа">
     <button id="addCabinetBtn">+ Добавить шкаф</button>
+    <div id="cabinetError" style="color:red; margin-top:5px;"></div>
   </div>
   <div id="cabinetDetail" class="hidden" style="margin-top:20px; border:1px solid #ccc; padding:15px; background:#fafafa;">
     <h4>Шкаф: <span id="cabinetName"></span></h4>
@@ -20,7 +21,7 @@
       <select id="templateSelect"><option value="">Без шаблона</option></select>
       <button id="saveBlockBtn">Добавить</button>
       <button id="cancelBlockBtn">Отмена</button>
-      <div id="blockError" class="error"></div>
+      <div id="blockError" style="color:red;"></div>
     </div>
   </div>
 </div>
@@ -118,15 +119,30 @@
 
   document.getElementById('addCabinetBtn').addEventListener('click', async () => {
     const name = document.getElementById('newCabinetName').value.trim();
-    if (!name) return alert('Введите название шкафа');
+    const errorDiv = document.getElementById('cabinetError');
+    errorDiv.textContent = '';
+    if (!name) {
+      errorDiv.textContent = 'Введите название шкафа';
+      return;
+    }
     const token = localStorage.getItem('token');
-    await fetch('/api/projects/' + projectId + '/cabinets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ name })
-    });
-    document.getElementById('newCabinetName').value = '';
-    loadCabinets();
+    try {
+      const res = await fetch('/api/projects/' + projectId + '/cabinets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ name })
+      });
+      const data = await res.json().catch(() => ({ error: 'Неизвестная ошибка' }));
+      if (!res.ok) {
+        errorDiv.textContent = data.error || 'Ошибка сервера';
+        return;
+      }
+      document.getElementById('newCabinetName').value = '';
+      loadCabinets();
+      errorDiv.textContent = '';
+    } catch(e) {
+      errorDiv.textContent = 'Ошибка соединения с сервером';
+    }
   });
 
   document.getElementById('addBlockToCabinetBtn').addEventListener('click', () => {
@@ -157,8 +173,19 @@
 
   async function updateCabinet(id, newName) {
     const token = localStorage.getItem('token');
-    await fetch('/api/projects/' + projectId + '/cabinets/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ name: newName }) });
-    loadCabinets();
+    try {
+      const res = await fetch('/api/projects/' + projectId + '/cabinets/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ name: newName })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Ошибка');
+        return;
+      }
+      loadCabinets();
+    } catch(e) { alert('Ошибка соединения'); }
   }
 
   loadProject();

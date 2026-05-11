@@ -82,3 +82,20 @@ router.post('/users/:id/reset-password', async (req, res) => {
 });
 
 module.exports = router;
+
+// Все шкафы (админ)
+router.get('/cabinets', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT c.id, c.name AS cabinet_name, p.name AS project_name, p.id AS project_id,
+             u.username AS creator, c.created_at
+      FROM cabinets c
+      JOIN projects p ON c.project_id = p.id
+      LEFT JOIN users u ON p.user_id = u.id
+      ORDER BY c.created_at DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});

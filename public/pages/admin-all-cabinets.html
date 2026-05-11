@@ -1,0 +1,41 @@
+<h2>Все шкафы</h2>
+<div id="allCabinetsTable"></div>
+
+<script>
+(async function() {
+  const token = localStorage.getItem('token');
+  const container = document.getElementById('allCabinetsTable');
+  try {
+    const res = await fetch('/api/admin/cabinets', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error('Ошибка загрузки');
+    const cabinets = await res.json();
+    if (cabinets.length === 0) {
+      container.innerHTML = '<p>Нет шкафов</p>';
+      return;
+    }
+    let html = '<table><tr><th>Название шкафа</th><th>Проект</th><th>Создатель</th><th>Дата создания</th></tr>';
+    cabinets.forEach(c => {
+      html += `<tr>
+        <td><a href="/project/${c.project_id}" class="cabinet-link">${c.cabinet_name}</a></td>
+        <td>${c.project_name}</td>
+        <td>${c.creator || 'неизвестно'}</td>
+        <td>${new Date(c.created_at).toLocaleString('ru-RU')}</td>
+      </tr>`;
+    });
+    html += '</table>';
+    container.innerHTML = html;
+
+    // Переход по клику (SPA)
+    container.querySelectorAll('.cabinet-link').forEach(link => {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        navigateTo(this.getAttribute('href'));
+      });
+    });
+  } catch(e) {
+    container.innerHTML = '<p style="color:red;">Ошибка загрузки шкафов</p>';
+  }
+})();
+</script>
