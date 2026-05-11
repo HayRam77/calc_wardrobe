@@ -61,10 +61,18 @@
   function renderBlocks(blocks) {
     const container = document.getElementById('cabinetBlocks');
     if (blocks.length === 0) { container.innerHTML = '<p>Нет компонентов</p>'; return; }
-    let html = '<table><tr><th>Название</th><th>Параметры</th><th></th></tr>';
+    let html = '<table><tr><th>Название</th><th>Артикул</th><th>Производитель</th><th>Примечание</th><th></th></tr>';
     blocks.forEach(b => {
-      const paramsStr = Array.isArray(b.parameters) ? b.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ') : '—';
-      html += `<tr><td>${b.block_name}</td><td>${paramsStr}</td><td><button class="small danger delete-block-btn" data-id="${b.id}">Удалить</button></td></tr>`;
+      const art = b.article || '';
+      const man = b.manufacturer || '';
+      const desc = b.description || '';
+      html += `<tr>
+        <td>${b.block_name}</td>
+        <td>${art}</td>
+        <td>${man}</td>
+        <td>${desc}</td>
+        <td><button class="small danger delete-block-btn" data-id="${b.id}">Удалить</button></td>
+      </tr>`;
     });
     html += '</table>';
     container.innerHTML = html;
