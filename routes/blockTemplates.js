@@ -1,3 +1,4 @@
+const XLSX = require('xlsx');
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
@@ -126,3 +127,118 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
+
+// Экспорт компонентов в Excel
+router.get('/export', async (req, res) => {
+  try {
+    const tmpls = await pool.query(`
+      SELECT bt.name, ct.name AS type_name, m.name AS manufacturer_name,
+             bt.article, bt.description, bt.price, bt.labor, bt.ln, bt.url,
+             COALESCE(json_agg(json_build_object('param_name', p.param_name, 'param_value', cpv.param_value))
+                      FILTER (WHERE p.param_name IS NOT NULL), '[]') AS parameters
+      FROM block_templates bt
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
+      LEFT JOIN component_param_values cpv ON cpv.template_id = bt.id
+      LEFT JOIN parameters p ON cpv.parameter_id = p.id
+      GROUP BY bt.id, ct.name, m.name
+      ORDER BY bt.name
+    `);
+    const rows = tmpls.rows.map(t => ({
+      'Название': t.name,
+      'Тип': t.type_name || '',
+      'Производитель': t.manufacturer_name || '',
+      'Артикул': t.article || '',
+      'Описание': t.description || '',
+      'Цена, руб.': t.price,
+      'LN': t.ln || '',
+      'Ссылка': t.url || '',
+      'Трудозатраты, мин.': t.labor,
+      'Параметры': Array.isArray(t.parameters) && t.parameters.length > 0 
+        ? t.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ') 
+        : ''
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Компоненты');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', 'attachment; filename="components.xlsx"');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buf);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Импорт компонентов из Excel
+router.post('/import', async (req, res) => {
+  try {
+    if (!req.files || !req.files.file) return res.status(400).json({ error: 'Файл не загружен' });
+    const file = req.files.file;
+    const workbook = XLSX.read(file.data, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(sheet);
+    let added = 0;
+    for (const row of data) {
+      const name = row['Название'] || row['name'] || '';
+      if (!name) continue;
+      const typeName = row['Тип'] || '';
+      const manufacturerName = row['Производитель'] || '';
+      const article = row['Артикул'] || '';
+      const description = row['Описание'] || '';
+      const price = parseFloat(row['Цена, руб.']) || null;
+      const ln = row['LN'] || '';
+      const url = row['Ссылка'] || '';
+      const labor = parseInt(row['Трудозатраты, мин.']) || null;
+      const paramsStr = row['Параметры'] || '';
+
+      // Ищем или создаём тип
+      let typeId = null;
+      if (typeName) {
+        const t = await pool.query('SELECT id FROM component_types WHERE name = $1', [typeName]);
+        if (t.rows.length > 0) typeId = t.rows[0].id;
+      }
+      // Ищем или создаём производителя
+      let manufacturerId = null;
+      if (manufacturerName) {
+        const m = await pool.query('SELECT id FROM manufacturers WHERE name = $1', [manufacturerName]);
+        if (m.rows.length > 0) manufacturerId = m.rows[0].id;
+      }
+
+      // Вставляем шаблон (если артикул уже есть, пропускаем)
+      const ins = await pool.query(
+        `INSERT INTO block_templates (name, type_id, manufacturer_id, article, description, price, ln, url, labor, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         ON CONFLICT (article) DO NOTHING RETURNING id`,
+        [name, typeId, manufacturerId, article, description, price, ln, url, labor, req.user.userId]
+      );
+      if (ins.rows.length > 0) {
+        const templateId = ins.rows[0].id;
+        // Параметры
+        if (paramsStr) {
+          const paramPairs = paramsStr.split(';').map(s => s.trim()).filter(s => s.includes('='));
+          for (const pair of paramPairs) {
+            const [key, ...valArr] = pair.split('=');
+            const value = valArr.join('=').trim();
+            const paramName = key.trim();
+            if (paramName) {
+              let paramId = null;
+              const existParam = await pool.query('SELECT id FROM parameters WHERE param_name = $1', [paramName]);
+              if (existParam.rows.length > 0) paramId = existParam.rows[0].id;
+              else {
+                const newParam = await pool.query('INSERT INTO parameters (param_name) VALUES ($1) RETURNING id', [paramName]);
+                paramId = newParam.rows[0].id;
+              }
+              await pool.query('INSERT INTO component_param_values (template_id, parameter_id, param_value) VALUES ($1,$2,$3)',
+                [templateId, paramId, value]);
+            }
+          }
+        }
+        added++;
+      }
+    }
+    res.json({ added, total: data.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
