@@ -6,8 +6,8 @@ const isAdmin = require('../middleware/isAdmin');
 const XLSX = require('xlsx');
 
 router.use(authMiddleware);
-router.use(isAdmin);
 
+// GET доступен всем авторизованным
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM component_types ORDER BY name');
@@ -15,7 +15,8 @@ router.get('/', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.post('/', async (req, res) => {
+// POST требует админа
+router.post('/', isAdmin, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Название типа обязательно' });
   try {
@@ -27,7 +28,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+// PUT требует админа
+router.put('/:id', isAdmin, async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: 'Название типа обязательно' });
   try {
@@ -43,15 +45,16 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+// DELETE требует админа
+router.delete('/:id', isAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM component_types WHERE id = $1', [req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Импорт из Excel
-router.post('/import', async (req, res) => {
+// Импорт (только админ)
+router.post('/import', isAdmin, async (req, res) => {
   try {
     if (!req.files || !req.files.file) return res.status(400).json({ error: 'Файл не загружен' });
     const file = req.files.file;
@@ -72,8 +75,8 @@ router.post('/import', async (req, res) => {
   }
 });
 
-// Экспорт в Excel
-router.get('/export', async (req, res) => {
+// Экспорт (только админ)
+router.get('/export', isAdmin, async (req, res) => {
   try {
     const result = await pool.query('SELECT name FROM component_types ORDER BY name');
     const ws = XLSX.utils.json_to_sheet(result.rows);
