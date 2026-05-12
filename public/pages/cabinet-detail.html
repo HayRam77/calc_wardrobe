@@ -10,25 +10,11 @@
   <div style="margin-top:15px; display:flex; gap:10px; flex-wrap:wrap;">
     <button id="selectComponentBtn">Выбрать компонент</button>
     <button id="newComponentBtn">Добавить новый компонент</button>
+    <button id="addTypeFromCabinetBtn">➕ Тип</button>
+    <button id="addManufacturerFromCabinetBtn">🏭 Производитель</button>
     <button id="exportCabinetBtn">📥 Экспорт Excel</button>
     <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls">
     <button id="importCabinetBtn">📤 Импорт Excel</button>
-    <button id="addTypeBtn">➕ Добавить тип</button>
-    <button id="addManufacturerBtn">➕ Добавить производителя</button>
-  </div>
-
-  <!-- Блок быстрого добавления типа -->
-  <div id="addTypeBlock" style="display:none; margin-top:10px; display:none; padding:10px; border:1px solid #ccc; background:#f9f9f9;">
-    <input type="text" id="newTypeNameInput" placeholder="Название типа" style="margin-right:10px;">
-    <button id="saveTypeBtn">Сохранить</button>
-    <button id="cancelTypeBtn">Отмена</button>
-  </div>
-
-  <!-- Блок быстрого добавления производителя -->
-  <div id="addManufacturerBlock" style="display:none; margin-top:10px; padding:10px; border:1px solid #ccc; background:#f9f9f9;">
-    <input type="text" id="newManufacturerNameInput" placeholder="Название производителя" style="margin-right:10px;">
-    <button id="saveManufacturerBtn">Сохранить</button>
-    <button id="cancelManufacturerBtn">Отмена</button>
   </div>
 
   <!-- Форма для нового компонента -->
@@ -49,10 +35,12 @@
   <div id="templateListModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); justify-content:center; align-items:center; z-index:1000;">
     <div style="background:white; border-radius:8px; width:90%; max-width:1200px; max-height:80vh; display:flex; flex-direction:column; position:relative;">
       <span id="closeModalX" style="position:absolute; top:10px; right:15px; font-size:24px; cursor:pointer; color:#888; z-index:3;">&times;</span>
+      
       <div style="padding:20px 20px 10px 20px; border-bottom:1px solid #eee; position:sticky; top:0; background:white; z-index:2;">
         <h3 style="margin:0 0 10px 0;">Выберите компонент</h3>
         <input type="text" id="searchInput" placeholder="Поиск по названию, артикулу, производителю, параметрам..." style="width:100%; padding:8px; box-sizing:border-box;">
       </div>
+
       <div style="overflow-y:auto; padding:0 20px 20px 20px;">
         <div id="templateListContent"></div>
       </div>
@@ -115,7 +103,6 @@
     });
   }
 
-  // Заполнение справочников
   function populateSelects() {
     const typeSel = document.getElementById('blockType');
     typeSel.innerHTML = '<option value="">--</option>';
@@ -126,58 +113,12 @@
     if (typeof manufacturers !== 'undefined') manufacturers.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; manSel.appendChild(o); });
   }
 
-  // --- Быстрое добавление типа ---
-  document.getElementById('addTypeBtn').addEventListener('click', () => {
-    document.getElementById('addTypeBlock').style.display = 'block';
-    document.getElementById('newTypeNameInput').value = '';
-  });
-  document.getElementById('cancelTypeBtn').addEventListener('click', () => {
-    document.getElementById('addTypeBlock').style.display = 'none';
-  });
-  document.getElementById('saveTypeBtn').addEventListener('click', async () => {
-    const name = document.getElementById('newTypeNameInput').value.trim();
-    if (!name) return alert('Введите название типа');
-    const token = localStorage.getItem('token');
-    const res = await fetch('/api/component-types', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ name })
-    });
-    if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка'); return; }
-    document.getElementById('addTypeBlock').style.display = 'none';
-    // Обновляем глобальный массив
-    if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
-    // Перезаполняем выпадающие списки на форме, если она открыта
-    populateSelects();
-  });
-
-  // --- Быстрое добавление производителя ---
-  document.getElementById('addManufacturerBtn').addEventListener('click', () => {
-    document.getElementById('addManufacturerBlock').style.display = 'block';
-    document.getElementById('newManufacturerNameInput').value = '';
-  });
-  document.getElementById('cancelManufacturerBtn').addEventListener('click', () => {
-    document.getElementById('addManufacturerBlock').style.display = 'none';
-  });
-  document.getElementById('saveManufacturerBtn').addEventListener('click', async () => {
-    const name = document.getElementById('newManufacturerNameInput').value.trim();
-    if (!name) return alert('Введите название производителя');
-    const token = localStorage.getItem('token');
-    const res = await fetch('/api/manufacturers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ name })
-    });
-    if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка'); return; }
-    document.getElementById('addManufacturerBlock').style.display = 'none';
-    if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
-    populateSelects();
-  });
-
-  // --- Модальное окно выбора компонента ---
+  // --- Модальное окно ---
   const modal = document.getElementById('templateListModal');
   function closeModal() { modal.style.display = 'none'; }
-  document.getElementById('closeModalX').addEventListener('click', closeModal);
+
+  const closeX = document.getElementById('closeModalX');
+  if (closeX) closeX.addEventListener('click', closeModal);
   modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
 
   document.getElementById('selectComponentBtn').addEventListener('click', () => {
@@ -271,6 +212,59 @@
     newSearchInput.addEventListener('input', (e) => { renderTable(e.target.value); });
 
     modal.style.display = 'flex';
+  });
+
+  // --- Кнопки "Тип" и "Производитель" ---
+  async function addType(name) {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/component-types', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ name })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Ошибка создания типа');
+        return false;
+      }
+      if (typeof loadTemplatesGlobal === 'function') await loadTemplatesGlobal();
+      populateSelects();
+      return true;
+    } catch(e) { alert('Ошибка соединения'); return false; }
+  }
+
+  async function addManufacturer(name) {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/manufacturers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ name })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Ошибка создания производителя');
+        return false;
+      }
+      if (typeof loadTemplatesGlobal === 'function') await loadTemplatesGlobal();
+      populateSelects();
+      return true;
+    } catch(e) { alert('Ошибка соединения'); return false; }
+  }
+
+  document.getElementById('addTypeFromCabinetBtn').addEventListener('click', async () => {
+    const name = prompt('Введите название нового типа:');
+    if (name && name.trim()) {
+      await addType(name.trim());
+    }
+  });
+
+  document.getElementById('addManufacturerFromCabinetBtn').addEventListener('click', async () => {
+    const name = prompt('Введите название нового производителя:');
+    if (name && name.trim()) {
+      await addManufacturer(name.trim());
+    }
   });
 
   // --- Остальные кнопки ---
