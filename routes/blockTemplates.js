@@ -38,8 +38,9 @@ router.post('/', async (req, res) => {
   try {
     await client.query('BEGIN');
     const tmpl = await client.query(
-      `INSERT INTO block_templates (name, description, type_id, manufacturer_id, article, price, labor, ln, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      `INSERT INTO block_templates (name, description, type_id, manufacturer_id, article, price, labor, ln, url, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [name, description || null, type_id || null, manufacturer_id || null, article || null, price || null, labor || null, ln || null, url || null, req.user.userId]
       [name, description || null, type_id || null, manufacturer_id || null, article || null, price || null, labor || null, ln || null, req.user.userId]
     );
     const templateId = tmpl.rows[0].id;
@@ -87,8 +88,8 @@ router.put('/:id', async (req, res) => {
   try {
     await client.query('BEGIN');
     await client.query(
-      `UPDATE block_templates SET name=$1, description=$2, type_id=$3, manufacturer_id=$4, article=$5, price=$6, labor=$7, ln=$8 WHERE id=$9`,
-      [name, description || null, type_id || null, manufacturer_id || null, article || null, price || null, labor || null, ln || null, req.params.id]
+      `UPDATE block_templates SET name=$1, description=$2, type_id=$3, manufacturer_id=$4, article=$5, price=$6, labor=$7, ln=$8, url=$9 WHERE id=$10`,
+      [name, description || null, type_id || null, manufacturer_id || null, article || null, price || null, labor || null, ln || null, url || null, req.params.id]
     );
     await client.query('DELETE FROM component_param_values WHERE template_id = $1', [req.params.id]);
     if (Array.isArray(parameters)) {

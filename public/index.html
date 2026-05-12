@@ -82,6 +82,7 @@
     <div class="form-group"><label>Описание</label><input type="text" id="modalTemplateDesc"></div>
     <div class="form-group"><label>Цена, руб.</label><input type="number" id="modalPrice" step="0.01"></div>
     <div class="form-group"><label>LN</label><input type="text" id="modalLn"></div>
+                <div class="form-group"><label>Ссылка</label><input type="text" id="modalUrl" placeholder="URL страницы производителя"></div>
     <div class="form-group"><label>Трудозатраты, мин.</label><input type="number" id="modalLabor" step="1"></div>
     <h4>Параметры</h4>
     <div id="modalParams"></div>
@@ -301,6 +302,7 @@ async function openTemplateModal(id=null) {
     document.getElementById('modalArticle').value = t.article || '';
     document.getElementById('modalPrice').value = t.price || '';
     document.getElementById('modalLn').value = t.ln || '';
+                document.getElementById('modalUrl').value = t.url || '';
     document.getElementById('modalLabor').value = t.labor || '';
     // параметры
     if (t.parameters && t.parameters.length > 0) {
@@ -317,6 +319,7 @@ async function openTemplateModal(id=null) {
     document.getElementById('modalArticle').value = '';
     document.getElementById('modalPrice').value = '';
     document.getElementById('modalLn').value = '';
+                document.getElementById('modalUrl').value = '';
     document.getElementById('modalLabor').value = '';
   }
   document.getElementById('templateModal').classList.remove('hidden');
@@ -364,6 +367,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
   const article = document.getElementById('modalArticle').value.trim();
   const price = parseFloat(document.getElementById('modalPrice').value) || null;
   const ln = document.getElementById('modalLn').value.trim();
+                const componentUrl = document.getElementById('modalUrl').value.trim();
   const labor = parseInt(document.getElementById('modalLabor').value) || null;
 
   const parameters = [];
@@ -389,7 +393,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ name, description: desc, type_id, manufacturer_id, article, price, ln, labor, parameters })
+                  body: JSON.stringify({ name, description: desc, type_id, manufacturer_id, article, price, ln, labor, url: componentUrl, parameters })
     });
     if (!res.ok) { const err = await res.json(); document.getElementById('modalError').textContent = err.error || 'Ошибка'; return; }
     closeTemplateModal();
