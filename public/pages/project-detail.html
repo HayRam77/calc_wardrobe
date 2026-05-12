@@ -9,7 +9,7 @@
   <div id="cabinetsList"></div>
   <div style="margin-top:10px;">
     <input type="text" id="newCabinetName" placeholder="Название шкафа">
-    <button id="addCabinetBtn">+ Добавить шкаф</button>
+    <button id="addCabinetBtn" title="Добавить новый шкаф">+ Добавить шкаф</button>
     <div id="cabinetError" style="color:red; margin-top:5px;"></div>
   </div>
 </div>
@@ -50,7 +50,7 @@
       html += `<tr>
         <td><a href="/cabinet/${cab.id}" class="cabinet-link">${cab.name}</a></td>
         <td>
-          <button class="small edit-cabinet-btn" data-id="${cab.id}" title="Переименовать">✎</button>
+          <button class="small edit-cabinet-btn" data-id="${cab.id}" title="Переименовать шкаф">✎</button>
           <button class="small danger delete-cabinet-btn" data-id="${cab.id}" title="Удалить шкаф">🗑</button>
         </td>
       </tr>`;
