@@ -21,7 +21,6 @@
 
       if (templates.length === 0) { container.innerHTML = '<p>Нет компонентов.</p>'; return; }
 
-      // Собираем используемые параметры (только те, что есть хотя бы у одного компонента)
       const paramNamesSet = new Set();
       templates.forEach(t => {
         if (t.parameters && t.parameters.length > 0) {
@@ -32,6 +31,7 @@
 
       let html = '<table><thead><tr>';
       html += '<th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th><th>LN</th>';
+      html += '<th>Ссылка</th>';  // новая колонка
       paramNames.forEach(name => { html += `<th>${name}</th>`; });
       html += '<th></th></tr></thead><tbody>';
 
@@ -43,6 +43,12 @@
         html += `<td>${t.article || ''}</td>`;
         html += `<td>${t.price != null ? t.price : ''}</td>`;
         html += `<td>${t.ln || ''}</td>`;
+        // Ссылка
+        if (t.url) {
+          html += `<td><a href="${t.url}" target="_blank" title="${t.url}">🔗</a></td>`;
+        } else {
+          html += '<td></td>';
+        }
 
         paramNames.forEach(pName => {
           const param = t.parameters ? t.parameters.find(p => p.param_name === pName) : null;
@@ -72,10 +78,12 @@
   }
 
   document.getElementById('addTemplateBtn').addEventListener('click', () => openTemplateModal());
-  document.getElementById('exportBtn').addEventListener('click', async () => { /* экспорт пока оставим старый */ });
+
+  // Экспорт и импорт оставим как есть (можно не менять)
+  document.getElementById('exportBtn').addEventListener('click', async () => { /* старый код */ });
   const fileInput = document.getElementById('importFile');
   document.getElementById('importBtn').addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', async () => { /* импорт старый */ });
+  fileInput.addEventListener('change', async () => { /* старый код */ });
 
   loadTemplatesList();
 })();

@@ -5,7 +5,7 @@ const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
 
-// Получить блоки проекта (можно фильтровать по cabinet_id)
+// GET – получить блоки проекта
 router.get('/', async (req, res) => {
   const projectId = req.params.projectId;
   const { cabinet_id } = req.query;
@@ -32,32 +32,31 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Добавить блок в шкаф
+// POST – добавить блок с количеством
 router.post('/', async (req, res) => {
   const projectId = req.params.projectId;
-  const { block_name, template_id, order_index, cabinet_id } = req.body;
+  const { block_name, template_id, order_index, cabinet_id, quantity } = req.body;
   if (!block_name) return res.status(400).json({ error: 'Имя блока обязательно' });
   if (!cabinet_id) return res.status(400).json({ error: 'cabinet_id обязателен' });
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Проверяем, что шкаф принадлежит проекту
     const cab = await client.query('SELECT id FROM cabinets WHERE id = $1 AND project_id = $2', [cabinet_id, projectId]);
     if (cab.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Шкаф не найден в проекте' });
     }
 
+    const qty = quantity ? parseInt(quantity) : 1;
     const blockRes = await client.query(
-      'INSERT INTO project_blocks (project_id, cabinet_id, template_id, block_name, order_index) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [projectId, cabinet_id, template_id || null, block_name, order_index || 0]
+      'INSERT INTO project_blocks (project_id, cabinet_id, template_id, block_name, order_index, quantity) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [projectId, cabinet_id, template_id || null, block_name, order_index || 0, qty]
     );
     const newBlock = blockRes.rows[0];
 
-    // Если указан шаблон, переносим его параметры в блок (новая структура)
+    // Переносим параметры из шаблона, если есть
     if (template_id) {
-      // Получаем параметры из новых таблиц
       const tmplParams = await client.query(
         `SELECT p.param_name, cpv.param_value
          FROM component_param_values cpv
@@ -76,7 +75,6 @@ router.post('/', async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Возвращаем созданный блок с параметрами
     const fullBlock = await pool.query('SELECT * FROM project_blocks WHERE id = $1', [newBlock.id]);
     const params = await pool.query(
       'SELECT param_name, param_value FROM project_block_params WHERE project_block_id = $1',
@@ -91,20 +89,20 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Обновить блок
+// PUT – обновить блок (включая количество)
 router.put('/:blockId', async (req, res) => {
-  const { block_name, order_index } = req.body;
+  const { block_name, order_index, quantity } = req.body;
   try {
     const result = await pool.query(
-      'UPDATE project_blocks SET block_name = COALESCE($1, block_name), order_index = COALESCE($2, order_index) WHERE id = $3 AND project_id = $4 RETURNING *',
-      [block_name, order_index, req.params.blockId, req.params.projectId]
+      'UPDATE project_blocks SET block_name = COALESCE($1, block_name), order_index = COALESCE($2, order_index), quantity = COALESCE($3, quantity) WHERE id = $4 AND project_id = $5 RETURNING *',
+      [block_name, order_index, quantity, req.params.blockId, req.params.projectId]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Блок не найден' });
     res.json(result.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Удалить блок
+// DELETE – удалить блок
 router.delete('/:blockId', async (req, res) => {
   try {
     await pool.query('DELETE FROM project_blocks WHERE id = $1 AND project_id = $2', [req.params.blockId, req.params.projectId]);
