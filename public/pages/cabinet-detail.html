@@ -103,14 +103,19 @@
     });
   }
 
+  // Функция заполнения списков (использует глобальные массивы)
   function populateSelects() {
     const typeSel = document.getElementById('blockType');
     typeSel.innerHTML = '<option value="">--</option>';
-    if (typeof componentTypes !== 'undefined') componentTypes.forEach(t => { const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; typeSel.appendChild(o); });
+    if (typeof componentTypes !== 'undefined' && componentTypes.length > 0) {
+      componentTypes.forEach(t => { const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; typeSel.appendChild(o); });
+    }
 
     const manSel = document.getElementById('blockManufacturer');
     manSel.innerHTML = '<option value="">--</option>';
-    if (typeof manufacturers !== 'undefined') manufacturers.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; manSel.appendChild(o); });
+    if (typeof manufacturers !== 'undefined' && manufacturers.length > 0) {
+      manufacturers.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; manSel.appendChild(o); });
+    }
   }
 
   // --- Модальное окно ---
@@ -267,14 +272,21 @@
     }
   });
 
-  // --- Остальные кнопки ---
-  document.getElementById('newComponentBtn').addEventListener('click', () => {
+  // --- Открытие формы добавления компонента: гарантированно загружаем справочники ---
+  document.getElementById('newComponentBtn').addEventListener('click', async () => {
+    // Показываем форму сразу
     document.getElementById('newComponentForm').style.display = 'block';
     document.getElementById('blockError').textContent = '';
     ['blockNameInput','blockArticle','blockDescription','blockPrice','blockLabor'].forEach(id => document.getElementById(id).value = '');
+
+    // Загружаем справочники, если их ещё нет (или обновляем)
+    if (typeof loadTemplatesGlobal === 'function') {
+      await loadTemplatesGlobal();   // загружает и componentTypes, и manufacturers
+    }
     populateSelects();
     document.getElementById('blockNameInput').focus();
   });
+
   document.getElementById('cancelNewBlockBtn').addEventListener('click', () => { document.getElementById('newComponentForm').style.display = 'none'; });
   document.getElementById('saveNewBlockBtn').addEventListener('click', async () => {
     const blockName = document.getElementById('blockNameInput').value.trim();
