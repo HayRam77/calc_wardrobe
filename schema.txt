@@ -1,0 +1,31 @@
+                                                     Список отношений
+ Схема  |             Имя             |        Тип         | Владелец |  Хранение  | Метод доступа |   Размер   | Описание 
+--------+-----------------------------+--------------------+----------+------------+---------------+------------+----------
+ public | block_parameters            | таблица            | hrroot   | постоянное | heap          | 48 kB      | 
+ public | block_parameters_id_seq     | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+ public | block_templates             | таблица            | hrroot   | постоянное | heap          | 16 kB      | 
+ public | block_templates_id_seq      | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+ public | breakers                    | таблица            | hrroot   | постоянное | heap          | 8192 bytes | 
+ public | breakers_id_seq             | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+ public | cabinets                    | таблица            | hrroot   | постоянное | heap          | 8192 bytes | 
+ public | cabinets_id_seq             | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+ public | component_types             | таблица            | hrroot   | постоянное | heap          | 8192 bytes | 
+ public | component_types_id_seq      | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+ public | components                  | таблица            | hrroot   | постоянное | heap          | 8192 bytes | 
+ public | components_id_seq           | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+ public | manufacturers               | таблица            | hrroot   | постоянное | heap          | 8192 bytes | 
+ public | manufacturers_id_seq        | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+ public | project_block_params        | таблица            | hrroot   | постоянное | heap          | 16 kB      | 
+ public | project_block_params_id_seq | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+ public | project_blocks              | таблица            | hrroot   | постоянное | heap          | 8192 bytes | 
+ public | project_blocks_id_seq       | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+ public | project_results             | таблица            | hrroot   | постоянное | heap          | 0 bytes    | 
+ public | project_results_id_seq      | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+ public | projects                    | таблица            | hrroot   | постоянное | heap          | 16 kB      | 
+ public | projects_id_seq             | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+ public | user_sessions               | таблица            | hrroot   | постоянное | heap          | 48 kB      | 
+ public | user_sessions_id_seq        | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+ public | users                       | таблица            | hrroot   | постоянное | heap          | 8192 bytes | 
+ public | users_id_seq                | последовательность | hrroot   | постоянное |               | 8192 bytes | 
+(26 строк)
+

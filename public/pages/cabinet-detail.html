@@ -17,29 +17,35 @@
     <button id="importCabinetBtn">📤 Импорт Excel</button>
   </div>
 
-  <div id="newComponentForm" style="display:none; margin-top:10px; padding:10px; border:1px solid #ccc; background:#f9f9f9;">
-    <div class="form-group"><label>Тип</label><select id="blockType"></select></div>
-    <div class="form-group"><label>Название</label><input type="text" id="blockNameInput"></div>
-    <div class="form-group"><label>Производитель</label><select id="blockManufacturer"></select></div>
-    <div class="form-group"><label>Артикул</label><input type="text" id="blockArticle"></div>
-    <div class="form-group"><label>Описание</label><input type="text" id="blockDescription"></div>
-    <div class="form-group"><label>Цена, руб.</label><input type="number" id="blockPrice" step="0.01"></div>
-    <div class="form-group"><label>Трудозатраты, мин.</label><input type="number" id="blockLabor" step="1"></div>
-    <button id="saveNewBlockBtn">Добавить</button>
-    <button id="cancelNewBlockBtn">Отмена</button>
-    <div id="blockError" style="color:red; margin-top:5px;"></div>
-  </div>
-
+  <!-- Модальное окно выбора существующего компонента (без изменений) -->
   <div id="templateListModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); justify-content:center; align-items:center; z-index:1000;">
     <div style="background:white; border-radius:8px; width:90%; max-width:1200px; max-height:80vh; display:flex; flex-direction:column; position:relative;">
       <span id="closeModalX" style="position:absolute; top:10px; right:15px; font-size:24px; cursor:pointer; color:#888; z-index:3;">&times;</span>
       <div style="padding:20px 20px 10px 20px; border-bottom:1px solid #eee; position:sticky; top:0; background:white; z-index:2;">
         <h3 style="margin:0 0 10px 0;">Выберите компонент</h3>
-        <input type="text" id="searchInput" placeholder="Поиск по названию, артикулу, производителю, параметрам..." style="width:100%; padding:8px; box-sizing:border-box;">
+        <input type="text" id="searchInput" placeholder="Поиск..." style="width:100%; padding:8px; box-sizing:border-box;">
       </div>
       <div style="overflow-y:auto; padding:0 20px 20px 20px;">
         <div id="templateListContent"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно добавления нового компонента -->
+  <div id="addComponentModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); justify-content:center; align-items:center; z-index:1000;">
+    <div style="background:white; border-radius:8px; width:500px; max-height:80vh; overflow-y:auto; padding:20px; position:relative;">
+      <span id="closeAddModalX" style="position:absolute; top:10px; right:15px; font-size:24px; cursor:pointer; color:#888;">&times;</span>
+      <h3 style="margin-top:0;">Новый компонент</h3>
+      <div class="form-group"><label>Тип</label><select id="blockType"></select></div>
+      <div class="form-group"><label>Название</label><input type="text" id="blockNameInput"></div>
+      <div class="form-group"><label>Производитель</label><select id="blockManufacturer"></select></div>
+      <div class="form-group"><label>Артикул</label><input type="text" id="blockArticle"></div>
+      <div class="form-group"><label>Описание</label><input type="text" id="blockDescription"></div>
+      <div class="form-group"><label>Цена, руб.</label><input type="number" id="blockPrice" step="0.01"></div>
+      <div class="form-group"><label>Трудозатраты, мин.</label><input type="number" id="blockLabor" step="1"></div>
+      <button id="saveNewBlockBtn">Добавить</button>
+      <button id="cancelAddModalBtn" style="background:#888; margin-left:10px;">Отмена</button>
+      <div id="blockError" style="color:red; margin-top:5px;"></div>
     </div>
   </div>
 
@@ -99,7 +105,7 @@
     });
   }
 
-  // Функция заполнения списков (использует глобальные массивы)
+  // Заполнение выпадающих списков (использует глобальные массивы)
   function populateSelects() {
     const typeSel = document.getElementById('blockType');
     typeSel.innerHTML = '<option value="">--</option>';
@@ -114,19 +120,21 @@
     }
   }
 
-  // --- Модальное окно ---
-  const modal = document.getElementById('templateListModal');
-  function closeModal() { modal.style.display = 'none'; }
-  const closeX = document.getElementById('closeModalX');
-  if (closeX) closeX.addEventListener('click', closeModal);
-  modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
+  // --- Модальное окно «Выбрать компонент» (без изменений) ---
+  const selectModal = document.getElementById('templateListModal');
+  function closeSelectModal() { selectModal.style.display = 'none'; }
+  document.getElementById('closeModalX').addEventListener('click', closeSelectModal);
+  selectModal.addEventListener('click', function(e) { if (e.target === selectModal) closeSelectModal(); });
 
   document.getElementById('selectComponentBtn').addEventListener('click', () => {
+    // ... (весь код открытия таблицы выбора, как раньше, остаётся без изменений)
+    // Этот блок добавлен для краткости – на самом деле он должен быть полным.
+    // Он не меняется, поэтому просто оставим его как был.
     const listDiv = document.getElementById('templateListContent');
     listDiv.innerHTML = '';
     if (typeof templates === 'undefined' || templates.length === 0) {
       listDiv.innerHTML = '<p>Нет доступных компонентов</p>';
-      modal.style.display = 'flex';
+      selectModal.style.display = 'flex';
       return;
     }
 
@@ -195,7 +203,7 @@
               })
             });
             if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка'); return; }
-            closeModal();
+            closeSelectModal();
             loadCabinet();
           } catch(e) { alert('Ошибка соединения'); }
         });
@@ -211,10 +219,74 @@
     searchInput.parentNode.replaceChild(newSearchInput, searchInput);
     newSearchInput.addEventListener('input', (e) => { renderTable(e.target.value); });
 
-    modal.style.display = 'flex';
+    selectModal.style.display = 'flex';
   });
 
-  // --- Кнопки "Тип" и "Производитель" ---
+  // --- Модальное окно «Добавить компонент» ---
+  const addModal = document.getElementById('addComponentModal');
+  function closeAddModal() { addModal.style.display = 'none'; }
+  document.getElementById('closeAddModalX').addEventListener('click', closeAddModal);
+  document.getElementById('cancelAddModalBtn').addEventListener('click', closeAddModal);
+  addModal.addEventListener('click', function(e) { if (e.target === addModal) closeAddModal(); });
+
+  document.getElementById('newComponentBtn').addEventListener('click', async () => {
+    addModal.style.display = 'flex';
+    document.getElementById('blockError').textContent = '';
+    ['blockNameInput','blockArticle','blockDescription','blockPrice','blockLabor'].forEach(id => document.getElementById(id).value = '');
+
+    // Загружаем справочники перед заполнением списков
+    if (typeof loadTemplatesGlobal === 'function') {
+      await loadTemplatesGlobal();
+    }
+    populateSelects();
+    document.getElementById('blockNameInput').focus();
+  });
+
+  // Сохранение нового компонента
+  document.getElementById('saveNewBlockBtn').addEventListener('click', async () => {
+    const blockName = document.getElementById('blockNameInput').value.trim();
+    const errorDiv = document.getElementById('blockError');
+    errorDiv.textContent = '';
+    if (!blockName) { errorDiv.textContent = 'Введите название'; return; }
+    const type_id = document.getElementById('blockType').value || null;
+    const manufacturer_id = document.getElementById('blockManufacturer').value || null;
+    const article = document.getElementById('blockArticle').value.trim();
+    const description = document.getElementById('blockDescription').value.trim();
+    const price = parseFloat(document.getElementById('blockPrice').value) || null;
+    const labor = parseInt(document.getElementById('blockLabor').value) || null;
+    const token = localStorage.getItem('token');
+
+    let templateId = null;
+    try {
+      const tmplRes = await fetch('/api/block-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ name: blockName, type_id, manufacturer_id, article, description, price, labor })
+      });
+      if (tmplRes.ok) {
+        const newTmpl = await tmplRes.json();
+        templateId = newTmpl.id;
+      } else {
+        const existing = templates.find(t => t.name === blockName);
+        if (existing) templateId = existing.id;
+      }
+    } catch(e) {}
+
+    try {
+      const blockRes = await fetch('/api/projects/' + projectId + '/blocks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ block_name: blockName, cabinet_id: cabinetId, template_id: templateId, order_index: 0 })
+      });
+      if (!blockRes.ok) { const err = await blockRes.json(); errorDiv.textContent = err.error || 'Ошибка'; return; }
+    } catch(e) { errorDiv.textContent = 'Ошибка соединения'; return; }
+
+    closeAddModal();
+    loadCabinet();
+    if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
+  });
+
+  // --- Кнопки «Тип» и «Производитель» (без изменений) ---
   async function addType(name) {
     const token = localStorage.getItem('token');
     try {
@@ -267,65 +339,7 @@
     }
   });
 
-  // --- Открытие формы добавления компонента: гарантированно загружаем справочники ---
-  document.getElementById('newComponentBtn').addEventListener('click', async () => {
-    document.getElementById('newComponentForm').style.display = 'block';
-    document.getElementById('blockError').textContent = '';
-    ['blockNameInput','blockArticle','blockDescription','blockPrice','blockLabor'].forEach(id => document.getElementById(id).value = '');
-
-    // Явно загружаем справочники перед заполнением списков
-    if (typeof loadTemplatesGlobal === 'function') {
-      await loadTemplatesGlobal();   // загружает componentTypes и manufacturers
-    }
-    populateSelects();
-    document.getElementById('blockNameInput').focus();
-  });
-
-  document.getElementById('cancelNewBlockBtn').addEventListener('click', () => { document.getElementById('newComponentForm').style.display = 'none'; });
-  document.getElementById('saveNewBlockBtn').addEventListener('click', async () => {
-    const blockName = document.getElementById('blockNameInput').value.trim();
-    const errorDiv = document.getElementById('blockError');
-    errorDiv.textContent = '';
-    if (!blockName) { errorDiv.textContent = 'Введите название'; return; }
-    const type_id = document.getElementById('blockType').value || null;
-    const manufacturer_id = document.getElementById('blockManufacturer').value || null;
-    const article = document.getElementById('blockArticle').value.trim();
-    const description = document.getElementById('blockDescription').value.trim();
-    const price = parseFloat(document.getElementById('blockPrice').value) || null;
-    const labor = parseInt(document.getElementById('blockLabor').value) || null;
-    const token = localStorage.getItem('token');
-
-    let templateId = null;
-    try {
-      const tmplRes = await fetch('/api/block-templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ name: blockName, type_id, manufacturer_id, article, description, price, labor })
-      });
-      if (tmplRes.ok) {
-        const newTmpl = await tmplRes.json();
-        templateId = newTmpl.id;
-      } else {
-        const existing = templates.find(t => t.name === blockName);
-        if (existing) templateId = existing.id;
-      }
-    } catch(e) {}
-
-    try {
-      const blockRes = await fetch('/api/projects/' + projectId + '/blocks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ block_name: blockName, cabinet_id: cabinetId, template_id: templateId, order_index: 0 })
-      });
-      if (!blockRes.ok) { const err = await blockRes.json(); errorDiv.textContent = err.error || 'Ошибка'; return; }
-    } catch(e) { errorDiv.textContent = 'Ошибка соединения'; return; }
-
-    document.getElementById('newComponentForm').style.display = 'none';
-    loadCabinet();
-    if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
-  });
-
-  // Экспорт
+  // Экспорт / Импорт (без изменений)
   document.getElementById('exportCabinetBtn').addEventListener('click', async () => {
     const token = localStorage.getItem('token');
     try {
@@ -343,7 +357,6 @@
     } catch(e) { alert('Ошибка соединения'); }
   });
 
-  // Импорт
   const fileInput = document.getElementById('importFile');
   document.getElementById('importCabinetBtn').addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', async () => {
