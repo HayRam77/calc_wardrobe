@@ -10,8 +10,6 @@
   <div style="margin-top:15px; display:flex; gap:10px; flex-wrap:wrap;">
     <button id="selectComponentBtn">Выбрать компонент</button>
     <button id="newComponentBtn">Добавить новый компонент</button>
-    <button id="addTypeFromCabinetBtn">➕ Тип</button>
-    <button id="addManufacturerFromCabinetBtn">🏭 Производитель</button>
     <button id="exportCabinetBtn">📥 Экспорт Excel</button>
     <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls">
     <button id="importCabinetBtn">📤 Импорт Excel</button>
@@ -242,7 +240,48 @@
     if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
   });
 
-  // Кнопки Тип, Производитель, Экспорт, Импорт оставим без изменений (они уже есть в файле)
+  // Экспорт
+  document.getElementById('exportCabinetBtn').addEventListener('click', async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/cabinets/' + cabinetId + '/export', { headers: { 'Authorization': 'Bearer ' + token } });
+      if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка экспорта'); return; }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cabinet_components.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch(e) { alert('Ошибка соединения'); }
+  });
+
+  // Импорт
+  const fileInput = document.getElementById('importFile');
+  document.getElementById('importCabinetBtn').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch('/api/cabinets/' + cabinetId + '/import', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Ошибка импорта'); return; }
+      alert(`Добавлено ${data.added} компонентов из ${data.total}`);
+      loadCabinet();
+      if (typeof loadTemplatesGlobal === 'function') loadTemplatesGlobal();
+    } catch(e) { alert('Ошибка соединения'); }
+    fileInput.value = '';
+  });
+
   loadCabinet();
 })();
 </script>
