@@ -30,18 +30,16 @@
   </div>
 
   <!-- Модальное окно выбора существующего компонента -->
-  <div id="templateListModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); display:none; justify-content:center; align-items:center; z-index:1000;">
+  <div id="templateListModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); justify-content:center; align-items:center; z-index:1000;">
     <div style="background:white; border-radius:8px; width:90%; max-width:1200px; max-height:80vh; display:flex; flex-direction:column; position:relative;">
       <!-- Крестик закрытия -->
-      <span id="closeModalX" style="position:absolute; top:10px; right:15px; font-size:24px; cursor:pointer; color:#888;">&times;</span>
+      <span id="closeModalX" style="position:absolute; top:10px; right:15px; font-size:24px; cursor:pointer; color:#888; z-index:3;">&times;</span>
       
-      <!-- Заголовок и строка поиска (закреплены) -->
       <div style="padding:20px 20px 10px 20px; border-bottom:1px solid #eee; position:sticky; top:0; background:white; z-index:2;">
         <h3 style="margin:0 0 10px 0;">Выберите компонент</h3>
         <input type="text" id="searchInput" placeholder="Поиск по названию, артикулу, производителю, параметрам..." style="width:100%; padding:8px; box-sizing:border-box;">
       </div>
 
-      <!-- Тело с таблицей (прокручивается) -->
       <div style="overflow-y:auto; padding:0 20px 20px 20px;">
         <div id="templateListContent"></div>
       </div>
@@ -104,7 +102,6 @@
     });
   }
 
-  // Заполнение справочников
   function populateSelects() {
     const typeSel = document.getElementById('blockType');
     typeSel.innerHTML = '<option value="">--</option>';
@@ -115,11 +112,18 @@
     if (typeof manufacturers !== 'undefined') manufacturers.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; manSel.appendChild(o); });
   }
 
-  // --- Модальное окно выбора компонента ---
+  // --- Модальное окно ---
   const modal = document.getElementById('templateListModal');
+  
+  // Определяем closeModal ОДИН раз через function declaration (поднимается)
   function closeModal() { modal.style.display = 'none'; }
-  function closeModal() { modal.style.display = 'none'; }
-  document.getElementById('closeModalX').addEventListener('click', closeModal);
+
+  // Навешиваем обработчик на крестик
+  const closeX = document.getElementById('closeModalX');
+  if (closeX) {
+    closeX.addEventListener('click', closeModal);
+  }
+
   // Закрытие по клику на оверлей
   modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
 
@@ -132,7 +136,6 @@
       return;
     }
 
-    // Собираем уникальные параметры
     const paramNamesSet = new Set();
     templates.forEach(t => {
       if (t.parameters && t.parameters.length > 0) {
@@ -141,7 +144,6 @@
     });
     const paramNames = Array.from(paramNamesSet).sort();
 
-    // Функция отрисовки таблицы с учётом фильтра
     function renderTable(filterText = '') {
       const filterLower = filterText.toLowerCase();
       const filtered = templates.filter(t => {
@@ -159,13 +161,9 @@
         return inName || inArticle || inManufacturer || inParams;
       });
 
-      if (filtered.length === 0) {
-        listDiv.innerHTML = '<p>Ничего не найдено</p>';
-        return;
-      }
+      if (filtered.length === 0) { listDiv.innerHTML = '<p>Ничего не найдено</p>'; return; }
 
       let html = '<table style="width:100%; border-collapse:collapse;">';
-      // Заголовок (приклеиваем)
       html += '<thead style="position:sticky; top:0; background:white; z-index:1;">';
       html += '<tr><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th>';
       paramNames.forEach(name => { html += `<th>${name}</th>`; });
@@ -187,7 +185,6 @@
       html += '</tbody></table>';
       listDiv.innerHTML = html;
 
-      // Обработчики клика по строкам
       listDiv.querySelectorAll('tr.clickable').forEach(row => {
         row.addEventListener('click', async () => {
           const id = row.dataset.id;
@@ -211,14 +208,11 @@
       });
     }
 
-    // Начальная отрисовка
     renderTable('');
 
-    // Поле поиска
     const searchInput = document.getElementById('searchInput');
     searchInput.value = '';
     searchInput.focus();
-    // Удаляем старый обработчик, чтобы не накапливались
     const newSearchInput = searchInput.cloneNode(true);
     searchInput.parentNode.replaceChild(newSearchInput, searchInput);
     newSearchInput.addEventListener('input', (e) => { renderTable(e.target.value); });
@@ -226,7 +220,7 @@
     modal.style.display = 'flex';
   });
 
-  // --- Остальные кнопки (Добавить новый, Экспорт, Импорт) без изменений ---
+  // --- Остальные кнопки ---
   document.getElementById('newComponentBtn').addEventListener('click', () => {
     document.getElementById('newComponentForm').style.display = 'block';
     document.getElementById('blockError').textContent = '';
