@@ -18,35 +18,54 @@
       const res = await fetch('/api/block-templates', { headers: { 'Authorization': 'Bearer ' + token } });
       if (!res.ok) throw new Error('Ошибка загрузки');
       const templates = await res.json();
-      let html = '<table><tr><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th><th>Параметры</th><th></th></tr>';
+
       if (templates.length === 0) {
-        html = '<p>Нет компонентов.</p>';
-      } else {
-        templates.forEach(t => {
-          const paramsStr = (t.parameters && t.parameters.length > 0) 
-            ? t.parameters.map(p => `${p.param_name}=${p.param_value}`).join('; ')
-            : '';
-          html += `<tr>
-            <td>${t.type_name || ''}</td>
-            <td>${t.name}</td>
-            <td>${t.manufacturer_name || ''}</td>
-            <td>${t.article || ''}</td>
-            <td>${t.price != null ? t.price : ''}</td>
-            <td>${paramsStr}</td>
-            <td>
-              <button class="small edit-template-btn" data-id="${t.id}">Редактировать</button>
-              <button class="small danger delete-template-btn" data-id="${t.id}">Удалить</button>
-            </td>
-          </tr>`;
-        });
+        container.innerHTML = '<p>Нет компонентов.</p>';
+        return;
       }
-      html += '</table>';
+
+      // Собираем уникальные названия параметров
+      const paramNamesSet = new Set();
+      templates.forEach(t => {
+        if (t.parameters && t.parameters.length > 0) {
+          t.parameters.forEach(p => paramNamesSet.add(p.param_name));
+        }
+      });
+      const paramNames = Array.from(paramNamesSet).sort();
+
+      // Формируем заголовок таблицы
+      let html = '<table><thead><tr>';
+      html += '<th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th>';
+      paramNames.forEach(name => { html += `<th>${name}</th>`; });
+      html += '<th></th></tr></thead><tbody>';
+
+      // Заполняем строки
+      templates.forEach(t => {
+        html += '<tr>';
+        html += `<td>${t.type_name || ''}</td>`;
+        html += `<td>${t.name}</td>`;
+        html += `<td>${t.manufacturer_name || ''}</td>`;
+        html += `<td>${t.article || ''}</td>`;
+        html += `<td>${t.price != null ? t.price : ''}</td>`;
+
+        // Для каждого параметра ищем значение
+        paramNames.forEach(pName => {
+          const param = t.parameters ? t.parameters.find(p => p.param_name === pName) : null;
+          html += `<td>${param ? param.param_value : ''}</td>`;
+        });
+
+        html += `<td>
+          <button class="small edit-template-btn" data-id="${t.id}">Редактировать</button>
+          <button class="small danger delete-template-btn" data-id="${t.id}">Удалить</button>
+        </td></tr>`;
+      });
+
+      html += '</tbody></table>';
       container.innerHTML = html;
 
+      // Обработчики кнопок
       container.querySelectorAll('.edit-template-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-          openTemplateModal(this.dataset.id);
-        });
+        btn.addEventListener('click', function() { openTemplateModal(this.dataset.id); });
       });
       container.querySelectorAll('.delete-template-btn').forEach(btn => {
         btn.addEventListener('click', async function() {
@@ -64,13 +83,11 @@
   }
 
   document.getElementById('addTemplateBtn').addEventListener('click', () => openTemplateModal());
-  
+
   // Экспорт
   document.getElementById('exportBtn').addEventListener('click', async () => {
     try {
-      const res = await fetch('/api/block-templates/export', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
+      const res = await fetch('/api/block-templates/export', { headers: { 'Authorization': 'Bearer ' + token } });
       if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка экспорта'); return; }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
