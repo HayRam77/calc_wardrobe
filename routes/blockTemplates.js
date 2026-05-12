@@ -9,7 +9,9 @@ router.use(authMiddleware);
 router.get('/', async (req, res) => {
   try {
     const tmpls = await pool.query(`
-      SELECT bt.*, ct.name AS type_name, m.name AS manufacturer_name
+      SELECT bt.id, bt.name, bt.description, bt.type_id, bt.manufacturer_id,
+             bt.article, bt.price, bt.labor, bt.ln, bt.url, bt.created_by, bt.created_at,
+             ct.name AS type_name, m.name AS manufacturer_name
       FROM block_templates bt
       LEFT JOIN component_types ct ON bt.type_id = ct.id
       LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
@@ -32,7 +34,7 @@ router.get('/', async (req, res) => {
 
 // POST – создание компонента
 router.post('/', async (req, res) => {
-  const { name, description, type_id, manufacturer_id, article, price, labor, ln, parameters } = req.body;
+  const { name, description, type_id, manufacturer_id, article, price, labor, ln, url, parameters } = req.body;
   if (!name) return res.status(400).json({ error: 'Название обязательно' });
   const client = await pool.connect();
   try {
@@ -41,27 +43,22 @@ router.post('/', async (req, res) => {
       `INSERT INTO block_templates (name, description, type_id, manufacturer_id, article, price, labor, ln, url, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [name, description || null, type_id || null, manufacturer_id || null, article || null, price || null, labor || null, ln || null, url || null, req.user.userId]
-      [name, description || null, type_id || null, manufacturer_id || null, article || null, price || null, labor || null, ln || null, req.user.userId]
     );
     const templateId = tmpl.rows[0].id;
-    // Параметры
     if (Array.isArray(parameters)) {
       for (const p of parameters) {
         let paramId = p.parameter_id;
         if (!paramId && p.param_name && p.param_name.trim()) {
           const exist = await client.query('SELECT id FROM parameters WHERE param_name = $1', [p.param_name.trim()]);
-          if (exist.rows.length > 0) {
-            paramId = exist.rows[0].id;
-          } else {
+          if (exist.rows.length > 0) paramId = exist.rows[0].id;
+          else {
             const newParam = await client.query('INSERT INTO parameters (param_name) VALUES ($1) RETURNING id', [p.param_name.trim()]);
             paramId = newParam.rows[0].id;
           }
         }
         if (paramId) {
-          await client.query(
-            'INSERT INTO component_param_values (template_id, parameter_id, param_value) VALUES ($1,$2,$3)',
-            [templateId, paramId, p.param_value || '']
-          );
+          await client.query('INSERT INTO component_param_values (template_id, parameter_id, param_value) VALUES ($1,$2,$3)',
+            [templateId, paramId, p.param_value || '']);
         }
       }
     }
@@ -70,9 +67,7 @@ router.post('/', async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     if (err.code === '23505') {
-      if (err.constraint === 'block_templates_article_key') {
-        return res.status(400).json({ error: 'Компонент с таким артикулом уже существует' });
-      }
+      if (err.constraint === 'block_templates_article_key') return res.status(400).json({ error: 'Компонент с таким артикулом уже существует' });
       return res.status(400).json({ error: 'Дублирование данных' });
     }
     res.status(500).json({ error: err.message });
@@ -82,13 +77,14 @@ router.post('/', async (req, res) => {
 // PUT – обновление компонента
 router.put('/:id', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Только для администратора' });
-  const { name, description, type_id, manufacturer_id, article, price, labor, ln, parameters } = req.body;
+  const { name, description, type_id, manufacturer_id, article, price, labor, ln, url, parameters } = req.body;
   if (!name) return res.status(400).json({ error: 'Название обязательно' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await client.query(
-      `UPDATE block_templates SET name=$1, description=$2, type_id=$3, manufacturer_id=$4, article=$5, price=$6, labor=$7, ln=$8, url=$9 WHERE id=$10`,
+      `UPDATE block_templates SET name=$1, description=$2, type_id=$3, manufacturer_id=$4,
+       article=$5, price=$6, labor=$7, ln=$8, url=$9 WHERE id=$10`,
       [name, description || null, type_id || null, manufacturer_id || null, article || null, price || null, labor || null, ln || null, url || null, req.params.id]
     );
     await client.query('DELETE FROM component_param_values WHERE template_id = $1', [req.params.id]);
@@ -97,18 +93,15 @@ router.put('/:id', async (req, res) => {
         let paramId = p.parameter_id;
         if (!paramId && p.param_name && p.param_name.trim()) {
           const exist = await client.query('SELECT id FROM parameters WHERE param_name = $1', [p.param_name.trim()]);
-          if (exist.rows.length > 0) {
-            paramId = exist.rows[0].id;
-          } else {
+          if (exist.rows.length > 0) paramId = exist.rows[0].id;
+          else {
             const newParam = await client.query('INSERT INTO parameters (param_name) VALUES ($1) RETURNING id', [p.param_name.trim()]);
             paramId = newParam.rows[0].id;
           }
         }
         if (paramId) {
-          await client.query(
-            'INSERT INTO component_param_values (template_id, parameter_id, param_value) VALUES ($1,$2,$3)',
-            [req.params.id, paramId, p.param_value || '']
-          );
+          await client.query('INSERT INTO component_param_values (template_id, parameter_id, param_value) VALUES ($1,$2,$3)',
+            [req.params.id, paramId, p.param_value || '']);
         }
       }
     }
@@ -117,9 +110,7 @@ router.put('/:id', async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     if (err.code === '23505') {
-      if (err.constraint === 'block_templates_article_key') {
-        return res.status(400).json({ error: 'Компонент с таким артикулом уже существует' });
-      }
+      if (err.constraint === 'block_templates_article_key') return res.status(400).json({ error: 'Компонент с таким артикулом уже существует' });
       return res.status(400).json({ error: 'Дублирование данных' });
     }
     res.status(500).json({ error: err.message });
