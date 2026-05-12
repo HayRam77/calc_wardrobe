@@ -59,6 +59,8 @@
     <a href="/component" id="templatesLink" class="hidden">Компоненты</a>
     <a href="/admin/component-types" id="compTypesLink" class="hidden">Типы</a>
     <a href="/admin/manufacturers" id="manufacturersLink" class="hidden">Производители</a>
+                <a href="/admin/parameters" id="paramsLink" class="hidden">Параметры</a>
+                <a href="/admin/parameters" id="paramsLink" class="hidden">Параметры</a>
     <a href="/admin/all-cabinets" id="allCabinetsLink" class="hidden">Все<br>шкафы</a>
   </div>
   <div class="right">
@@ -167,6 +169,8 @@ function updateMenu() {
     document.getElementById('templatesLink').classList.remove('hidden');
     document.getElementById('compTypesLink').classList.remove('hidden');
     document.getElementById('manufacturersLink').classList.remove('hidden');
+                document.getElementById('paramsLink').classList.remove('hidden');
+                document.getElementById('paramsLink').classList.remove('hidden');
     document.getElementById('allCabinetsLink').classList.remove('hidden');
   } else {
     document.getElementById('myProjectsLink').classList.remove('hidden');
@@ -175,6 +179,8 @@ function updateMenu() {
     document.getElementById('templatesLink').classList.remove('hidden');
     document.getElementById('compTypesLink').classList.remove('hidden');
     document.getElementById('manufacturersLink').classList.remove('hidden');
+                document.getElementById('paramsLink').classList.remove('hidden');
+                document.getElementById('paramsLink').classList.remove('hidden');
     document.getElementById('allCabinetsLink').classList.add('hidden');
   }
 }
@@ -193,6 +199,8 @@ async function loadPage(url) {
     else if (url === '/admin/all-cabinets') file = 'admin-all-cabinets.html';
     else if (url === '/admin/component-types') file = 'admin-component-types.html';
     else if (url === '/admin/manufacturers') file = 'admin-manufacturers.html';
+                else if (url === '/admin/parameters') file = 'admin-parameters.html';
+    else if (url === '/admin/parameters') file = 'admin-parameters.html';
     else if (url === '/component') file = 'component.html';
     else if (url.startsWith('/project/')) file = 'project-detail.html';
     else if (url.startsWith('/cabinet/')) file = 'cabinet-detail.html';
