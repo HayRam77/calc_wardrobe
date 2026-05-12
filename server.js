@@ -11,6 +11,7 @@ const cabinetsRoutes = require('./routes/cabinets');
 const cabinetsTopRoutes = require('./routes/cabinetsTop');
 const componentTypesRoutes = require('./routes/componentTypes');
 const manufacturersRoutes = require('./routes/manufacturers');
+const parametersRoutes = require('./routes/parameters');
 
 const app = express();
 const PORT = process.env.SERVER_PORT || 3001;
@@ -27,6 +28,7 @@ app.use('/api/projects/:projectId/cabinets', cabinetsRoutes);
 app.use('/api/cabinets', cabinetsTopRoutes);
 app.use('/api/component-types', componentTypesRoutes);
 app.use('/api/manufacturers', manufacturersRoutes);
+app.use('/api/parameters', parametersRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.listen(PORT, '127.0.0.1', () => {
