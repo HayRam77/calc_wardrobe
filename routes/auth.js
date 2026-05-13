@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'defaultsecret';
 
-// Регистрация (без изменений)
+// Регистрация
 router.post('/register', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
@@ -28,7 +28,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Вход
+// Вход (сохраняем ip и user-agent)
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -37,18 +37,19 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
     }
     const user = result.rows[0];
+
     if (user.is_blocked) {
       return res.status(403).json({ error: 'Пользователь заблокирован' });
     }
+
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
       return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
     }
 
-    // Создаём сессию с IP и User-Agent
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
+    // Сохраняем сессию с ip и user-agent
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
     const userAgent = req.headers['user-agent'] || '';
-
     const session = await pool.query(
       'INSERT INTO user_sessions (user_id, ip_address, user_agent) VALUES ($1, $2, $3) RETURNING id, login_time',
       [user.id, ip, userAgent]
