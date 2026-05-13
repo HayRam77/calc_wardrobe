@@ -22,7 +22,16 @@
       } else html += '<p>Нет проектов</p>';
       html += '<h3>Последние сессии</h3>';
       if (user.sessions && user.sessions.length > 0) {
-        html += '<table><tr><th>Вход</th><th>Выход</th></tr>' + user.sessions.map(s => `<tr><td>${new Date(s.login_time).toLocaleString('ru-RU')}</td><td>${s.logout_time ? new Date(s.logout_time).toLocaleString('ru-RU') : '—'}</td></tr>`).join('') + '</table>';
+        html += '<table><tr><th>Вход</th><th>Выход</th><th>IP</th><th>Устройство</th></tr>';
+        user.sessions.forEach(s => {
+          html += `<tr>
+            <td>${new Date(s.login_time).toLocaleString('ru-RU')}</td>
+            <td>${s.logout_time ? new Date(s.logout_time).toLocaleString('ru-RU') : '—'}</td>
+            <td>${s.ip_address || ''}</td>
+            <td>${s.user_agent || ''}</td>
+          </tr>`;
+        });
+        html += '</table>';
       } else html += '<p>Нет данных</p>';
       document.getElementById('detailInfo').innerHTML = html;
       document.querySelectorAll('.project-link').forEach(link => { link.addEventListener('click', function(e) { e.preventDefault(); navigateTo(this.getAttribute('href')); }); });
