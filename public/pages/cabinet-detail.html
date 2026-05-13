@@ -15,7 +15,7 @@
     <button id="importCabinetBtn">📤 Импорт Excel</button>
   </div>
 
-  <!-- Модальное окно выбора существующего компонента (без изменений) -->
+  <!-- Модальное окно выбора существующего компонента -->
   <div id="templateListModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); justify-content:center; align-items:center; z-index:1000;">
     <div style="background:white; border-radius:8px; width:90%; max-width:1200px; max-height:80vh; display:flex; flex-direction:column; position:relative;">
       <span id="closeModalX" style="position:absolute; top:10px; right:15px; font-size:24px; cursor:pointer; color:#888; z-index:3;">&times;</span>
@@ -114,7 +114,7 @@
     if (typeof manufacturers !== 'undefined') manufacturers.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; manSel.appendChild(o); });
   }
 
-  // --- Модальное окно выбора (старый код) ---
+  // --- Модальное окно выбора (старый код, только с количеством=1 при выборе) ---
   const selectModal = document.getElementById('templateListModal');
   function closeSelectModal() { selectModal.style.display = 'none'; }
   document.getElementById('closeModalX').addEventListener('click', closeSelectModal);

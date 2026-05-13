@@ -59,6 +59,7 @@
     <a href="/component" id="templatesLink" class="hidden">Компоненты</a>
     <a href="/admin/component-types" id="compTypesLink" class="hidden">Типы</a>
     <a href="/admin/manufacturers" id="manufacturersLink" class="hidden">Производители</a>
+    <a href="/admin/parameters" id="paramsLink" class="hidden">Параметры</a>
     <a href="/admin/all-cabinets" id="allCabinetsLink" class="hidden">Все<br>шкафы</a>
   </div>
   <div class="right">
@@ -80,7 +81,7 @@
     <div class="form-group"><label>Описание</label><input type="text" id="modalTemplateDesc"></div>
     <div class="form-group"><label>Цена, руб.</label><input type="number" id="modalPrice" step="0.01"></div>
     <div class="form-group"><label>LN</label><input type="text" id="modalLn"></div>
-                <div class="form-group"><label>Ссылка</label><input type="text" id="modalUrl" placeholder="URL страницы производителя"></div>
+    <div class="form-group"><label>Ссылка</label><input type="text" id="modalUrl" placeholder="URL страницы производителя"></div>
     <div class="form-group"><label>Трудозатраты, мин.</label><input type="number" id="modalLabor" step="1"></div>
     <h4>Параметры</h4>
     <div id="modalParams"></div>
@@ -168,8 +169,7 @@ function updateMenu() {
     document.getElementById('templatesLink').classList.remove('hidden');
     document.getElementById('compTypesLink').classList.remove('hidden');
     document.getElementById('manufacturersLink').classList.remove('hidden');
-                document.getElementById('paramsLink').classList.remove('hidden');
-                document.getElementById('paramsLink').classList.remove('hidden');
+    document.getElementById('paramsLink').classList.remove('hidden');
     document.getElementById('allCabinetsLink').classList.remove('hidden');
   } else {
     document.getElementById('myProjectsLink').classList.remove('hidden');
@@ -178,8 +178,7 @@ function updateMenu() {
     document.getElementById('templatesLink').classList.remove('hidden');
     document.getElementById('compTypesLink').classList.remove('hidden');
     document.getElementById('manufacturersLink').classList.remove('hidden');
-                document.getElementById('paramsLink').classList.remove('hidden');
-                document.getElementById('paramsLink').classList.remove('hidden');
+    document.getElementById('paramsLink').classList.remove('hidden');
     document.getElementById('allCabinetsLink').classList.add('hidden');
   }
 }
@@ -198,7 +197,6 @@ async function loadPage(url) {
     else if (url === '/admin/all-cabinets') file = 'admin-all-cabinets.html';
     else if (url === '/admin/component-types') file = 'admin-component-types.html';
     else if (url === '/admin/manufacturers') file = 'admin-manufacturers.html';
-                else if (url === '/admin/parameters') file = 'admin-parameters.html';
     else if (url === '/admin/parameters') file = 'admin-parameters.html';
     else if (url === '/component') file = 'component.html';
     else if (url.startsWith('/project/')) file = 'project-detail.html';
@@ -252,7 +250,7 @@ window.addEventListener('load', () => {
 let templates = [];
 let componentTypes = [];
 let manufacturers = [];
-let parametersList = [];   // справочник параметров
+let parametersList = [];
 let editingTemplateId = null;
 
 async function loadTemplatesGlobal() {
@@ -300,13 +298,10 @@ async function openTemplateModal(id=null) {
     document.getElementById('modalArticle').value = t.article || '';
     document.getElementById('modalPrice').value = t.price || '';
     document.getElementById('modalLn').value = t.ln || '';
-                document.getElementById('modalUrl').value = t.url || '';
+    document.getElementById('modalUrl').value = t.url || '';
     document.getElementById('modalLabor').value = t.labor || '';
-    // параметры
     if (t.parameters && t.parameters.length > 0) {
-      t.parameters.forEach(p => {
-        addParamRow(p.parameter_id, p.param_value, p.param_name);
-      });
+      t.parameters.forEach(p => { addParamRow(p.parameter_id, p.param_value, p.param_name); });
     }
   } else {
     document.getElementById('modalTitle').textContent = 'Новый компонент';
@@ -317,7 +312,7 @@ async function openTemplateModal(id=null) {
     document.getElementById('modalArticle').value = '';
     document.getElementById('modalPrice').value = '';
     document.getElementById('modalLn').value = '';
-                document.getElementById('modalUrl').value = '';
+    document.getElementById('modalUrl').value = '';
     document.getElementById('modalLabor').value = '';
   }
   document.getElementById('templateModal').classList.remove('hidden');
@@ -339,16 +334,9 @@ function addParamRow(parameterId = '', paramValue = '', paramName = '') {
 
   const select = row.querySelector('.param-select');
   const nameInput = row.querySelector('.param-name');
-
   select.addEventListener('change', () => {
-    if (select.value === '') {
-      nameInput.style.display = 'block';
-      nameInput.focus();
-    } else {
-      nameInput.style.display = 'none';
-    }
+    nameInput.style.display = select.value === '' ? 'block' : 'none';
   });
-
   row.querySelector('.remove-param-btn').addEventListener('click', () => row.remove());
 }
 
@@ -365,7 +353,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
   const article = document.getElementById('modalArticle').value.trim();
   const price = parseFloat(document.getElementById('modalPrice').value) || null;
   const ln = document.getElementById('modalLn').value.trim();
-                const componentUrl = document.getElementById('modalUrl').value.trim();
+  const componentUrl = document.getElementById('modalUrl').value.trim();
   const labor = parseInt(document.getElementById('modalLabor').value) || null;
 
   const parameters = [];
@@ -375,13 +363,9 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     const nameInput = row.querySelector('.param-name');
     let paramName = null;
     let parameterId = select.value;
-    if (parameterId === '') {
-      paramName = nameInput.value.trim();
-    }
+    if (parameterId === '') { paramName = nameInput.value.trim(); }
     const paramValue = valueInput.value.trim();
-    if (parameterId || paramName) {
-      parameters.push({ parameter_id: parameterId || null, param_name: paramName, param_value: paramValue });
-    }
+    if (parameterId || paramName) { parameters.push({ parameter_id: parameterId || null, param_name: paramName, param_value: paramValue }); }
   });
 
   const token = localStorage.getItem('token');
@@ -391,7 +375,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                  body: JSON.stringify({ name, description: desc, type_id, manufacturer_id, article, price, ln, labor, url: componentUrl, parameters })
+      body: JSON.stringify({ name, description: desc, type_id, manufacturer_id, article, price, ln, labor, url: componentUrl, parameters })
     });
     if (!res.ok) { const err = await res.json(); document.getElementById('modalError').textContent = err.error || 'Ошибка'; return; }
     closeTemplateModal();
