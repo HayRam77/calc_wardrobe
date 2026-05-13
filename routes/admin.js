@@ -186,3 +186,14 @@ router.post('/cabinets/:id/copy', async (req, res) => {
 });
 
 module.exports = router;
+
+// Удалить шкаф (админ)
+router.delete('/cabinets/:id', async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM cabinets WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Шкаф не найден' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
