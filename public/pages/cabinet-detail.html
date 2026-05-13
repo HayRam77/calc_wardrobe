@@ -21,7 +21,7 @@
       <span id="closeModalX" style="position:absolute; top:10px; right:15px; font-size:24px; cursor:pointer; color:#888; z-index:3;">&times;</span>
       <div style="padding:20px 20px 10px 20px; border-bottom:1px solid #eee; position:sticky; top:0; background:white; z-index:2;">
         <h3 style="margin:0 0 10px 0;">Выберите компонент</h3>
-        <input type="text" id="searchInput" placeholder="Поиск..." style="width:100%; padding:8px; box-sizing:border-box;">
+        <input type="text" id="searchInput" placeholder="Поиск по названию, артикулу, производителю, параметрам..." style="width:100%; padding:8px; box-sizing:border-box;">
       </div>
       <div style="overflow-y:auto; padding:0 20px 20px 20px;">
         <div id="templateListContent"></div>
@@ -56,6 +56,7 @@
   const pathParts = location.pathname.split('/');
   const cabinetId = pathParts[pathParts.length - 1];
   let projectId = null;
+  let currentBlocks = [];
 
   async function loadCabinet() {
     const token = localStorage.getItem('token');
@@ -71,27 +72,39 @@
       projectLink.textContent = data.project_name;
       projectLink.href = '/project/' + data.project_id;
       projectLink.addEventListener('click', function(e) { e.preventDefault(); navigateTo(this.getAttribute('href')); });
-      renderBlocks(data.blocks || []);
+      currentBlocks = data.blocks || [];
+      renderBlocks(currentBlocks);
     } catch(e) { document.getElementById('cabinetContent').innerHTML = '<p style="color:red;">Ошибка загрузки шкафа</p>'; }
   }
 
   function renderBlocks(blocks) {
     const container = document.getElementById('cabinetBlocks');
     if (blocks.length === 0) { container.innerHTML = '<p>Нет компонентов</p>'; return; }
-    let html = '<table><tr><th>Тип</th><th>Наименование</th><th>Количество</th><th>Артикул</th><th>Производитель</th><th>Примечание</th><th></th></tr>';
+    let html = '<table><thead><tr><th>Тип</th><th>Наименование</th><th>Количество</th><th>Артикул</th><th>Производитель</th><th>Примечание</th><th></th></tr></thead><tbody id="sortableBody">';
     blocks.forEach(b => {
-      html += `<tr>
+      html += `<tr draggable="true" data-id="${b.id}" data-order="${b.order_index}" class="draggable-row">
         <td>${b.type_name || ''}</td>
         <td>${b.block_name}</td>
-        <td>${b.quantity || 1}</td>
+        <td><input type="number" class="quantity-input" value="${b.quantity || 1}" min="0" style="width:70px;" data-id="${b.id}"></td>
         <td>${b.article || ''}</td>
         <td>${b.manufacturer_name || ''}</td>
         <td>${b.template_description || ''}</td>
         <td><button class="small danger delete-block-btn" data-id="${b.id}">Удалить</button></td>
       </tr>`;
     });
-    html += '</table>';
+    html += '</tbody></table>';
     container.innerHTML = html;
+
+    // Drag‑n‑Drop
+    const rows = container.querySelectorAll('.draggable-row');
+    rows.forEach(row => {
+      row.addEventListener('dragstart', handleDragStart);
+      row.addEventListener('dragover', handleDragOver);
+      row.addEventListener('drop', handleDrop);
+      row.addEventListener('dragend', handleDragEnd);
+    });
+
+    // Удаление
     container.querySelectorAll('.delete-block-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const blockId = e.target.dataset.id;
@@ -103,6 +116,76 @@
         } catch(e) { alert('Ошибка удаления'); }
       });
     });
+
+    // Изменение количества
+    container.querySelectorAll('.quantity-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const blockId = e.target.dataset.id;
+        const newQty = parseInt(e.target.value) || 0;
+        const token = localStorage.getItem('token');
+        try {
+          await fetch('/api/projects/' + projectId + '/blocks/' + blockId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ quantity: newQty })
+          });
+        } catch(e) { alert('Ошибка обновления количества'); }
+      });
+    });
+  }
+
+  // Drag‑n‑Drop handlers
+  let draggedRow = null;
+  function handleDragStart(e) {
+    draggedRow = this;
+    e.dataTransfer.effectAllowed = 'move';
+    this.classList.add('dragging');
+  }
+  function handleDragOver(e) {
+    if (e.preventDefault) e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+  }
+  function handleDrop(e) {
+    if (e.stopPropagation) e.stopPropagation();
+    if (draggedRow !== this) {
+      const draggedId = parseInt(draggedRow.dataset.id);
+      const targetId = parseInt(this.dataset.id);
+      const draggedOrder = parseInt(draggedRow.dataset.order);
+      const targetOrder = parseInt(this.dataset.order);
+
+      const tbody = document.getElementById('sortableBody');
+      const rows = Array.from(tbody.querySelectorAll('.draggable-row'));
+      const draggedIdx = rows.findIndex(r => parseInt(r.dataset.id) === draggedId);
+      const targetIdx = rows.findIndex(r => parseInt(r.dataset.id) === targetId);
+      if (draggedIdx < targetIdx) {
+        tbody.insertBefore(draggedRow, rows[targetIdx].nextSibling);
+      } else {
+        tbody.insertBefore(draggedRow, rows[targetIdx]);
+      }
+
+      const token = localStorage.getItem('token');
+      Promise.all([
+        fetch('/api/projects/' + projectId + '/blocks/' + draggedId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ order_index: targetOrder })
+        }),
+        fetch('/api/projects/' + projectId + '/blocks/' + targetId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ order_index: draggedOrder })
+        })
+      ]).then(() => {
+        draggedRow.dataset.order = targetOrder;
+        this.dataset.order = draggedOrder;
+      }).catch(e => console.error(e));
+    }
+    return false;
+  }
+  function handleDragEnd(e) {
+    this.classList.remove('dragging');
+    draggedRow = null;
   }
 
   function populateSelects() {
@@ -114,7 +197,7 @@
     if (typeof manufacturers !== 'undefined') manufacturers.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; manSel.appendChild(o); });
   }
 
-  // --- Модальное окно выбора (старый код, только с количеством=1 при выборе) ---
+  // --- Модальное окно выбора компонента (полный код) ---
   const selectModal = document.getElementById('templateListModal');
   function closeSelectModal() { selectModal.style.display = 'none'; }
   document.getElementById('closeModalX').addEventListener('click', closeSelectModal);
@@ -128,6 +211,7 @@
       selectModal.style.display = 'flex';
       return;
     }
+
     const paramNamesSet = new Set();
     templates.forEach(t => { if (t.parameters && t.parameters.length > 0) t.parameters.forEach(p => paramNamesSet.add(p.param_name)); });
     const paramNames = Array.from(paramNamesSet).sort();
@@ -145,6 +229,7 @@
       });
 
       if (filtered.length === 0) { listDiv.innerHTML = '<p>Ничего не найдено</p>'; return; }
+
       let html = '<table style="width:100%; border-collapse:collapse;"><thead style="position:sticky; top:0; background:white; z-index:1;"><tr><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th>';
       paramNames.forEach(name => { html += `<th>${name}</th>`; });
       html += '<th>Описание</th></tr></thead><tbody>';
@@ -158,6 +243,7 @@
         });
         html += `<td>${t.description || ''}</td></tr>`;
       });
+
       html += '</tbody></table>';
       listDiv.innerHTML = html;
 
@@ -169,7 +255,13 @@
             const res = await fetch('/api/projects/' + projectId + '/blocks', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-              body: JSON.stringify({ block_name: templates.find(t => t.id == id).name, cabinet_id: cabinetId, template_id: id, order_index: 0, quantity: 1 })
+              body: JSON.stringify({
+                block_name: templates.find(t => t.id == id).name,
+                cabinet_id: cabinetId,
+                template_id: id,
+                order_index: 0,
+                quantity: 1
+              })
             });
             if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка'); return; }
             closeSelectModal();
@@ -180,15 +272,18 @@
     }
 
     renderTable('');
+
     const searchInput = document.getElementById('searchInput');
-    searchInput.value = ''; searchInput.focus();
+    searchInput.value = '';
+    searchInput.focus();
     const newSearchInput = searchInput.cloneNode(true);
     searchInput.parentNode.replaceChild(newSearchInput, searchInput);
     newSearchInput.addEventListener('input', (e) => { renderTable(e.target.value); });
+
     selectModal.style.display = 'flex';
   });
 
-  // --- Модальное окно добавления ---
+  // --- Модальное окно добавления нового компонента ---
   const addModal = document.getElementById('addComponentModal');
   function closeAddModal() { addModal.style.display = 'none'; }
   document.getElementById('closeAddModalX').addEventListener('click', closeAddModal);
