@@ -30,7 +30,7 @@
       const paramNames = Array.from(paramNamesSet).sort();
 
       let html = '<table><thead><tr>';
-      html += '<th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th><th>LN</th>';
+      html += '<th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th><th>Вес, гр.</th><th>Q, вт</th><th>LN</th>';
       html += '<th>Ссылка</th>';
       paramNames.forEach(name => { html += `<th>${name}</th>`; });
       html += '<th></th></tr></thead><tbody>';
@@ -42,6 +42,8 @@
         html += `<td>${t.manufacturer_name || ''}</td>`;
         html += `<td>${t.article || ''}</td>`;
         html += `<td>${t.price != null ? t.price : ''}</td>`;
+        html += `<td>${t.weight_grams != null ? t.weight_grams : ''}</td>`;
+        html += `<td>${t.power_watts != null ? t.power_watts : ''}</td>`;
         html += `<td>${t.ln || ''}</td>`;
         if (t.url) {
           html += `<td><a href="${t.url}" target="_blank" title="${t.url}">🔗</a></td>`;
