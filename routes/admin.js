@@ -197,3 +197,71 @@ router.delete('/cabinets/:id', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+const { exec } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+// Экспорт базы данных (только админ)
+router.post('/database/export', async (req, res) => {
+  // Проверка роли уже выполнена middleware isAdmin
+  try {
+    // Параметры подключения из .env
+    const dbName = process.env.DB_NAME || 'bd_calc';
+    const dbUser = process.env.DB_USER || 'hrroot';
+    const dbPass = process.env.DB_PASSWORD || '';
+    const dbHost = process.env.DB_HOST || 'localhost';
+    const dbPort = process.env.DB_PORT || '5432';
+
+    // Формируем команду pg_dump
+    const dumpFile = path.join('/tmp', 'dump_' + Date.now() + '.sql');
+    const env = { PGPASSWORD: dbPass };
+    const cmd = `pg_dump -h ${dbHost} -p ${dbPort} -U ${dbUser} -F p ${dbName} > ${dumpFile}`;
+    
+    exec(cmd, { env }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('pg_dump error:', stderr);
+        return res.status(500).json({ error: 'Ошибка при создании дампа' });
+      }
+      // Отправляем файл
+      res.download(dumpFile, path.basename(dumpFile), (err) => {
+        if (err) console.error('Download error:', err);
+        // Удаляем временный файл после отправки
+        fs.unlink(dumpFile, () => {});
+      });
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Импорт базы данных (только админ)
+router.post('/database/import', async (req, res) => {
+  try {
+    if (!req.files || !req.files.file) return res.status(400).json({ error: 'Файл не загружен' });
+    const file = req.files.file;
+    const dbName = process.env.DB_NAME || 'bd_calc';
+    const dbUser = process.env.DB_USER || 'hrroot';
+    const dbPass = process.env.DB_PASSWORD || '';
+    const dbHost = process.env.DB_HOST || 'localhost';
+    const dbPort = process.env.DB_PORT || '5432';
+
+    const tempPath = path.join('/tmp', 'restore_' + Date.now() + '.sql');
+    await file.mv(tempPath);
+
+    const env = { PGPASSWORD: dbPass };
+    const cmd = `psql -h ${dbHost} -p ${dbPort} -U ${dbUser} -d ${dbName} -f ${tempPath}`;
+
+    exec(cmd, { env }, (error, stdout, stderr) => {
+      if (error) {
+        console.error('psql restore error:', stderr);
+        fs.unlink(tempPath, () => {});
+        return res.status(500).json({ error: 'Ошибка при восстановлении базы' });
+      }
+      fs.unlink(tempPath, () => {});
+      res.json({ success: true, message: 'База данных восстановлена' });
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});

@@ -60,6 +60,7 @@
     <a href="/admin/component-types" id="compTypesLink" class="hidden">Типы</a>
     <a href="/admin/manufacturers" id="manufacturersLink" class="hidden">Производители</a>
     <a href="/admin/parameters" id="paramsLink" class="hidden">Параметры</a>
+                <a href="/admin/config" id="configLink" class="hidden">Конфигурация</a>
     <a href="/admin/all-cabinets" id="allCabinetsLink" class="hidden">Все<br>шкафы</a>
   </div>
   <div class="right">
@@ -172,6 +173,7 @@ function updateMenu() {
     document.getElementById('compTypesLink').classList.remove('hidden');
     document.getElementById('manufacturersLink').classList.remove('hidden');
     document.getElementById('paramsLink').classList.remove('hidden');
+                document.getElementById('configLink').classList.remove('hidden');
     document.getElementById('allCabinetsLink').classList.remove('hidden');
   } else {
     document.getElementById('myProjectsLink').classList.remove('hidden');
@@ -181,6 +183,7 @@ function updateMenu() {
     document.getElementById('compTypesLink').classList.remove('hidden');
     document.getElementById('manufacturersLink').classList.remove('hidden');
     document.getElementById('paramsLink').classList.remove('hidden');
+                document.getElementById('configLink').classList.add('hidden');
     document.getElementById('allCabinetsLink').classList.add('hidden');
   }
 }
@@ -196,6 +199,7 @@ async function loadPage(url) {
     else if (url === '/create-project') file = 'create-project.html';
     else if (url === '/admin/users') file = 'admin-users.html';
     else if (url === '/admin/all-projects') file = 'admin-all-projects.html';
+    else if (url === '/admin/config') file = 'admin-config.html';
     else if (url === '/admin/all-cabinets') file = 'admin-all-cabinets.html';
     else if (url === '/admin/component-types') file = 'admin-component-types.html';
     else if (url === '/admin/manufacturers') file = 'admin-manufacturers.html';
@@ -332,8 +336,8 @@ function addParamRow(parameterId = '', paramValue = '', paramName = '') {
       <option value="">-- новый параметр --</option>
       ${parametersList.map(p => `<option value="${p.id}" ${paramName ? (p.param_name === paramName ? 'selected' : '') : (p.id == parameterId ? 'selected' : '')}>${p.param_name}</option>`).join('')}
     </select>
+    <input type="text" class="param-name" value="${paramName}" placeholder="Название нового параметра" style="flex:1; ${paramName ? 'display:none;' : ''}">
     <input type="text" class="param-value" value="${paramValue}" placeholder="Значение" style="flex:1;">
-    <input type="text" class="param-name" value="${paramName}" placeholder="Новый параметр" style="flex:1; ${paramName ? 'display:none;' : ''}">
     <button class="small save-new-param-btn" style="flex:0 0 auto; ${paramName ? 'display:none;' : ''}">Записать</button>
     <button class="small danger remove-param-btn">×</button>
   `;
