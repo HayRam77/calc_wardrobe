@@ -333,7 +333,7 @@ function addParamRow(parameterId = '', paramValue = '', paramName = '') {
       ${parametersList.map(p => `<option value="${p.id}" ${paramName ? (p.param_name === paramName ? 'selected' : '') : (p.id == parameterId ? 'selected' : '')}>${p.param_name}</option>`).join('')}
     </select>
     <input type="text" class="param-value" value="${paramValue}" placeholder="Значение" style="flex:1;">
-    <input type="text" class="param-name" value="${paramName}" placeholder="Название нового параметра" style="flex:1; ${paramName ? 'display:none;' : ''}">
+    <input type="text" class="param-name" value="${paramName}" placeholder="Новый параметр" style="flex:1; ${paramName ? 'display:none;' : ''}">
     <button class="small save-new-param-btn" style="flex:0 0 auto; ${paramName ? 'display:none;' : ''}">Записать</button>
     <button class="small danger remove-param-btn">×</button>
   `;
