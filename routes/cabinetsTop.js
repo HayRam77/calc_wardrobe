@@ -23,7 +23,7 @@ router.get('/:id', async (req, res) => {
     }
 
     const blocks = await pool.query(`
-      SELECT pb.id, pb.block_name, pb.order_index,
+      SELECT pb.id, pb.block_name, pb.order_index, pb.template_id, pb.template_id,
              bt.article, bt.description AS template_description,
              ct.name AS type_name, m.name AS manufacturer_name,
              COALESCE(json_agg(json_build_object('param_name', pbp.param_name, 'param_value', pbp.param_value))
