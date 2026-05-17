@@ -99,7 +99,7 @@
     html += '</tbody></table>';
     container.innerHTML = html;
 
-    // Обработчики для кнопок удаления, изменения количества и редактирования (не трогаем drag)
+    // Обработчики удаления, изменения количества и кнопки ✎
     container.querySelectorAll('.delete-block-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -146,7 +146,7 @@
     });
   }
 
-  // ========== Drag‑n‑Drop (делегирование на document, один раз) ==========
+  // ========== Drag‑n‑Drop (делегирование на document, без вызова loadCabinet) ==========
   document.addEventListener('dragstart', function(e) {
     const row = e.target.closest('#sortableBody .draggable-row');
     if (!row) return;
@@ -184,25 +184,22 @@
       tbody.insertBefore(draggedRow, targetRow);
     }
 
+    // Обновляем data-order локально
+    draggedRow.dataset.order = targetOrder;
+    targetRow.dataset.order = draggedOrder;
+
     // Сохраняем на сервере
     const token = localStorage.getItem('token');
-      Promise.all([
-        fetch('/api/projects/' + projectId + '/blocks/' + draggedId, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ order_index: targetOrder })
-        }),
-        fetch('/api/projects/' + projectId + '/blocks/' + targetId, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ order_index: draggedOrder })
-        })
-      ]).then(() => {
-        draggedRow.dataset.order = targetOrder;
-        targetRow.dataset.order = draggedOrder;
-        // Даём серверу мгновение и перезагружаем шкаф
-        setTimeout(() => loadCabinet(), 100);
-      }).catch(e => console.error(e));
+    fetch('/api/projects/' + projectId + '/blocks/' + draggedId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ order_index: targetOrder })
+    }).catch(e => console.error(e));
+    fetch('/api/projects/' + projectId + '/blocks/' + targetId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ order_index: draggedOrder })
+    }).catch(e => console.error(e));
   });
 
   document.addEventListener('dragend', function(e) {
@@ -210,7 +207,7 @@
     if (row) row.classList.remove('dragging');
   });
 
-  // ========== Остальные функции (populateSelects, модальные окна, экспорт/импорт) ==========
+  // ========== Остальные функции (populateSelects, модальные окна выбора и добавления, экспорт/импорт) ==========
   // (они уже есть в полной версии, здесь опущены для краткости, но должны присутствовать)
   loadCabinet();
 })();
