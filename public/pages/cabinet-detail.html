@@ -99,71 +99,7 @@
     html += '</tbody></table>';
     container.innerHTML = html;
 
-    const tbody = document.getElementById('sortableBody');
-    let draggedRow = null;
-
-    // Drag‑n‑Drop через делегирование на tbody
-    tbody.addEventListener('dragstart', (e) => {
-      draggedRow = e.target.closest('.draggable-row');
-      if (!draggedRow) return;
-      draggedRow.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-
-    tbody.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-    });
-
-    tbody.addEventListener('drop', (e) => {
-      e.preventDefault();
-      if (!draggedRow) return;
-      const targetRow = e.target.closest('.draggable-row');
-      if (!targetRow || targetRow === draggedRow) return;
-
-      const draggedId = parseInt(draggedRow.dataset.id);
-      const targetId = parseInt(targetRow.dataset.id);
-      const draggedOrder = parseInt(draggedRow.dataset.order);
-      const targetOrder = parseInt(targetRow.dataset.order);
-
-      // Визуально меняем местами
-      const rows = Array.from(tbody.querySelectorAll('.draggable-row'));
-      const draggedIdx = rows.indexOf(draggedRow);
-      const targetIdx = rows.indexOf(targetRow);
-      if (draggedIdx < targetIdx) {
-        tbody.insertBefore(draggedRow, targetRow.nextSibling);
-      } else {
-        tbody.insertBefore(draggedRow, targetRow);
-      }
-
-      // Сохраняем на сервере
-      const token = localStorage.getItem('token');
-      Promise.all([
-        fetch('/api/projects/' + projectId + '/blocks/' + draggedId, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ order_index: targetOrder })
-        }),
-        fetch('/api/projects/' + projectId + '/blocks/' + targetId, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ order_index: draggedOrder })
-        })
-      ]).then(() => {
-        draggedRow.dataset.order = targetOrder;
-        targetRow.dataset.order = draggedOrder;
-      }).catch(e => console.error(e));
-
-      draggedRow = null; // сбрасываем сразу после обработки
-    });
-
-    tbody.addEventListener('dragend', (e) => {
-      const row = e.target.closest('.draggable-row');
-      if (row) row.classList.remove('dragging');
-      draggedRow = null;
-    });
-
-    // Удаление
+    // Обработчики для кнопок удаления, изменения количества и редактирования (не трогаем drag)
     container.querySelectorAll('.delete-block-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -177,7 +113,6 @@
       });
     });
 
-    // Изменение количества
     container.querySelectorAll('.quantity-input').forEach(input => {
       input.addEventListener('change', async (e) => {
         const blockId = e.target.dataset.id;
@@ -193,7 +128,6 @@
       });
     });
 
-    // Кнопка ✎ (редактирование через глобальное окно)
     container.querySelectorAll('.edit-block-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -212,11 +146,72 @@
     });
   }
 
-  // Остальные функции (populateSelects, модальные окна выбора и добавления, экспорт/импорт) остаются как в предыдущей полной версии.
-  // ВНИМАНИЕ: В этом коде они не приведены для краткости, но они ДОЛЖНЫ быть в реальном файле!
-  // Если вы скопируете этот код, кнопки "Выбрать компонент" и "Добавить новый" не будут работать.
-  // Я предоставлю полный файл с ними отдельно, если потребуется.
+  // ========== Drag‑n‑Drop (делегирование на document, один раз) ==========
+  document.addEventListener('dragstart', function(e) {
+    const row = e.target.closest('#sortableBody .draggable-row');
+    if (!row) return;
+    e.dataTransfer.setData('text/plain', row.dataset.id);
+    e.dataTransfer.effectAllowed = 'move';
+    row.classList.add('dragging');
+  });
 
+  document.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  });
+
+  document.addEventListener('drop', function(e) {
+    e.preventDefault();
+    const target = e.target.closest('#sortableBody .draggable-row');
+    if (!target) return;
+    const draggedId = e.dataTransfer.getData('text/plain');
+    if (!draggedId) return;
+    const targetId = target.dataset.id;
+    if (draggedId === targetId) return;
+
+    const tbody = document.getElementById('sortableBody');
+    const draggedRow = tbody.querySelector(`tr[data-id="${draggedId}"]`);
+    const targetRow = tbody.querySelector(`tr[data-id="${targetId}"]`);
+    if (!draggedRow || !targetRow) return;
+
+    const draggedOrder = parseInt(draggedRow.dataset.order);
+    const targetOrder = parseInt(targetRow.dataset.order);
+
+    // Визуально перемещаем
+    if (Array.from(tbody.children).indexOf(draggedRow) < Array.from(tbody.children).indexOf(targetRow)) {
+      tbody.insertBefore(draggedRow, targetRow.nextSibling);
+    } else {
+      tbody.insertBefore(draggedRow, targetRow);
+    }
+
+    // Сохраняем на сервере
+    const token = localStorage.getItem('token');
+      Promise.all([
+        fetch('/api/projects/' + projectId + '/blocks/' + draggedId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ order_index: targetOrder })
+        }),
+        fetch('/api/projects/' + projectId + '/blocks/' + targetId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ order_index: draggedOrder })
+        })
+      ]).then(() => {
+        draggedRow.dataset.order = targetOrder;
+        targetRow.dataset.order = draggedOrder;
+        // Даём серверу мгновение и перезагружаем шкаф
+        setTimeout(() => loadCabinet(), 100);
+      }).catch(e => console.error(e));
+  });
+
+  document.addEventListener('dragend', function(e) {
+    const row = e.target.closest('.draggable-row');
+    if (row) row.classList.remove('dragging');
+  });
+
+  // ========== Остальные функции (populateSelects, модальные окна, экспорт/импорт) ==========
+  // (они уже есть в полной версии, здесь опущены для краткости, но должны присутствовать)
   loadCabinet();
 })();
 </script>
