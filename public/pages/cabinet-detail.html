@@ -80,9 +80,10 @@
   function renderBlocks(blocks) {
     const container = document.getElementById('cabinetBlocks');
     if (blocks.length === 0) { container.innerHTML = '<p>Нет компонентов</p>'; return; }
-    let html = '<table><thead><tr><th>Тип</th><th>Наименование</th><th>Количество</th><th>Артикул</th><th>Производитель</th><th>Примечание</th><th></th></tr></thead><tbody id="sortableBody">';
+    let html = '<table><thead><tr><th></th><th>Тип</th><th>Наименование</th><th>Количество</th><th>Артикул</th><th>Производитель</th><th>Примечание</th><th></th></tr></thead><tbody id="sortableBody">';
     blocks.forEach(b => {
       html += `<tr draggable="true" data-id="${b.id}" data-order="${b.order_index}" class="draggable-row">
+        <td style="cursor:grab; color:#888; font-size:18px; vertical-align:middle; text-align:center;">⠿</td>
         <td>${b.type_name || ''}</td>
         <td>${b.block_name}</td>
         <td><input type="number" class="quantity-input" value="${b.quantity || 1}" min="0" style="width:70px;" data-id="${b.id}"></td>
@@ -188,6 +189,7 @@
     draggedRow = null;
   }
 
+  // --- Остальные функции (populateSelects, модальные окна, экспорт/импорт) без изменений ---
   function populateSelects() {
     const typeSel = document.getElementById('blockType');
     typeSel.innerHTML = '<option value="">--</option>';
@@ -197,7 +199,7 @@
     if (typeof manufacturers !== 'undefined') manufacturers.forEach(m => { const o = document.createElement('option'); o.value = m.id; o.textContent = m.name; manSel.appendChild(o); });
   }
 
-  // --- Модальное окно выбора компонента (полный код) ---
+  // Модальное окно выбора компонента (полный код)
   const selectModal = document.getElementById('templateListModal');
   function closeSelectModal() { selectModal.style.display = 'none'; }
   document.getElementById('closeModalX').addEventListener('click', closeSelectModal);
@@ -230,12 +232,13 @@
 
       if (filtered.length === 0) { listDiv.innerHTML = '<p>Ничего не найдено</p>'; return; }
 
-      let html = '<table style="width:100%; border-collapse:collapse;"><thead style="position:sticky; top:0; background:white; z-index:1;"><tr><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th>';
+      let html = '<table style="width:100%; border-collapse:collapse;"><thead style="position:sticky; top:0; background:white; z-index:1;"><tr><th></th><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th>';
       paramNames.forEach(name => { html += `<th>${name}</th>`; });
       html += '<th>Описание</th></tr></thead><tbody>';
 
       filtered.forEach(t => {
         html += `<tr class="clickable" data-id="${t.id}" style="cursor:pointer;">`;
+        html += `<td style="color:#888; font-size:18px; text-align:center;">⠿</td>`;
         html += `<td>${t.type_name || ''}</td><td><strong>${t.name}</strong></td><td>${t.manufacturer_name || ''}</td><td>${t.article || ''}</td>`;
         paramNames.forEach(pName => {
           const param = t.parameters ? t.parameters.find(p => p.param_name === pName) : null;
@@ -283,7 +286,7 @@
     selectModal.style.display = 'flex';
   });
 
-  // --- Модальное окно добавления нового компонента ---
+  // Модальное окно добавления нового компонента
   const addModal = document.getElementById('addComponentModal');
   function closeAddModal() { addModal.style.display = 'none'; }
   document.getElementById('closeAddModalX').addEventListener('click', closeAddModal);

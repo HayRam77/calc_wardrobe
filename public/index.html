@@ -33,8 +33,8 @@
   .form-group { margin-bottom: 15px; }
   .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
   .form-group input, .form-group select { width: 100%; padding: 8px; box-sizing: border-box; }
-  .param-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: center; }
-  .param-row select, .param-row input { flex: 1; }
+  .param-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
+  .param-row select, .param-row input, .param-row button { flex: 1 1 auto; }
   .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; }
   .modal { background: white; border-radius: 8px; padding: 20px; min-width: 400px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto; }
 </style>
@@ -60,6 +60,7 @@
     <a href="/admin/component-types" id="compTypesLink" class="hidden">Типы</a>
     <a href="/admin/manufacturers" id="manufacturersLink" class="hidden">Производители</a>
     <a href="/admin/parameters" id="paramsLink" class="hidden">Параметры</a>
+                <a href="/admin/config" id="configLink" class="hidden">Конфигурация</a>
     <a href="/admin/all-cabinets" id="allCabinetsLink" class="hidden">Все<br>шкафы</a>
   </div>
   <div class="right">
@@ -80,6 +81,8 @@
     <div class="form-group"><label>Артикул</label><input type="text" id="modalArticle"></div>
     <div class="form-group"><label>Описание</label><input type="text" id="modalTemplateDesc"></div>
     <div class="form-group"><label>Цена, руб.</label><input type="number" id="modalPrice" step="0.01"></div>
+    <div class="form-group"><label>Вес, гр.</label><input type="number" id="modalWeight" step="0.01"></div>
+    <div class="form-group"><label>Q, вт</label><input type="number" id="modalPower" step="0.01"></div>
     <div class="form-group"><label>LN</label><input type="text" id="modalLn"></div>
     <div class="form-group"><label>Ссылка</label><input type="text" id="modalUrl" placeholder="URL страницы производителя"></div>
     <div class="form-group"><label>Трудозатраты, мин.</label><input type="number" id="modalLabor" step="1"></div>
@@ -170,6 +173,7 @@ function updateMenu() {
     document.getElementById('compTypesLink').classList.remove('hidden');
     document.getElementById('manufacturersLink').classList.remove('hidden');
     document.getElementById('paramsLink').classList.remove('hidden');
+                document.getElementById('configLink').classList.remove('hidden');
     document.getElementById('allCabinetsLink').classList.remove('hidden');
   } else {
     document.getElementById('myProjectsLink').classList.remove('hidden');
@@ -179,6 +183,7 @@ function updateMenu() {
     document.getElementById('compTypesLink').classList.remove('hidden');
     document.getElementById('manufacturersLink').classList.remove('hidden');
     document.getElementById('paramsLink').classList.remove('hidden');
+                document.getElementById('configLink').classList.add('hidden');
     document.getElementById('allCabinetsLink').classList.add('hidden');
   }
 }
@@ -194,6 +199,7 @@ async function loadPage(url) {
     else if (url === '/create-project') file = 'create-project.html';
     else if (url === '/admin/users') file = 'admin-users.html';
     else if (url === '/admin/all-projects') file = 'admin-all-projects.html';
+    else if (url === '/admin/config') file = 'admin-config.html';
     else if (url === '/admin/all-cabinets') file = 'admin-all-cabinets.html';
     else if (url === '/admin/component-types') file = 'admin-component-types.html';
     else if (url === '/admin/manufacturers') file = 'admin-manufacturers.html';
@@ -297,6 +303,8 @@ async function openTemplateModal(id=null) {
     document.getElementById('modalManufacturer').value = t.manufacturer_id || '';
     document.getElementById('modalArticle').value = t.article || '';
     document.getElementById('modalPrice').value = t.price || '';
+    document.getElementById('modalWeight').value = t.weight_grams || '';
+    document.getElementById('modalPower').value = t.power_watts || '';
     document.getElementById('modalLn').value = t.ln || '';
     document.getElementById('modalUrl').value = t.url || '';
     document.getElementById('modalLabor').value = t.labor || '';
@@ -311,6 +319,8 @@ async function openTemplateModal(id=null) {
     document.getElementById('modalManufacturer').value = '';
     document.getElementById('modalArticle').value = '';
     document.getElementById('modalPrice').value = '';
+    document.getElementById('modalWeight').value = '';
+    document.getElementById('modalPower').value = '';
     document.getElementById('modalLn').value = '';
     document.getElementById('modalUrl').value = '';
     document.getElementById('modalLabor').value = '';
@@ -326,17 +336,51 @@ function addParamRow(parameterId = '', paramValue = '', paramName = '') {
       <option value="">-- новый параметр --</option>
       ${parametersList.map(p => `<option value="${p.id}" ${paramName ? (p.param_name === paramName ? 'selected' : '') : (p.id == parameterId ? 'selected' : '')}>${p.param_name}</option>`).join('')}
     </select>
+    <input type="text" class="param-name" value="${paramName}" placeholder="Название нового параметра" style="flex:1; ${paramName ? 'display:none;' : ''}">
     <input type="text" class="param-value" value="${paramValue}" placeholder="Значение" style="flex:1;">
-    <input type="text" class="param-name" value="${paramName}" placeholder="Новый параметр" style="flex:1; ${paramName ? '' : 'display:none;'}">
+    <button class="small save-new-param-btn" style="flex:0 0 auto; ${paramName ? 'display:none;' : ''}">Записать</button>
     <button class="small danger remove-param-btn">×</button>
   `;
   document.getElementById('modalParams').appendChild(row);
 
   const select = row.querySelector('.param-select');
   const nameInput = row.querySelector('.param-name');
+  const saveBtn = row.querySelector('.save-new-param-btn');
+
   select.addEventListener('change', () => {
-    nameInput.style.display = select.value === '' ? 'block' : 'none';
+    if (select.value === '') {
+      nameInput.style.display = 'block';
+      saveBtn.style.display = 'inline-block';
+      nameInput.focus();
+    } else {
+      nameInput.style.display = 'none';
+      saveBtn.style.display = 'none';
+    }
   });
+
+  saveBtn.addEventListener('click', async () => {
+    const name = nameInput.value.trim();
+    if (!name) return alert('Введите название параметра');
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('/api/parameters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ param_name: name })
+      });
+      if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка'); return; }
+      const newParam = await res.json();
+      parametersList.push(newParam);
+      const option = document.createElement('option');
+      option.value = newParam.id;
+      option.textContent = newParam.param_name;
+      select.appendChild(option);
+      select.value = newParam.id;
+      nameInput.style.display = 'none';
+      saveBtn.style.display = 'none';
+    } catch(e) { alert('Ошибка соединения'); }
+  });
+
   row.querySelector('.remove-param-btn').addEventListener('click', () => row.remove());
 }
 
@@ -352,6 +396,8 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
   const manufacturer_id = document.getElementById('modalManufacturer').value || null;
   const article = document.getElementById('modalArticle').value.trim();
   const price = parseFloat(document.getElementById('modalPrice').value) || null;
+  const weight = parseFloat(document.getElementById('modalWeight').value) || null;
+  const power = parseFloat(document.getElementById('modalPower').value) || null;
   const ln = document.getElementById('modalLn').value.trim();
   const componentUrl = document.getElementById('modalUrl').value.trim();
   const labor = parseInt(document.getElementById('modalLabor').value) || null;
@@ -375,7 +421,7 @@ document.getElementById('saveTemplateBtn').addEventListener('click', async () =>
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ name, description: desc, type_id, manufacturer_id, article, price, ln, labor, url: componentUrl, parameters })
+      body: JSON.stringify({ name, description: desc, type_id, manufacturer_id, article, price, ln, labor, url: componentUrl, weight_grams: weight, power_watts: power, parameters })
     });
     if (!res.ok) { const err = await res.json(); document.getElementById('modalError').textContent = err.error || 'Ошибка'; return; }
     closeTemplateModal();
