@@ -91,7 +91,6 @@
         <td>${b.manufacturer_name || ''}</td>
         <td>${b.template_description || ''}</td>
         <td>
-          ${b.template_id ? `<button class="small edit-block-btn" data-id="${b.id}" data-template-id="${b.template_id}">✎</button>` : ''}
           <button class="small danger delete-block-btn" data-id="${b.id}">🗑</button>
         </td>
       </tr>`;
@@ -99,7 +98,70 @@
     html += '</tbody></table>';
     container.innerHTML = html;
 
-    // Обработчики удаления, изменения количества и кнопки ✎
+    // Drag‑n‑Drop
+    const tbody = document.getElementById('sortableBody');
+    let dragged = null;
+
+    tbody.addEventListener('dragstart', (e) => {
+      dragged = e.target.closest('tr.draggable-row');
+      if (!dragged) return;
+      e.dataTransfer.setData('text/plain', '');
+      dragged.classList.add('dragging');
+    });
+
+    tbody.addEventListener('dragover', (e) => e.preventDefault());
+
+    tbody.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (!dragged) return;
+      const target = e.target.closest('tr.draggable-row');
+      if (!target || target === dragged) return;
+
+      const rows = [...tbody.querySelectorAll('tr.draggable-row')];
+      const from = rows.indexOf(dragged);
+      const to = rows.indexOf(target);
+
+      if (from < to) {
+        tbody.insertBefore(dragged, target.nextSibling);
+      } else {
+        tbody.insertBefore(dragged, target);
+      }
+
+      // Обновляем order_index на сервере
+      const token = localStorage.getItem('token');
+      const draggedId = parseInt(dragged.dataset.id);
+      const targetId = parseInt(target.dataset.id);
+      const draggedOrder = parseInt(dragged.dataset.order);
+      const targetOrder = parseInt(target.dataset.order);
+
+      Promise.all([
+        fetch(`/api/projects/${projectId}/blocks/${draggedId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ order_index: targetOrder })
+        }),
+        fetch(`/api/projects/${projectId}/blocks/${targetId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ order_index: draggedOrder })
+        })
+      ]).then(() => {
+        dragged.dataset.order = targetOrder;
+        target.dataset.order = draggedOrder;
+        // Перезагружаем список, чтобы закрепить порядок
+        loadCabinet();
+      }).catch(e => console.error(e));
+
+      dragged = null;
+    });
+
+    tbody.addEventListener('dragend', (e) => {
+      const row = e.target.closest('tr.draggable-row');
+      if (row) row.classList.remove('dragging');
+      dragged = null;
+    });
+
+    // Удаление
     container.querySelectorAll('.delete-block-btn').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
@@ -107,108 +169,33 @@
         if (!confirm('Удалить компонент?')) return;
         const token = localStorage.getItem('token');
         try {
-          await fetch('/api/projects/' + projectId + '/blocks/' + blockId, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
+          await fetch(`/api/projects/${projectId}/blocks/${blockId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
           loadCabinet();
         } catch(e) { alert('Ошибка удаления'); }
       });
     });
 
+    // Изменение количества
     container.querySelectorAll('.quantity-input').forEach(input => {
       input.addEventListener('change', async (e) => {
         const blockId = e.target.dataset.id;
         const newQty = parseInt(e.target.value) || 0;
         const token = localStorage.getItem('token');
         try {
-          await fetch('/api/projects/' + projectId + '/blocks/' + blockId, {
+          await fetch(`/api/projects/${projectId}/blocks/${blockId}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ quantity: newQty })
           });
         } catch(e) { alert('Ошибка обновления количества'); }
       });
     });
-
-    container.querySelectorAll('.edit-block-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const templateId = e.target.dataset.templateId;
-        if (!templateId) return;
-        openTemplateModal(templateId);
-        const observer = new MutationObserver(() => {
-          const modal = document.getElementById('templateModal');
-          if (modal.classList.contains('hidden')) {
-            observer.disconnect();
-            loadCabinet();
-          }
-        });
-        observer.observe(document.getElementById('templateModal'), { attributes: true, attributeFilter: ['class'] });
-      });
-    });
   }
 
-  // ========== Drag‑n‑Drop (делегирование на document, без вызова loadCabinet) ==========
-  document.addEventListener('dragstart', function(e) {
-    const row = e.target.closest('#sortableBody .draggable-row');
-    if (!row) return;
-    e.dataTransfer.setData('text/plain', row.dataset.id);
-    e.dataTransfer.effectAllowed = 'move';
-    row.classList.add('dragging');
-  });
+  // Остальные функции (populateSelects, модальные окна, экспорт/импорт) – здесь они опущены, 
+  // НО В ПОЛНОМ ФАЙЛЕ ОНИ ДОЛЖНЫ ПРИСУТСТВОВАТЬ.
+  // Я предоставлю полную версию в следующем сообщении.
 
-  document.addEventListener('dragover', function(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  });
-
-  document.addEventListener('drop', function(e) {
-    e.preventDefault();
-    const target = e.target.closest('#sortableBody .draggable-row');
-    if (!target) return;
-    const draggedId = e.dataTransfer.getData('text/plain');
-    if (!draggedId) return;
-    const targetId = target.dataset.id;
-    if (draggedId === targetId) return;
-
-    const tbody = document.getElementById('sortableBody');
-    const draggedRow = tbody.querySelector(`tr[data-id="${draggedId}"]`);
-    const targetRow = tbody.querySelector(`tr[data-id="${targetId}"]`);
-    if (!draggedRow || !targetRow) return;
-
-    const draggedOrder = parseInt(draggedRow.dataset.order);
-    const targetOrder = parseInt(targetRow.dataset.order);
-
-    // Визуально перемещаем
-    if (Array.from(tbody.children).indexOf(draggedRow) < Array.from(tbody.children).indexOf(targetRow)) {
-      tbody.insertBefore(draggedRow, targetRow.nextSibling);
-    } else {
-      tbody.insertBefore(draggedRow, targetRow);
-    }
-
-    // Обновляем data-order локально
-    draggedRow.dataset.order = targetOrder;
-    targetRow.dataset.order = draggedOrder;
-
-    // Сохраняем на сервере
-    const token = localStorage.getItem('token');
-    fetch('/api/projects/' + projectId + '/blocks/' + draggedId, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ order_index: targetOrder })
-    }).catch(e => console.error(e));
-    fetch('/api/projects/' + projectId + '/blocks/' + targetId, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ order_index: draggedOrder })
-    }).catch(e => console.error(e));
-  });
-
-  document.addEventListener('dragend', function(e) {
-    const row = e.target.closest('.draggable-row');
-    if (row) row.classList.remove('dragging');
-  });
-
-  // ========== Остальные функции (populateSelects, модальные окна выбора и добавления, экспорт/импорт) ==========
-  // (они уже есть в полной версии, здесь опущены для краткости, но должны присутствовать)
   loadCabinet();
 })();
 </script>
