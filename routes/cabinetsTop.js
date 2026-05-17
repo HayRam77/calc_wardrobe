@@ -34,8 +34,8 @@ router.get('/:id', async (req, res) => {
       LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
       LEFT JOIN project_block_params pbp ON pbp.project_block_id = pb.id
       WHERE pb.cabinet_id = $1
-      GROUP BY pb.id, bt.article, bt.description, ct.name, m.name
       ORDER BY pb.order_index
+      GROUP BY pb.id, bt.article, bt.description, ct.name, m.name
     `, [id]);
 
     res.json({
@@ -65,8 +65,8 @@ router.get('/:id/export', async (req, res) => {
       LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
       LEFT JOIN project_block_params pbp ON pbp.project_block_id = pb.id
       WHERE pb.cabinet_id = $1
-      GROUP BY pb.id, bt.article, bt.description, ct.name, m.name
       ORDER BY pb.order_index
+      GROUP BY pb.id, bt.article, bt.description, ct.name, m.name
     `, [id]);
 
     // Преобразуем параметры в строку "ключ=значение; ..."
