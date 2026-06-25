@@ -1,200 +1,67 @@
-<div class="page-content">
-    <div class="page-header">
-        <h2>Администрирование</h2>
-    </div>
+const express = require('express');
+const router = express.Router();
+const pool = require('../db');
+const authMiddleware = require('../middleware/auth');
+const bcrypt = require('bcryptjs');
 
-    <div class="tabs">
-        <button class="tab-btn active" data-tab="projects">Все проекты</button>
-        <button class="tab-btn" data-tab="cabinets">Все шкафы</button>
-        <button class="tab-btn" data-tab="users">Управление пользователями</button>
-    </div>
+router.use(authMiddleware);
 
-    <div class="tab-content active" id="tab-projects">
-        <div class="table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Название</th>
-                        <th>Владелец</th>
-                        <th>Напряжение</th>
-                        <th>Примечание</th>
-                        <th>Дата создания</th>
-                    </tr>
-                </thead>
-                <tbody id="allProjectsBody">
-                    <tr><td colspan="6" class="loading">Загрузка...</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div id="allProjectsEmpty" class="empty-state" style="display:none;"><p>Проектов нет</p></div>
-    </div>
+function isAdmin(req, res, next) {
+  if (req.user && req.user.role === 'admin') return next();
+  return res.status(403).json({ error: 'Доступ запрещён' });
+}
 
-    <div class="tab-content" id="tab-cabinets">
-        <div class="table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Название шкафа</th>
-                        <th>Проект</th>
-                        <th>Владелец</th>
-                        <th>Дата создания</th>
-                    </tr>
-                </thead>
-                <tbody id="allCabinetsBody">
-                    <tr><td colspan="5" class="loading">Загрузка...</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div id="allCabinetsEmpty" class="empty-state" style="display:none;"><p>Шкафов нет</p></div>
-    </div>
+// Получить всех пользователей
+router.get('/users', isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, username, role, is_blocked, created_at FROM users ORDER BY created_at DESC'
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    <div class="tab-content" id="tab-users">
-        <div class="tab-header"><h3>Пользователи</h3></div>
-        <div class="table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Имя пользователя</th>
-                        <th>Роль</th>
-                        <th>Статус</th>
-                        <th>Дата регистрации</th>
-                        <th>Действия</th>
-                    </tr>
-                </thead>
-                <tbody id="usersTableBody">
-                    <tr><td colspan="6" class="loading">Загрузка...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+// Заблокировать/разблокировать пользователя
+router.post('/users/:id/block', isAdmin, async (req, res) => {
+  try {
+    const { is_blocked } = req.body;
+    const result = await pool.query(
+      'UPDATE users SET is_blocked = $1 WHERE id = $2 RETURNING id, username, is_blocked',
+      [is_blocked, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Пользователь не найден' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-<script>
-(function() {
-    const token = localStorage.getItem('token');
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    if (!user || user.role !== 'admin') {
-        document.getElementById('contentContainer').innerHTML = '<p>Доступ запрещён</p>';
-        return;
-    }
+// Сброс пароля пользователя
+router.post('/users/:id/reset-password', isAdmin, async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password || password.length < 4) return res.status(400).json({ error: 'Пароль должен быть минимум 4 символа' });
+    const hashed = await bcrypt.hash(password, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashed, req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+// Удалить пользователя
+router.delete('/users/:id', isAdmin, async (req, res) => {
+  try {
+    const user = await pool.query('SELECT role FROM users WHERE id = $1', [req.params.id]);
+    if (user.rows.length === 0) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (user.rows[0].role === 'admin') return res.status(403).json({ error: 'Нельзя удалить администратора' });
+    await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    // Вкладки
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-            if (btn.dataset.tab === 'projects') loadProjects();
-            else if (btn.dataset.tab === 'cabinets') loadCabinets();
-            else if (btn.dataset.tab === 'users') loadUsers();
-        });
-    });
-
-    // Проекты
-    async function loadProjects() {
-        const tbody = document.getElementById('allProjectsBody');
-        try {
-            const res = await fetch(API_BASE + '/projects/all', { headers: { 'Authorization': 'Bearer ' + token } });
-            const data = await res.json();
-            if (!data.length) { tbody.innerHTML = '<tr><td colspan="6">Нет проектов</td></tr>'; return; }
-            tbody.innerHTML = data.map(p => '<tr>' +
-                '<td>' + p.id + '</td>' +
-                '<td><a href="/project/' + p.id + '" class="spa-link">' + esc(p.name) + '</a></td>' +
-                '<td>' + esc(p.owner || '—') + '</td>' +
-                '<td>' + esc(p.voltage) + '</td>' +
-                '<td>' + esc(p.remark || '') + '</td>' +
-                '<td>' + (p.created_at ? new Date(p.created_at).toLocaleDateString('ru-RU') : '') + '</td>' +
-            '</tr>').join('');
-        } catch(e) { tbody.innerHTML = '<tr><td colspan="6" class="error">Ошибка</td></tr>'; }
-    }
-
-    // Шкафы
-    async function loadCabinets() {
-        const tbody = document.getElementById('allCabinetsBody');
-        try {
-            const res = await fetch(API_BASE + '/cabinets', { headers: { 'Authorization': 'Bearer ' + token } });
-            const data = await res.json();
-            if (!data.length) { tbody.innerHTML = '<tr><td colspan="5">Нет шкафов</td></tr>'; return; }
-            tbody.innerHTML = data.map(c => '<tr>' +
-                '<td>' + c.id + '</td>' +
-                '<td><a href="/cabinet/' + c.id + '" class="spa-link">' + esc(c.name) + '</a></td>' +
-                '<td><a href="/project/' + c.project_id + '" class="spa-link">' + esc(c.project_name || '—') + '</a></td>' +
-                '<td>' + esc(c.owner || '—') + '</td>' +
-                '<td>' + (c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU') : '') + '</td>' +
-            '</tr>').join('');
-        } catch(e) { tbody.innerHTML = '<tr><td colspan="5" class="error">Ошибка</td></tr>'; }
-    }
-
-    // Пользователи
-    async function loadUsers() {
-        const tbody = document.getElementById('usersTableBody');
-        try {
-            const res = await fetch(API_BASE + '/admin/users', { headers: { 'Authorization': 'Bearer ' + token } });
-            const users = await res.json();
-            tbody.innerHTML = users.map(u => '<tr>' +
-                '<td>' + u.id + '</td>' +
-                '<td>' + esc(u.username) + '</td>' +
-                '<td>' + (u.role === 'admin' ? 'Админ' : 'Пользователь') + '</td>' +
-                '<td>' + (u.is_blocked ? '🔒 Заблокирован' : '✅ Активен') + '</td>' +
-                '<td>' + (u.created_at ? new Date(u.created_at).toLocaleDateString('ru-RU') : '') + '</td>' +
-                '<td>' + (u.role !== 'admin' ?
-                    '<button class="btn btn-sm ' + (u.is_blocked ? 'btn-edit' : 'btn-secondary') + ' toggle-btn" data-id="' + u.id + '" data-blocked="' + u.is_blocked + '">' + (u.is_blocked ? 'Разблокировать' : 'Заблокировать') + '</button> ' +
-                    '<button class="btn btn-sm btn-secondary reset-btn" data-id="' + u.id + '">Сброс пароля</button> ' +
-                    '<button class="btn btn-sm btn-delete del-btn" data-id="' + u.id + '">Удалить</button>'
-                    : '<span style="color:#888;">Администратор</span>') +
-                '</td>' +
-            '</tr>').join('');
-
-            tbody.querySelectorAll('.toggle-btn').forEach(btn => {
-                btn.onclick = async function() {
-                    const id = this.dataset.id, blocked = this.dataset.blocked === 'true';
-                    if (!confirm('Вы уверены?')) return;
-                    await fetch(API_BASE + '/admin/users/' + id + '/block', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                        body: JSON.stringify({ is_blocked: !blocked })
-                    });
-                    loadUsers();
-                };
-            });
-            tbody.querySelectorAll('.reset-btn').forEach(btn => {
-                btn.onclick = async function() {
-                    const pw = prompt('Новый пароль (мин 4 символа):');
-                    if (!pw || pw.length < 4) return;
-                    await fetch(API_BASE + '/admin/users/' + this.dataset.id + '/reset-password', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                        body: JSON.stringify({ password: pw })
-                    });
-                    alert('Пароль сброшен');
-                };
-            });
-            tbody.querySelectorAll('.del-btn').forEach(btn => {
-                btn.onclick = async function() {
-                    if (!confirm('Удалить пользователя?')) return;
-                    await fetch(API_BASE + '/admin/users/' + this.dataset.id, {
-                        method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token }
-                    });
-                    loadUsers();
-                };
-            });
-        } catch(e) { tbody.innerHTML = '<tr><td colspan="6" class="error">Ошибка</td></tr>'; }
-    }
-
-    // Перехват SPA-ссылок
-    document.addEventListener('click', function(e) {
-        const link = e.target.closest('a.spa-link');
-        if (link) {
-            e.preventDefault();
-            history.pushState(null, '', link.getAttribute('href'));
-            loadPage(link.getAttribute('href'));
-        }
-    });
-
-    loadProjects();
-})();
-</script>
+module.exports = router;
