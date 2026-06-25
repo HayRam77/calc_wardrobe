@@ -1,0 +1,19 @@
+<script>
+(function() {
+  const parts = location.pathname.split('/');
+  const templateId = parts[4];
+  if (templateId) {
+    openTemplateModal(templateId);
+    const observer = new MutationObserver(() => {
+      const modal = document.getElementById('templateModal');
+      if (modal && modal.classList.contains('hidden')) {
+        observer.disconnect();
+        history.back();
+      }
+    });
+    observer.observe(document.getElementById('templateModal'), { attributes: true, attributeFilter: ['class'] });
+  } else {
+    history.back();
+  }
+})();
+</script>
