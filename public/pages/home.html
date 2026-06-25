@@ -1,2 +1,34 @@
-<h2>Добро пожаловать в конфигуратор вентиляционных установок</h2>
-<p><a href="/automation">Перейти к системам автоматизации</a></p>
+<h2>Мои проекты</h2>
+<div id="projectsTable">Загрузка...</div>
+<script>
+(async function() {
+  const token = localStorage.getItem('token');
+  const container = document.getElementById('projectsTable');
+  if (!token) {
+    container.innerHTML = '<p>Для просмотра проектов необходимо <a href="#" onclick="document.getElementById(\'authActionBtn\').click()">войти</a>.</p>';
+    return;
+  }
+  try {
+    const res = await fetch('/api/projects', { headers: { 'Authorization': 'Bearer ' + token } });
+    if (!res.ok) throw new Error('Ошибка загрузки');
+    const projects = await res.json();
+    if (projects.length === 0) {
+      container.innerHTML = '<p>У вас пока нет проектов.</p>';
+      return;
+    }
+    let html = '<table border="1" cellpadding="6" cellspacing="0"><tr><th>Название</th><th>Напряжение</th><th>Примечание</th><th>Дата создания</th></tr>';
+    projects.forEach(p => {
+      html += `<tr>
+        <td>${p.name}</td>
+        <td>${p.voltage} В</td>
+        <td>${p.remark || ''}</td>
+        <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>
+      </tr>`;
+    });
+    html += '</table>';
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<p style="color:red;">Ошибка загрузки проектов</p>';
+  }
+})();
+</script>

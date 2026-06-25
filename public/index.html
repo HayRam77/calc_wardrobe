@@ -79,7 +79,7 @@
 <div class="overlay" id="overlay"></div>
 
 <nav class="sidebar" id="sidebar">
-  <a href="/" data-title="Главная">Главная</a>
+  <a href="/" data-title="Проекты">Проекты</a>
   <a href="/automation" data-title="Системы автоматизации">Системы автоматизации</a>
   <!-- дополнительные ссылки добавятся позже -->
 </nav>
@@ -236,6 +236,9 @@ async function loadPage(url) {
     container.innerHTML = html;
     // Выполняем скрипты из загруженного контента
     container.querySelectorAll('script').forEach(oldScript => {
+  // Устанавливаем заголовок страницы
+  const titles = { '/': 'Проекты', '/automation': 'Системы автоматизации' };
+  pageTitle.textContent = titles[url] || 'Конфигуратор вентиляции';
       const newScript = document.createElement('script');
       if (oldScript.src) {
         newScript.src = oldScript.src; newScript.async = false;
