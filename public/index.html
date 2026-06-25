@@ -2,51 +2,228 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Конфигуратор вентиляции</title>
 <style>
-  body { font-family: 'Segoe UI', Arial; margin: 0; padding: 0; background: #f4f7fb; }
-  .top-menu {
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background: #f4f7fb; }
+  /* Верхнее меню */
+  .header {
     background: #1a5f7a; color: white;
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0 20px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    padding: 0 15px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
   }
-  .top-menu .left { display: flex; align-items: center; gap: 20px; }
-  .top-menu .left h1 { margin: 0; font-size: 20px; }
-  .top-menu .left a { color: white; text-decoration: none; font-size: 13px; padding: 4px 8px; border-radius: 4px; }
-  .top-menu .left a:hover { background: rgba(255,255,255,0.2); }
-  .top-menu .right { display: flex; align-items: center; gap: 15px; font-size: 13px; }
-  .top-menu .right button {
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .burger-btn {
+    background: none; border: none; color: white; font-size: 24px;
+    cursor: pointer; padding: 5px; line-height: 1; display: flex; align-items: center;
+  }
+  .page-title { font-size: 16px; font-weight: 500; white-space: nowrap; }
+  .header-right { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+  .header-right button {
     background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);
-    color: white; padding: 5px 12px; border-radius: 4px; cursor: pointer;
+    color: white; padding: 4px 10px; border-radius: 4px; cursor: pointer;
+    font-size: 12px;
   }
-  .content { padding: 20px; }
-  .form-group { margin-bottom: 15px; }
-  .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
-  .form-group select, .form-group input { width: 100%; padding: 8px; box-sizing: border-box; }
-  button { background: #1a5f7a; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
-  button:hover { background: #134b5f; }
+
+  /* Боковое меню */
+  .sidebar {
+    position: fixed; top: 50px; left: 0; width: 240px; height: calc(100% - 50px);
+    background: #fff; box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+    transform: translateX(-100%); transition: transform 0.3s ease;
+    z-index: 999; overflow-y: auto; padding: 15px 0;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar a {
+    display: block; padding: 10px 20px; color: #333; text-decoration: none;
+    font-size: 14px; transition: background 0.2s;
+  }
+  .sidebar a:hover { background: #f0f4f8; }
+  .sidebar a.active { background: #e0e7ef; font-weight: 600; }
+
+  /* Оверлей для закрытия меню */
+  .overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.3); z-index: 998;
+    display: none;
+  }
+  .overlay.show { display: block; }
+
+  /* Основной контент */
+  .content { margin-top: 50px; padding: 20px; }
+  .auth-container { max-width: 350px; margin: 40px auto; padding: 20px; background: white; border-radius: 8px; }
+  .auth-container input { width: 100%; padding: 8px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; }
+  .auth-container button { width: 100%; padding: 8px; background: #1a5f7a; color: white; border: none; border-radius: 4px; cursor: pointer; }
+  .hidden { display: none !important; }
+
+  @media (max-width: 600px) {
+    .page-title { font-size: 14px; }
+    .sidebar { width: 200px; }
+  }
 </style>
 </head>
 <body>
 
-<div id="topMenu" class="top-menu">
-  <div class="left">
-    <h1>Конфигуратор вентиляции</h1>
-    <a href="/" id="homeLink">Главная</a>
-    <a href="/automation" id="automationLink">Системы автоматизации</a>
+<div class="header">
+  <div class="header-left">
+    <button class="burger-btn" id="burgerBtn">☰</button>
+    <span class="page-title" id="pageTitle">Конфигуратор вентиляции</span>
   </div>
-  <div class="right">
-    <!-- авторизация появится позже -->
+  <div class="header-right" id="userArea">
+    <span id="usernameDisplay"></span>
+    <button id="authActionBtn">Войти</button>
   </div>
 </div>
 
-<div id="contentContainer" class="content"></div>
+<div class="overlay" id="overlay"></div>
+
+<nav class="sidebar" id="sidebar">
+  <a href="/" data-title="Главная">Главная</a>
+  <a href="/automation" data-title="Системы автоматизации">Системы автоматизации</a>
+  <!-- дополнительные ссылки добавятся позже -->
+</nav>
+
+<div class="content" id="contentContainer"></div>
+
+<!-- Модальное окно авторизации -->
+<div id="authModal" class="auth-container hidden" style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:1001; background:white; padding:20px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+  <h3 id="authTitle">Вход</h3>
+  <div id="authError" style="color:red; font-size:13px;"></div>
+  <input type="text" id="authUsername" placeholder="Имя пользователя">
+  <input type="password" id="authPassword" placeholder="Пароль">
+  <button id="authSubmitBtn">Войти</button>
+  <p style="text-align:center; font-size:13px;">
+    <span id="toggleAuthMode" style="color:#1a5f7a; cursor:pointer;">Нет аккаунта? Зарегистрироваться</span>
+  </p>
+  <button id="closeAuthModal" style="background:#888; margin-top:5px;">Закрыть</button>
+</div>
 
 <script>
+const API_BASE = '/api';
+const AUTH = API_BASE + '/auth';
+let currentUser = null;
+let authMode = 'login'; // 'login' или 'register'
+
+// --- Верхнее меню ---
+const burgerBtn = document.getElementById('burgerBtn');
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('overlay');
+const pageTitle = document.getElementById('pageTitle');
+const userArea = document.getElementById('userArea');
+const usernameDisplay = document.getElementById('usernameDisplay');
+const authActionBtn = document.getElementById('authActionBtn');
+const authModal = document.getElementById('authModal');
+const authTitle = document.getElementById('authTitle');
+const authSubmitBtn = document.getElementById('authSubmitBtn');
+const toggleAuthMode = document.getElementById('toggleAuthMode');
+const authError = document.getElementById('authError');
+const closeAuthModalBtn = document.getElementById('closeAuthModal');
+
+// Бургер-меню
+burgerBtn.addEventListener('click', () => {
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('show');
+});
+overlay.addEventListener('click', () => {
+  sidebar.classList.remove('open');
+  overlay.classList.remove('show');
+});
+
+// Закрытие бокового меню при клике по ссылке
+sidebar.querySelectorAll('a').forEach(link => {
+  link.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+    pageTitle.textContent = link.dataset.title || 'Конфигуратор вентиляции';
+  });
+});
+
+// Авторизация
+function updateUserUI() {
+  if (currentUser) {
+    usernameDisplay.textContent = currentUser.username;
+    authActionBtn.textContent = 'Выйти';
+  } else {
+    usernameDisplay.textContent = '';
+    authActionBtn.textContent = 'Войти';
+  }
+}
+
+authActionBtn.addEventListener('click', () => {
+  if (currentUser) {
+    // Выход
+    const sid = localStorage.getItem('sessionId');
+    if (sid) fetch(AUTH+'/logout', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sessionId:sid}) }).catch(()=>{});
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('sessionId');
+    currentUser = null;
+    updateUserUI();
+    loadPage(location.pathname || '/');
+    return;
+  }
+  // Показать модальное окно входа
+  authMode = 'login';
+  authTitle.textContent = 'Вход';
+  authSubmitBtn.textContent = 'Войти';
+  toggleAuthMode.textContent = 'Нет аккаунта? Зарегистрироваться';
+  authError.textContent = '';
+  authModal.classList.remove('hidden');
+});
+
+toggleAuthMode.addEventListener('click', () => {
+  authMode = authMode === 'login' ? 'register' : 'login';
+  authTitle.textContent = authMode === 'login' ? 'Вход' : 'Регистрация';
+  authSubmitBtn.textContent = authMode === 'login' ? 'Войти' : 'Зарегистрироваться';
+  toggleAuthMode.textContent = authMode === 'login' ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
+  authError.textContent = '';
+});
+
+closeAuthModalBtn.addEventListener('click', () => {
+  authModal.classList.add('hidden');
+});
+
+authSubmitBtn.addEventListener('click', async () => {
+  const u = document.getElementById('authUsername').value.trim();
+  const p = document.getElementById('authPassword').value.trim();
+  if (!u || !p) { authError.textContent = 'Заполните все поля'; return; }
+  const endpoint = authMode === 'login' ? '/login' : '/register';
+  try {
+    const res = await fetch(AUTH + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p })
+    });
+    const data = await res.json();
+    if (!res.ok) { authError.textContent = data.error || 'Ошибка'; return; }
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      if (data.sessionId) localStorage.setItem('sessionId', data.sessionId);
+      currentUser = data.user;
+      updateUserUI();
+      authModal.classList.add('hidden');
+      loadPage(location.pathname || '/');
+    } else {
+      // регистрация успешна, переключаем на вход
+      authMode = 'login';
+      authTitle.textContent = 'Вход';
+      authSubmitBtn.textContent = 'Войти';
+      toggleAuthMode.textContent = 'Нет аккаунта? Зарегистрироваться';
+      authError.textContent = '';
+      document.getElementById('authUsername').value = '';
+      document.getElementById('authPassword').value = '';
+      alert('Регистрация успешна! Теперь войдите.');
+    }
+  } catch (e) { authError.textContent = 'Ошибка соединения'; }
+});
+
+// SPA-роутер
 function navigateTo(url) { history.pushState(null, '', url); loadPage(url); }
 async function loadPage(url) {
   const container = document.getElementById('contentContainer');
-  container.innerHTML = '';
+  container.innerHTML = '<p>Загрузка...</p>';
   try {
     let file = '';
     if (url === '/') file = 'pages/home.html';
@@ -57,6 +234,7 @@ async function loadPage(url) {
     if (!res.ok) throw new Error('Страница не найдена');
     const html = await res.text();
     container.innerHTML = html;
+    // Выполняем скрипты из загруженного контента
     container.querySelectorAll('script').forEach(oldScript => {
       const newScript = document.createElement('script');
       if (oldScript.src) {
@@ -66,12 +244,13 @@ async function loadPage(url) {
       }
       oldScript.parentNode.replaceChild(newScript, oldScript);
     });
-  } catch(e) {
+  } catch (e) {
     container.innerHTML = '<p>Ошибка загрузки страницы</p>';
   }
 }
 
-document.querySelectorAll('.top-menu a').forEach(link => {
+// Перехват кликов по меню (sidebar)
+sidebar.querySelectorAll('a').forEach(link => {
   link.addEventListener('click', function(e) {
     e.preventDefault();
     const href = this.getAttribute('href');
@@ -80,7 +259,16 @@ document.querySelectorAll('.top-menu a').forEach(link => {
 });
 
 window.addEventListener('popstate', () => { loadPage(location.pathname || '/'); });
-window.addEventListener('load', () => { loadPage(location.pathname || '/'); });
+window.addEventListener('load', () => {
+  // Проверяем авторизацию
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  if (token && user) {
+    currentUser = user;
+    updateUserUI();
+  }
+  loadPage(location.pathname || '/');
+});
 </script>
 </body>
 </html>
