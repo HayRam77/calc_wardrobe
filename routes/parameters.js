@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST – создать новый параметр
+// POST – создать новый параметр (все авторизованные)
 router.post('/', async (req, res) => {
   const { param_name } = req.body;
   if (!param_name || !param_name.trim()) return res.status(400).json({ error: 'Название параметра обязательно' });
@@ -95,30 +95,3 @@ router.get('/export', isAdmin, async (req, res) => {
 });
 
 module.exports = router;
-
-// PUT – переименовать параметр (админ)
-router.put('/:id', async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Только для администратора' });
-  const { param_name } = req.body;
-  if (!param_name || !param_name.trim()) return res.status(400).json({ error: 'Название обязательно' });
-  try {
-    const result = await pool.query(
-      'UPDATE parameters SET param_name = $1 WHERE id = $2 RETURNING *',
-      [param_name.trim(), req.params.id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Параметр не найден' });
-    res.json(result.rows[0]);
-  } catch (err) {
-    if (err.code === '23505') return res.status(400).json({ error: 'Параметр уже существует' });
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// DELETE – удалить параметр (админ)
-router.delete('/:id', async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Только для администратора' });
-  try {
-    await pool.query('DELETE FROM parameters WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});

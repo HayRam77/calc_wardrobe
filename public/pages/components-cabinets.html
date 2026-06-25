@@ -1,1 +1,407 @@
-<p>Здесь будет список компонентов шкафов.</p>
+<div class="page-content">
+    <h2>Компоненты</h2>
+    <div style="margin-bottom:10px;">
+        <button id="addTemplateBtn" class="btn btn-primary" style="display:none;">Добавить новый компонент</button>
+        <button id="exportBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
+        <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls">
+        <button id="importBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
+    </div>
+    <div id="templatesTable" style="margin-top:15px;"></div>
+</div>
+
+<!-- Модальное окно для шаблона -->
+<div id="templateModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:700px; max-height:90vh; overflow-y:auto;">
+        <span class="modal-close">&times;</span>
+        <h3 id="templateModalTitle">Добавить новый компонент</h3>
+        <form id="templateForm">
+            <input type="hidden" id="templateId">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="templateType">Тип</label>
+                    <select id="templateType"></select>
+                </div>
+                <div class="form-group">
+                    <label for="templateManufacturer">Производитель</label>
+                    <select id="templateManufacturer"></select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="templateName">Название *</label>
+                    <input type="text" id="templateName" required maxlength="255">
+                </div>
+                <div class="form-group">
+                    <label for="templateArticle">Артикул</label>
+                    <input type="text" id="templateArticle" maxlength="255">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="templatePrice">Цена, руб.</label>
+                    <input type="number" id="templatePrice" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label for="templateLabor">Работа, ч</label>
+                    <input type="number" id="templateLabor" step="0.01">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="templateWeight">Вес, гр.</label>
+                    <input type="number" id="templateWeight" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label for="templatePower">Мощность, Вт</label>
+                    <input type="number" id="templatePower" step="0.01">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="templateLn">LN</label>
+                    <input type="text" id="templateLn" maxlength="255">
+                </div>
+                <div class="form-group">
+                    <label for="templateUrl">Ссылка</label>
+                    <input type="url" id="templateUrl" maxlength="500">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="templateDescription">Описание</label>
+                <textarea id="templateDescription" maxlength="500" rows="2"></textarea>
+            </div>
+            
+            <h4>Параметры</h4>
+            <div id="parametersContainer"></div>
+            <button type="button" id="addParamBtn" class="btn btn-secondary btn-sm">+ Добавить параметр</button>
+            
+            <div id="templateError" class="error-message" style="display:none;"></div>
+            <div class="form-actions" style="margin-top:15px;">
+                <button type="button" id="templateCancelBtn" class="btn btn-secondary">Отмена</button>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function() {
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const isAdmin = user && user.role === 'admin';
+
+    if (isAdmin) {
+        document.getElementById('addTemplateBtn').style.display = 'inline-block';
+        document.getElementById('exportBtn').style.display = 'inline-block';
+        document.getElementById('importBtn').style.display = 'inline-block';
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
+    }
+
+    // ==================== ЗАГРУЗКА ТАБЛИЦЫ ====================
+    async function loadTemplatesList() {
+        const container = document.getElementById('templatesTable');
+        if (!container) return;
+        try {
+            const res = await fetch(API_BASE + '/block-templates', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) throw new Error('Ошибка загрузки');
+            const templates = await res.json();
+
+            if (templates.length === 0) {
+                container.innerHTML = '<p>Нет компонентов.</p>';
+                return;
+            }
+
+            const paramNamesSet = new Set();
+            templates.forEach(t => {
+                if (t.parameters && t.parameters.length > 0) {
+                    t.parameters.forEach(p => paramNamesSet.add(p.param_name));
+                }
+            });
+            const paramNames = Array.from(paramNamesSet).sort();
+
+            let html = '<div class="table-container"><table class="data-table"><thead><tr>';
+            html += '<th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th><th>Вес, гр.</th><th>Q, вт</th><th>LN</th>';
+            html += '<th>Ссылка</th>';
+            paramNames.forEach(name => { html += `<th>${escapeHtml(name)}</th>`; });
+            if (isAdmin) html += '<th>Действия</th>';
+            html += '</tr></thead><tbody>';
+
+            templates.forEach(t => {
+                html += '<tr>';
+                html += `<td>${escapeHtml(t.type_name || '')}</td>`;
+                html += `<td>${escapeHtml(t.name)}</td>`;
+                html += `<td>${escapeHtml(t.manufacturer_name || '')}</td>`;
+                html += `<td>${escapeHtml(t.article || '')}</td>`;
+                html += `<td>${t.price != null ? t.price : ''}</td>`;
+                html += `<td>${t.weight_grams != null ? t.weight_grams : ''}</td>`;
+                html += `<td>${t.power_watts != null ? t.power_watts : ''}</td>`;
+                html += `<td>${escapeHtml(t.ln || '')}</td>`;
+                if (t.url) {
+                    html += `<td><a href="${escapeHtml(t.url)}" target="_blank">🔗</a></td>`;
+                } else {
+                    html += '<td></td>';
+                }
+                paramNames.forEach(pName => {
+                    const param = t.parameters ? t.parameters.find(p => p.param_name === pName) : null;
+                    html += `<td>${param ? escapeHtml(param.param_value) : ''}</td>`;
+                });
+                if (isAdmin) {
+                    html += `<td>
+                        <button class="btn btn-sm btn-edit edit-template-btn" data-id="${t.id}">✏️</button>
+                        <button class="btn btn-sm btn-delete delete-template-btn" data-id="${t.id}">🗑️</button>
+                    </td>`;
+                }
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+
+            container.querySelectorAll('.edit-template-btn').forEach(btn => {
+                btn.addEventListener('click', function() { openTemplateModal(this.dataset.id); });
+            });
+            container.querySelectorAll('.delete-template-btn').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    if (!confirm('Удалить компонент?')) return;
+                    try {
+                        await fetch(API_BASE + '/block-templates/' + this.dataset.id, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+                        loadTemplatesList();
+                    } catch(e) { alert('Ошибка удаления'); }
+                });
+            });
+        } catch(e) {
+            container.innerHTML = '<p style="color:red;">Ошибка загрузки компонентов</p>';
+        }
+    }
+
+    // ==================== МОДАЛЬНОЕ ОКНО ====================
+    const modal = document.getElementById('templateModal');
+    const modalTitle = document.getElementById('templateModalTitle');
+    const form = document.getElementById('templateForm');
+    const errorDiv = document.getElementById('templateError');
+
+    document.querySelector('#templateModal .modal-close').addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+    document.getElementById('templateCancelBtn').addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+    });
+
+    async function loadSelectOptions() {
+        try {
+            const [typesRes, manufRes, paramsRes] = await Promise.all([
+                fetch(API_BASE + '/component-types', { headers: { 'Authorization': 'Bearer ' + token } }),
+                fetch(API_BASE + '/manufacturers', { headers: { 'Authorization': 'Bearer ' + token } }),
+                fetch(API_BASE + '/parameters', { headers: { 'Authorization': 'Bearer ' + token } })
+            ]);
+            const types = typesRes.ok ? await typesRes.json() : [];
+            const manufacturers = manufRes.ok ? await manufRes.json() : [];
+            window.allParameters = paramsRes.ok ? await paramsRes.json() : [];
+
+            const typeSelect = document.getElementById('templateType');
+            typeSelect.innerHTML = '<option value="">-- Выберите тип --</option>';
+            types.forEach(t => { typeSelect.innerHTML += `<option value="${t.id}">${escapeHtml(t.name)}</option>`; });
+
+            const manufSelect = document.getElementById('templateManufacturer');
+            manufSelect.innerHTML = '<option value="">-- Выберите производителя --</option>';
+            manufacturers.forEach(m => { manufSelect.innerHTML += `<option value="${m.id}">${escapeHtml(m.name)}</option>`; });
+        } catch(e) {
+            console.error('Ошибка загрузки справочников:', e);
+        }
+    }
+
+    window.openTemplateModal = async function(id) {
+        await loadSelectOptions();
+        errorDiv.style.display = 'none';
+        form.reset();
+        document.getElementById('parametersContainer').innerHTML = '';
+
+        if (id) {
+            modalTitle.textContent = 'Редактировать компонент';
+            document.getElementById('templateId').value = id;
+            try {
+                const res = await fetch(API_BASE + '/block-templates', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const templates = await res.json();
+                const t = templates.find(x => x.id == id);
+                if (t) {
+                    document.getElementById('templateName').value = t.name || '';
+                    document.getElementById('templateArticle').value = t.article || '';
+                    document.getElementById('templatePrice').value = t.price || '';
+                    document.getElementById('templateLabor').value = t.labor || '';
+                    document.getElementById('templateWeight').value = t.weight_grams || '';
+                    document.getElementById('templatePower').value = t.power_watts || '';
+                    document.getElementById('templateLn').value = t.ln || '';
+                    document.getElementById('templateUrl').value = t.url || '';
+                    document.getElementById('templateDescription').value = t.description || '';
+                    if (t.type_id) document.getElementById('templateType').value = t.type_id;
+                    if (t.manufacturer_id) document.getElementById('templateManufacturer').value = t.manufacturer_id;
+
+                    if (t.parameters && t.parameters.length > 0) {
+                        t.parameters.forEach(p => addParamRow(p.parameter_id, p.param_value));
+                    }
+                }
+            } catch(e) { console.error(e); }
+        } else {
+            modalTitle.textContent = 'Добавить новый компонент';
+            document.getElementById('templateId').value = '';
+        }
+        modal.style.display = 'flex';
+    };
+
+    function addParamRow(paramId, value) {
+        const container = document.getElementById('parametersContainer');
+        const row = document.createElement('div');
+        row.className = 'param-row';
+        row.style.cssText = 'display:flex; gap:8px; margin-bottom:5px; align-items:center;';
+
+        const select = document.createElement('select');
+        select.style.cssText = 'flex:1;';
+        select.innerHTML = '<option value="">-- Выберите параметр --</option>';
+        (window.allParameters || []).forEach(p => {
+            select.innerHTML += `<option value="${p.id}">${escapeHtml(p.param_name)}</option>`;
+        });
+        if (paramId) select.value = paramId;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'Значение';
+        input.style.cssText = 'flex:2;';
+        if (value) input.value = value;
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.textContent = '✕';
+        delBtn.className = 'btn btn-sm btn-delete';
+        delBtn.addEventListener('click', () => row.remove());
+
+        row.appendChild(select);
+        row.appendChild(input);
+        row.appendChild(delBtn);
+        container.appendChild(row);
+    }
+
+    document.getElementById('addParamBtn').addEventListener('click', () => addParamRow());
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorDiv.style.display = 'none';
+
+        const name = document.getElementById('templateName').value.trim();
+        if (!name) {
+            errorDiv.textContent = 'Название обязательно';
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        const parameters = [];
+        document.querySelectorAll('.param-row').forEach(row => {
+            const select = row.querySelector('select');
+            const input = row.querySelector('input');
+            if (select.value) {
+                parameters.push({
+                    parameter_id: parseInt(select.value),
+                    param_value: input.value
+                });
+            }
+        });
+
+        const body = {
+            name,
+            type_id: document.getElementById('templateType').value || null,
+            manufacturer_id: document.getElementById('templateManufacturer').value || null,
+            article: document.getElementById('templateArticle').value.trim() || null,
+            price: document.getElementById('templatePrice').value || null,
+            labor: document.getElementById('templateLabor').value || null,
+            weight_grams: document.getElementById('templateWeight').value || null,
+            power_watts: document.getElementById('templatePower').value || null,
+            ln: document.getElementById('templateLn').value.trim() || null,
+            url: document.getElementById('templateUrl').value.trim() || null,
+            description: document.getElementById('templateDescription').value.trim() || null,
+            parameters
+        };
+
+        const id = document.getElementById('templateId').value;
+        const url = id ? API_BASE + '/block-templates/' + id : API_BASE + '/block-templates';
+        const method = id ? 'PUT' : 'POST';
+
+        try {
+            const res = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Ошибка сохранения');
+            }
+            modal.style.display = 'none';
+            loadTemplatesList();
+        } catch(err) {
+            errorDiv.textContent = err.message;
+            errorDiv.style.display = 'block';
+        }
+    });
+
+    // ==================== ЭКСПОРТ / ИМПОРТ ====================
+    document.getElementById('addTemplateBtn').addEventListener('click', () => openTemplateModal());
+
+    document.getElementById('exportBtn').addEventListener('click', async () => {
+        try {
+            const res = await fetch(API_BASE + '/block-templates/export', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) { const err = await res.json(); alert(err.error || 'Ошибка экспорта'); return; }
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'components.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch(e) { alert('Ошибка соединения'); }
+    });
+
+    const fileInput = document.getElementById('importFile');
+    document.getElementById('importBtn').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const res = await fetch(API_BASE + '/block-templates/import', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token },
+                body: formData
+            });
+            const data = await res.json();
+            if (!res.ok) { alert(data.error || 'Ошибка импорта'); return; }
+            alert('Добавлено ' + data.added + ' из ' + data.total);
+            loadTemplatesList();
+        } catch(e) { alert('Ошибка соединения'); }
+        fileInput.value = '';
+    });
+
+    loadTemplatesList();
+})();
+</script>
