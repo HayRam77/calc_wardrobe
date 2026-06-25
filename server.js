@@ -10,7 +10,7 @@ const adminRoutes = require('./routes/admin');
 const cabinetsRoutes = require('./routes/cabinets');
 const cabinetsTopRoutes = require('./routes/cabinetsTop');
 const componentTypesRoutes = require('./routes/componentTypes');
-const manufacturersRoutes = require('./routes/manufacturers');
+const manufacturersRouter = require('./routes/manufacturers');
 const parametersRoutes = require('./routes/parameters');
 
 const app = express();
@@ -27,7 +27,7 @@ app.use('/api/projects/:projectId/blocks', projectBlocksRoutes);
 app.use('/api/projects/:projectId/cabinets', cabinetsRoutes);
 app.use('/api/cabinets', cabinetsTopRoutes);
 app.use('/api/component-types', componentTypesRoutes);
-app.use('/api/manufacturers', manufacturersRoutes);
+app.use('/api/manufacturers', manufacturersRouter);
 app.use('/api/parameters', parametersRoutes);
 app.use('/api/admin', adminRoutes);
 
