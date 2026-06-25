@@ -308,7 +308,13 @@ async function loadPage(url) {
     '/manufacturers': 'Производители',
     '/admin': 'Администрирование'
   };
-  pageTitle.textContent = titles[url] || 'Конфигуратор вентиляции';
+  if (url.startsWith('/project/')) {
+    pageTitle.textContent = 'Проект';
+  } else if (url.startsWith('/cabinet/')) {
+    pageTitle.textContent = 'Шкаф';
+  } else {
+    pageTitle.textContent = titles[url] || 'Конфигуратор вентиляции';
+  }
   try {
     let file = '';
     if (url === '/') file = 'pages/home.html';
@@ -317,6 +323,8 @@ async function loadPage(url) {
     else if (url === '/components-cabinets') file = 'pages/components-cabinets.html';
     else if (url === '/manufacturers') file = 'pages/manufacturers.html';
     else if (url === '/admin') file = 'pages/admin.html';
+    else if (url.startsWith('/project/')) file = 'pages/project.html';
+    else if (url.startsWith('/cabinet/')) file = 'pages/cabinet.html';
     else file = 'pages/home.html';
 
     const res = await fetch(file + '?_=' + Date.now());

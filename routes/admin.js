@@ -1,273 +1,200 @@
-const express = require('express');
-const router = express.Router();
-const pool = require('../db');
-const isAdmin = require('../middleware/isAdmin');
-const bcrypt = require('bcryptjs');
-const { exec } = require('child_process');
-const path = require('path');
-const fs = require('fs');
+<div class="page-content">
+    <div class="page-header">
+        <h2>Администрирование</h2>
+    </div>
 
-router.use(isAdmin);
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="projects">Все проекты</button>
+        <button class="tab-btn" data-tab="cabinets">Все шкафы</button>
+        <button class="tab-btn" data-tab="users">Управление пользователями</button>
+    </div>
 
-// ---------- пользователи ----------
-router.get('/users', async (req, res) => {
-  try {
-    const users = await pool.query(`
-      SELECT u.id, u.username, u.role, u.is_blocked, u.created_at,
-        (SELECT COUNT(*) FROM projects WHERE user_id = u.id) AS project_count,
-        (SELECT login_time FROM user_sessions WHERE user_id = u.id ORDER BY login_time DESC LIMIT 1) AS last_login
-      FROM users u
-      ORDER BY u.id
-    `);
-    res.json(users.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    <div class="tab-content active" id="tab-projects">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название</th>
+                        <th>Владелец</th>
+                        <th>Напряжение</th>
+                        <th>Примечание</th>
+                        <th>Дата создания</th>
+                    </tr>
+                </thead>
+                <tbody id="allProjectsBody">
+                    <tr><td colspan="6" class="loading">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="allProjectsEmpty" class="empty-state" style="display:none;"><p>Проектов нет</p></div>
+    </div>
 
-router.get('/users/:id', async (req, res) => {
-  try {
-    const user = await pool.query('SELECT id, username, role, is_blocked, created_at FROM users WHERE id = $1', [req.params.id]);
-    if (user.rows.length === 0) return res.status(404).json({ error: 'Пользователь не найден' });
-    const projects = await pool.query('SELECT id, name, voltage, created_at FROM projects WHERE user_id = $1 ORDER BY created_at DESC', [req.params.id]);
-    const sessions = await pool.query(
-      'SELECT login_time, logout_time, ip_address, user_agent FROM user_sessions WHERE user_id = $1 ORDER BY login_time DESC LIMIT 20',
-      [req.params.id]
-    );
-    res.json({ ...user.rows[0], projects: projects.rows, sessions: sessions.rows });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    <div class="tab-content" id="tab-cabinets">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название шкафа</th>
+                        <th>Проект</th>
+                        <th>Владелец</th>
+                        <th>Дата создания</th>
+                    </tr>
+                </thead>
+                <tbody id="allCabinetsBody">
+                    <tr><td colspan="5" class="loading">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="allCabinetsEmpty" class="empty-state" style="display:none;"><p>Шкафов нет</p></div>
+    </div>
 
-router.delete('/users/:id', async (req, res) => {
-  const targetId = parseInt(req.params.id);
-  if (targetId === req.user.userId) return res.status(400).json({ error: 'Нельзя удалить самого себя' });
-  try {
-    const user = await pool.query('SELECT role FROM users WHERE id = $1', [targetId]);
-    if (user.rows.length === 0) return res.status(404).json({ error: 'Пользователь не найден' });
-    if (user.rows[0].role === 'admin') return res.status(403).json({ error: 'Нельзя удалить администратора' });
-    await pool.query('DELETE FROM users WHERE id = $1', [targetId]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    <div class="tab-content" id="tab-users">
+        <div class="tab-header"><h3>Пользователи</h3></div>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Имя пользователя</th>
+                        <th>Роль</th>
+                        <th>Статус</th>
+                        <th>Дата регистрации</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <tr><td colspan="6" class="loading">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
-router.post('/users/:id/block', async (req, res) => {
-  const targetId = parseInt(req.params.id);
-  if (targetId === req.user.userId) return res.status(400).json({ error: 'Нельзя заблокировать самого себя' });
-  try {
-    const user = await pool.query('SELECT is_blocked FROM users WHERE id = $1', [targetId]);
-    if (user.rows.length === 0) return res.status(404).json({ error: 'Пользователь не найден' });
-    const newState = !user.rows[0].is_blocked;
-    await pool.query('UPDATE users SET is_blocked = $1 WHERE id = $2', [newState, targetId]);
-    res.json({ is_blocked: newState });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/users/:id/reset-password', async (req, res) => {
-  const { newPassword } = req.body;
-  if (!newPassword || newPassword.length < 4) return res.status(400).json({ error: 'Новый пароль должен быть не менее 4 символов' });
-  try {
-    const hashed = await bcrypt.hash(newPassword, 10);
-    await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashed, req.params.id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ---------- кабинеты ----------
-router.get('/cabinets', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT c.id, c.name AS cabinet_name, p.name AS project_name, p.id AS project_id,
-             u.username AS creator, c.created_at
-      FROM cabinets c
-      JOIN projects p ON c.project_id = p.id
-      LEFT JOIN users u ON p.user_id = u.id
-      ORDER BY c.created_at DESC
-    `);
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.get('/cabinets/:id', async (req, res) => {
-  try {
-    const cabinet = await pool.query(`
-      SELECT c.*, p.name AS project_name, p.id AS project_id,
-             u.username AS creator
-      FROM cabinets c
-      JOIN projects p ON c.project_id = p.id
-      LEFT JOIN users u ON p.user_id = u.id
-      WHERE c.id = $1
-    `, [req.params.id]);
-    if (cabinet.rows.length === 0) return res.status(404).json({ error: 'Шкаф не найден' });
-
-    const blocks = await pool.query(`
-      SELECT pb.*, 
-             (SELECT json_agg(json_build_object('param_name', pbp.param_name, 'param_value', pbp.param_value))
-              FROM project_block_params pbp WHERE pbp.project_block_id = pb.id) AS parameters
-      FROM project_blocks pb
-      WHERE pb.cabinet_id = $1
-      ORDER BY pb.order_index
-    `, [req.params.id]);
-
-    const result = {
-      ...cabinet.rows[0],
-      blocks: blocks.rows.map(b => ({
-        ...b,
-        parameters: b.parameters || []
-      }))
-    };
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.put('/cabinets/:id/move', async (req, res) => {
-  const { project_id } = req.body;
-  const { id } = req.params;
-  if (!project_id) return res.status(400).json({ error: 'Не указан project_id' });
-  try {
-    const result = await pool.query(
-      'UPDATE cabinets SET project_id = $1 WHERE id = $2 RETURNING *',
-      [project_id, id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Шкаф не найден' });
-    res.json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/cabinets/:id/copy', async (req, res) => {
-  const { new_name } = req.body;
-  if (!new_name) return res.status(400).json({ error: 'Укажите новое имя' });
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const original = await client.query('SELECT * FROM cabinets WHERE id = $1', [req.params.id]);
-    if (original.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Шкаф не найден' });
+<script>
+(function() {
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!user || user.role !== 'admin') {
+        document.getElementById('contentContainer').innerHTML = '<p>Доступ запрещён</p>';
+        return;
     }
-    const orig = original.rows[0];
-    const copy = await client.query(
-      'INSERT INTO cabinets (project_id, name) VALUES ($1, $2) RETURNING *',
-      [orig.project_id, new_name]
-    );
-    const newCabinetId = copy.rows[0].id;
-    const blocks = await client.query('SELECT * FROM project_blocks WHERE cabinet_id = $1', [orig.id]);
-    for (const block of blocks.rows) {
-      const newBlock = await client.query(
-        'INSERT INTO project_blocks (project_id, cabinet_id, template_id, block_name, order_index, quantity) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-        [orig.project_id, newCabinetId, block.template_id, block.block_name, block.order_index, block.quantity]
-      );
-      const params = await client.query('SELECT param_name, param_value FROM project_block_params WHERE project_block_id = $1', [block.id]);
-      for (const p of params.rows) {
-        await client.query(
-          'INSERT INTO project_block_params (project_block_id, param_name, param_value) VALUES ($1,$2,$3)',
-          [newBlock.rows[0].id, p.param_name, p.param_value]
-        );
-      }
-    }
-    await client.query('COMMIT');
-    res.json(copy.rows[0]);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    if (err.code === '23505') return res.status(400).json({ error: 'Шкаф с таким названием уже существует в этом проекте' });
-    res.status(500).json({ error: err.message });
-  } finally {
-    client.release();
-  }
-});
 
-router.delete('/cabinets/:id', async (req, res) => {
-  try {
-    await pool.query('DELETE FROM cabinets WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-// ---------- база данных ----------
-router.post('/database/export', async (req, res) => {
-  try {
-    const dbName = process.env.DB_NAME || 'bd_calc';
-    const dbUser = process.env.DB_USER || 'hrroot';
-    const dbPass = process.env.DB_PASSWORD || '';
-    const dbHost = process.env.DB_HOST || 'localhost';
-    const dbPort = process.env.DB_PORT || '5432';
-
-    const dumpFile = path.join('/tmp', 'dump_' + Date.now() + '.sql');
-    const env = { PGPASSWORD: dbPass };
-    const cmd = `pg_dump -h ${dbHost} -p ${dbPort} -U ${dbUser} -F p ${dbName} > ${dumpFile}`;
-    
-    exec(cmd, { env }, (error, stdout, stderr) => {
-      if (error) {
-        console.error('pg_dump error:', stderr);
-        return res.status(500).json({ error: 'Ошибка при создании дампа' });
-      }
-      res.download(dumpFile, path.basename(dumpFile), (err) => {
-        if (err) console.error('Download error:', err);
-        fs.unlink(dumpFile, () => {});
-      });
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-router.post('/database/import', async (req, res) => {
-  try {
-    if (!req.files || !req.files.file) return res.status(400).json({ error: 'Файл не загружен' });
-    const file = req.files.file;
-    const dbName = process.env.DB_NAME || 'bd_calc';
-    const dbUser = process.env.DB_USER || 'hrroot';
-    const dbPass = process.env.DB_PASSWORD || '';
-    const dbHost = process.env.DB_HOST || 'localhost';
-    const dbPort = process.env.DB_PORT || '5432';
-
-    const tempPath = path.join('/tmp', 'restore_' + Date.now() + '.sql');
-    await file.mv(tempPath);
-
-    const env = { PGPASSWORD: dbPass };
-    const dropCmd = `psql -h ${dbHost} -p ${dbPort} -U ${dbUser} -d ${dbName} -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"`;
-    
-    exec(dropCmd, { env }, (dropErr, dropStdout, dropStderr) => {
-      if (dropErr) {
-        console.error('Очистка базы не удалась:', dropStderr);
-        fs.unlink(tempPath, () => {});
-        return res.status(500).json({ error: 'Ошибка при очистке базы данных' });
-      }
-      const restoreCmd = `psql -h ${dbHost} -p ${dbPort} -U ${dbUser} -d ${dbName} -f ${tempPath}`;
-      exec(restoreCmd, { env }, (restoreErr, restoreStdout, restoreStderr) => {
-        if (restoreErr) {
-          console.error('Восстановление не удалось:', restoreStderr);
-          fs.unlink(tempPath, () => {});
-          return res.status(500).json({ error: 'Ошибка при восстановлении базы данных' });
-        }
-        // Сбрасываем последовательности
-        const resetSeqCmd = `psql -h ${dbHost} -p ${dbPort} -U ${dbUser} -d ${dbName} -c "SELECT setval('user_sessions_id_seq', COALESCE((SELECT MAX(id) FROM user_sessions), 1)); SELECT setval('block_templates_id_seq', COALESCE((SELECT MAX(id) FROM block_templates), 1)); SELECT setval('cabinets_id_seq', COALESCE((SELECT MAX(id) FROM cabinets), 1)); SELECT setval('component_param_values_id_seq', COALESCE((SELECT MAX(id) FROM component_param_values), 1)); SELECT setval('component_types_id_seq', COALESCE((SELECT MAX(id) FROM component_types), 1)); SELECT setval('manufacturers_id_seq', COALESCE((SELECT MAX(id) FROM manufacturers), 1)); SELECT setval('parameters_id_seq', COALESCE((SELECT MAX(id) FROM parameters), 1)); SELECT setval('project_block_params_id_seq', COALESCE((SELECT MAX(id) FROM project_block_params), 1)); SELECT setval('project_blocks_id_seq', COALESCE((SELECT MAX(id) FROM project_blocks), 1)); SELECT setval('projects_id_seq', COALESCE((SELECT MAX(id) FROM projects), 1)); SELECT setval('users_id_seq', COALESCE((SELECT MAX(id) FROM users), 1));"`;
-        exec(resetSeqCmd, { env }, (seqErr, seqStdout, seqStderr) => {
-          if (seqErr) console.error('Сброс последовательностей не удался:', seqStderr);
-          else console.log('Последовательности сброшены');
-          fs.unlink(tempPath, () => {});
-          res.json({ success: true, message: 'База данных восстановлена, последовательности синхронизированы' });
+    // Вкладки
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            if (btn.dataset.tab === 'projects') loadProjects();
+            else if (btn.dataset.tab === 'cabinets') loadCabinets();
+            else if (btn.dataset.tab === 'users') loadUsers();
         });
-      });
     });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
-module.exports = router;
+    // Проекты
+    async function loadProjects() {
+        const tbody = document.getElementById('allProjectsBody');
+        try {
+            const res = await fetch(API_BASE + '/projects/all', { headers: { 'Authorization': 'Bearer ' + token } });
+            const data = await res.json();
+            if (!data.length) { tbody.innerHTML = '<tr><td colspan="6">Нет проектов</td></tr>'; return; }
+            tbody.innerHTML = data.map(p => '<tr>' +
+                '<td>' + p.id + '</td>' +
+                '<td><a href="/project/' + p.id + '" class="spa-link">' + esc(p.name) + '</a></td>' +
+                '<td>' + esc(p.owner || '—') + '</td>' +
+                '<td>' + esc(p.voltage) + '</td>' +
+                '<td>' + esc(p.remark || '') + '</td>' +
+                '<td>' + (p.created_at ? new Date(p.created_at).toLocaleDateString('ru-RU') : '') + '</td>' +
+            '</tr>').join('');
+        } catch(e) { tbody.innerHTML = '<tr><td colspan="6" class="error">Ошибка</td></tr>'; }
+    }
+
+    // Шкафы
+    async function loadCabinets() {
+        const tbody = document.getElementById('allCabinetsBody');
+        try {
+            const res = await fetch(API_BASE + '/cabinets', { headers: { 'Authorization': 'Bearer ' + token } });
+            const data = await res.json();
+            if (!data.length) { tbody.innerHTML = '<tr><td colspan="5">Нет шкафов</td></tr>'; return; }
+            tbody.innerHTML = data.map(c => '<tr>' +
+                '<td>' + c.id + '</td>' +
+                '<td><a href="/cabinet/' + c.id + '" class="spa-link">' + esc(c.name) + '</a></td>' +
+                '<td><a href="/project/' + c.project_id + '" class="spa-link">' + esc(c.project_name || '—') + '</a></td>' +
+                '<td>' + esc(c.owner || '—') + '</td>' +
+                '<td>' + (c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU') : '') + '</td>' +
+            '</tr>').join('');
+        } catch(e) { tbody.innerHTML = '<tr><td colspan="5" class="error">Ошибка</td></tr>'; }
+    }
+
+    // Пользователи
+    async function loadUsers() {
+        const tbody = document.getElementById('usersTableBody');
+        try {
+            const res = await fetch(API_BASE + '/admin/users', { headers: { 'Authorization': 'Bearer ' + token } });
+            const users = await res.json();
+            tbody.innerHTML = users.map(u => '<tr>' +
+                '<td>' + u.id + '</td>' +
+                '<td>' + esc(u.username) + '</td>' +
+                '<td>' + (u.role === 'admin' ? 'Админ' : 'Пользователь') + '</td>' +
+                '<td>' + (u.is_blocked ? '🔒 Заблокирован' : '✅ Активен') + '</td>' +
+                '<td>' + (u.created_at ? new Date(u.created_at).toLocaleDateString('ru-RU') : '') + '</td>' +
+                '<td>' + (u.role !== 'admin' ?
+                    '<button class="btn btn-sm ' + (u.is_blocked ? 'btn-edit' : 'btn-secondary') + ' toggle-btn" data-id="' + u.id + '" data-blocked="' + u.is_blocked + '">' + (u.is_blocked ? 'Разблокировать' : 'Заблокировать') + '</button> ' +
+                    '<button class="btn btn-sm btn-secondary reset-btn" data-id="' + u.id + '">Сброс пароля</button> ' +
+                    '<button class="btn btn-sm btn-delete del-btn" data-id="' + u.id + '">Удалить</button>'
+                    : '<span style="color:#888;">Администратор</span>') +
+                '</td>' +
+            '</tr>').join('');
+
+            tbody.querySelectorAll('.toggle-btn').forEach(btn => {
+                btn.onclick = async function() {
+                    const id = this.dataset.id, blocked = this.dataset.blocked === 'true';
+                    if (!confirm('Вы уверены?')) return;
+                    await fetch(API_BASE + '/admin/users/' + id + '/block', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ is_blocked: !blocked })
+                    });
+                    loadUsers();
+                };
+            });
+            tbody.querySelectorAll('.reset-btn').forEach(btn => {
+                btn.onclick = async function() {
+                    const pw = prompt('Новый пароль (мин 4 символа):');
+                    if (!pw || pw.length < 4) return;
+                    await fetch(API_BASE + '/admin/users/' + this.dataset.id + '/reset-password', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ password: pw })
+                    });
+                    alert('Пароль сброшен');
+                };
+            });
+            tbody.querySelectorAll('.del-btn').forEach(btn => {
+                btn.onclick = async function() {
+                    if (!confirm('Удалить пользователя?')) return;
+                    await fetch(API_BASE + '/admin/users/' + this.dataset.id, {
+                        method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    loadUsers();
+                };
+            });
+        } catch(e) { tbody.innerHTML = '<tr><td colspan="6" class="error">Ошибка</td></tr>'; }
+    }
+
+    // Перехват SPA-ссылок
+    document.addEventListener('click', function(e) {
+        const link = e.target.closest('a.spa-link');
+        if (link) {
+            e.preventDefault();
+            history.pushState(null, '', link.getAttribute('href'));
+            loadPage(link.getAttribute('href'));
+        }
+    });
+
+    loadProjects();
+})();
+</script>

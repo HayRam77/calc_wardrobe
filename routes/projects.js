@@ -5,7 +5,7 @@ const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
 
-// GET /all — все проекты (только админ) — ДОЛЖЕН БЫТЬ ПЕРЕД /:id
+// GET /all — все проекты (только админ)
 router.get('/all', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Доступ запрещён' });
   try {
@@ -28,6 +28,22 @@ router.get('/', async (req, res) => {
       [req.user.userId]
     );
     res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /:id — один проект
+router.get('/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.id, p.name, p.voltage, p.simultaneity_factor, p.created_at, p.updated_at, p.remark,
+              u.username AS owner
+       FROM projects p
+       LEFT JOIN users u ON p.user_id = u.id
+       WHERE p.id = $1`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Проект не найден' });
+    res.json(result.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
