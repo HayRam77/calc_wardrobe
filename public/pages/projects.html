@@ -1,55 +1,90 @@
-<h2>Мои проекты</h2>
-<div id="myProjectsTable"></div>
+<div class="page-content">
+    <div id="projectContent" style="max-width:800px;">
+        <p>Загрузка проекта...</p>
+    </div>
+</div>
+
 <script>
 (function() {
-  async function loadMyProjects() {
     const token = localStorage.getItem('token');
-    const container = document.getElementById('myProjectsTable');
-    if (!container) return;
-    try {
-      const res = await fetch('/api/projects', { headers: { 'Authorization': 'Bearer ' + token } });
-      if (!res.ok) throw new Error('Ошибка загрузки');
-      const projects = await res.json();
-      if (projects.length === 0) {
-        container.innerHTML = '<p>У вас пока нет проектов. <a href="#" id="createLink">Создать новый</a></p>';
-        const link = document.getElementById('createLink');
-        if (link) link.addEventListener('click', (e) => { e.preventDefault(); navigateTo('/create-project'); });
-        return;
-      }
-      let html = '<table><tr><th>Название</th><th>Примечание</th><th>Создатель</th><th>Дата создания</th><th></th></tr>';
-      projects.forEach(p => {
-        html += `<tr>
-          <td><a href="/project/${p.id}" class="project-link">${p.name}</a></td>
-          <td>${p.remark || ''}</td>
-          <td>${p.created_by || ''}</td>
-          <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>
-          <td><button class="small danger delete-btn" data-id="${p.id}">Удалить</button></td>
-        </tr>`;
-      });
-      html += '</table>';
-      container.innerHTML = html;
+    const parts = location.pathname.split('/');
+    const projectId = parts[2];
 
-      container.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const id = e.target.dataset.id;
-          if (!confirm('Удалить проект?')) return;
-          const token = localStorage.getItem('token');
-          try {
-            await fetch('/api/projects/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
-            loadMyProjects();
-          } catch(e) { alert('Ошибка удаления'); }
-        });
-      });
-      container.querySelectorAll('.project-link').forEach(link => {
-        link.addEventListener('click', function(e) {
-          e.preventDefault();
-          navigateTo(this.getAttribute('href'));
-        });
-      });
-    } catch(e) {
-      container.innerHTML = '<p style="color:red;">Ошибка загрузки проектов</p>';
+    if (!projectId || !token) {
+        document.getElementById('projectContent').innerHTML = '<p>Проект не найден</p>';
+        return;
     }
-  }
-  loadMyProjects();
+
+    function esc(str) {
+        const div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
+    }
+
+    function navigate(url) {
+        history.pushState(null, '', url);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+
+    async function loadProject() {
+        const container = document.getElementById('projectContent');
+        try {
+            const [projectRes, cabinetsRes] = await Promise.all([
+                fetch(API_BASE + '/projects/' + projectId, { headers: { 'Authorization': 'Bearer ' + token } }),
+                fetch(API_BASE + '/projects/' + projectId + '/cabinets', { headers: { 'Authorization': 'Bearer ' + token } })
+            ]);
+
+            if (!projectRes.ok) throw new Error('Проект не найден');
+            const project = await projectRes.json();
+            const cabinets = cabinetsRes.ok ? await cabinetsRes.json() : [];
+
+            let html = `
+                <div class="page-header">
+                    <h2>${esc(project.name)}</h2>
+                    <button class="btn btn-secondary back-btn">← К проектам</button>
+                </div>
+                <div style="background:white; padding:20px; border-radius:8px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                    <table class="data-table">
+                        <tr><td><strong>Напряжение:</strong></td><td>${esc(project.voltage)} В</td></tr>
+                        <tr><td><strong>Коэфф. одновременности:</strong></td><td>${project.simultaneity_factor || '—'}</td></tr>
+                        <tr><td><strong>Примечание:</strong></td><td>${esc(project.remark || '—')}</td></tr>
+                        <tr><td><strong>Владелец:</strong></td><td>${esc(project.owner || '—')}</td></tr>
+                        <tr><td><strong>Создан:</strong></td><td>${project.created_at ? new Date(project.created_at).toLocaleString('ru-RU') : '—'}</td></tr>
+                    </table>
+                </div>
+                <h3>Шкафы проекта</h3>
+            `;
+
+            if (cabinets.length === 0) {
+                html += '<p>Нет шкафов</p>';
+            } else {
+                html += '<div class="table-container"><table class="data-table"><thead><tr><th>ID</th><th>Название</th><th>Создан</th></tr></thead><tbody>';
+                cabinets.forEach(c => {
+                    html += `<tr>
+                        <td>${c.id}</td>
+                        <td><a href="/cabinet/${c.id}" class="spa-link">${esc(c.name)}</a></td>
+                        <td>${c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU') : ''}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table></div>';
+            }
+
+            container.innerHTML = html;
+
+            container.querySelector('.back-btn').addEventListener('click', () => navigate('/'));
+
+            container.querySelectorAll('.spa-link').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    navigate(this.getAttribute('href'));
+                });
+            });
+
+        } catch(e) {
+            container.innerHTML = '<p style="color:red;">Ошибка загрузки проекта</p>';
+        }
+    }
+
+    loadProject();
 })();
 </script>

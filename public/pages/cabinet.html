@@ -1,0 +1,93 @@
+<div class="page-content">
+    <div id="cabinetContent" style="max-width:800px;">
+        <p>Загрузка шкафа...</p>
+    </div>
+</div>
+
+<script>
+(function() {
+    const token = localStorage.getItem('token');
+    const parts = location.pathname.split('/');
+    const cabinetId = parts[2];
+
+    if (!cabinetId || !token) {
+        document.getElementById('cabinetContent').innerHTML = '<p>Шкаф не найден</p>';
+        return;
+    }
+
+    function esc(str) {
+        const div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
+    }
+
+    function navigate(url) {
+        history.pushState(null, '', url);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+
+    async function loadCabinet() {
+        const container = document.getElementById('cabinetContent');
+        try {
+            const res = await fetch(API_BASE + '/cabinets/' + cabinetId, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) throw new Error('Шкаф не найден');
+            const cabinet = await res.json();
+
+            let html = `
+                <div class="page-header">
+                    <h2>${esc(cabinet.name)}</h2>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-secondary back-project-btn">← К проекту</button>
+                        <button class="btn btn-secondary back-admin-btn">← Администрирование</button>
+                    </div>
+                </div>
+                <div style="background:white; padding:20px; border-radius:8px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                    <table class="data-table">
+                        <tr><td><strong>Проект:</strong></td><td><a href="/project/${cabinet.project_id}" class="spa-link">${esc(cabinet.project_name || '—')}</a></td></tr>
+                        <tr><td><strong>Владелец:</strong></td><td>${esc(cabinet.owner || '—')}</td></tr>
+                        <tr><td><strong>Создан:</strong></td><td>${cabinet.created_at ? new Date(cabinet.created_at).toLocaleString('ru-RU') : '—'}</td></tr>
+                    </table>
+                </div>
+                <h3>Блоки шкафа</h3>
+            `;
+
+            if (!cabinet.blocks || cabinet.blocks.length === 0) {
+                html += '<p>Нет блоков</p>';
+            } else {
+                html += '<div class="table-container"><table class="data-table"><thead><tr><th>#</th><th>Название блока</th><th>Тип</th><th>Компонент</th><th>Производитель</th><th>Артикул</th><th>Кол-во</th></tr></thead><tbody>';
+                cabinet.blocks.forEach(b => {
+                    html += `<tr>
+                        <td>${b.order_index || 0}</td>
+                        <td>${esc(b.block_name)}</td>
+                        <td>${esc(b.type_name || '—')}</td>
+                        <td>${esc(b.template_name || '—')}</td>
+                        <td>${esc(b.manufacturer_name || '—')}</td>
+                        <td>${esc(b.article || '—')}</td>
+                        <td>${b.quantity || 1}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table></div>';
+            }
+
+            container.innerHTML = html;
+
+            container.querySelector('.back-project-btn').addEventListener('click', () => navigate('/project/' + cabinet.project_id));
+            container.querySelector('.back-admin-btn').addEventListener('click', () => navigate('/admin'));
+
+            container.querySelectorAll('.spa-link').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    navigate(this.getAttribute('href'));
+                });
+            });
+
+        } catch(e) {
+            container.innerHTML = '<p style="color:red;">Ошибка загрузки шкафа</p>';
+        }
+    }
+
+    loadCabinet();
+})();
+</script>

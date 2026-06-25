@@ -297,6 +297,7 @@ authSubmitBtn.addEventListener('click', async () => {
 });
 
 function navigateTo(url) { history.pushState(null, '', url); loadPage(url); }
+window.loadPage = loadPage;
 async function loadPage(url) {
   const container = document.getElementById('contentContainer');
   container.innerHTML = '<p>Загрузка...</p>';
