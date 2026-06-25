@@ -5,18 +5,7 @@ const authMiddleware = require('../middleware/auth');
 
 router.use(authMiddleware);
 
-// GET — проекты текущего пользователя
-router.get('/', async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT id, name, voltage, simultaneity_factor, created_at, updated_at, remark FROM projects WHERE user_id = $1 ORDER BY created_at DESC',
-      [req.user.userId]
-    );
-    res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// GET /all — все проекты (только админ)
+// GET /all — все проекты (только админ) — ДОЛЖЕН БЫТЬ ПЕРЕД /:id
 router.get('/all', async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Доступ запрещён' });
   try {
@@ -26,6 +15,17 @@ router.get('/all', async (req, res) => {
        FROM projects p
        LEFT JOIN users u ON p.user_id = u.id
        ORDER BY p.created_at DESC`
+    );
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET — проекты текущего пользователя
+router.get('/', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name, voltage, simultaneity_factor, created_at, updated_at, remark FROM projects WHERE user_id = $1 ORDER BY created_at DESC',
+      [req.user.userId]
     );
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
