@@ -50,12 +50,10 @@
   .auth-container button { width: 100%; padding: 8px; background: #1a5f7a; color: white; border: none; border-radius: 4px; cursor: pointer; }
   .hidden { display: none !important; }
 
-  /* Общие стили для страниц */
   .page-content { }
   .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
   .page-header h2 { margin: 0; font-size: 20px; }
 
-  /* Таблицы */
   .table-container { overflow-x: auto; }
   .data-table {
     width: 100%; border-collapse: collapse; background: white;
@@ -71,7 +69,6 @@
   .data-table .loading { text-align: center; color: #888; }
   .data-table .error { text-align: center; color: #d32f2f; }
 
-  /* Кнопки */
   .btn {
     padding: 7px 16px; border: none; border-radius: 4px;
     cursor: pointer; font-size: 14px; text-decoration: none;
@@ -87,7 +84,6 @@
   .btn-delete { background: #ffebee; color: #c62828; }
   .btn-delete:hover { background: #ffcdd2; }
 
-  /* Формы */
   .form-group { margin-bottom: 12px; }
   .form-group label {
     display: block; margin-bottom: 4px;
@@ -110,7 +106,6 @@
   .error-message { color: #d32f2f; font-size: 13px; margin-bottom: 8px; }
   .empty-state { text-align: center; padding: 30px; color: #888; }
 
-  /* Модальные окна */
   .modal {
     display: none; position: fixed; top: 0; left: 0;
     width: 100%; height: 100%; background: rgba(0,0,0,0.5);
@@ -129,7 +124,6 @@
   }
   .modal-close:hover { color: #333; }
 
-  /* Вкладки */
   .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0; }
   .tab-btn {
     padding: 10px 20px; border: none; background: none;
@@ -179,7 +173,6 @@
 
 <div class="content" id="contentContainer"></div>
 
-<!-- Модальное окно авторизации -->
 <div id="authModal" class="auth-container hidden" style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:1001; background:white; padding:20px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
   <h3 id="authTitle">Вход</h3>
   <div id="authError" style="color:red; font-size:13px;"></div>
@@ -193,29 +186,29 @@
 </div>
 
 <script>
-const API_BASE = '/api';
-const AUTH = API_BASE + '/auth';
-let currentUser = null;
-let authMode = 'login';
+var API_BASE = '/api';
+var AUTH = API_BASE + '/auth';
+var currentUser = null;
+var authMode = 'login';
 
-const burgerBtn = document.getElementById('burgerBtn');
-const sidebar = document.getElementById('sidebar');
-const overlay = document.getElementById('overlay');
-const pageTitle = document.getElementById('pageTitle');
-const usernameDisplay = document.getElementById('usernameDisplay');
-const authActionBtn = document.getElementById('authActionBtn');
-const authModal = document.getElementById('authModal');
-const authTitle = document.getElementById('authTitle');
-const authSubmitBtn = document.getElementById('authSubmitBtn');
-const toggleAuthMode = document.getElementById('toggleAuthMode');
-const authError = document.getElementById('authError');
-const closeAuthModalBtn = document.getElementById('closeAuthModal');
+var burgerBtn = document.getElementById('burgerBtn');
+var sidebar = document.getElementById('sidebar');
+var overlay = document.getElementById('overlay');
+var pageTitle = document.getElementById('pageTitle');
+var usernameDisplay = document.getElementById('usernameDisplay');
+var authActionBtn = document.getElementById('authActionBtn');
+var authModal = document.getElementById('authModal');
+var authTitle = document.getElementById('authTitle');
+var authSubmitBtn = document.getElementById('authSubmitBtn');
+var toggleAuthMode = document.getElementById('toggleAuthMode');
+var authError = document.getElementById('authError');
+var closeAuthModalBtn = document.getElementById('closeAuthModal');
 
-burgerBtn.addEventListener('click', () => {
+burgerBtn.addEventListener('click', function() {
   sidebar.classList.toggle('open');
   overlay.classList.toggle('show');
 });
-overlay.addEventListener('click', () => {
+overlay.addEventListener('click', function() {
   sidebar.classList.remove('open');
   overlay.classList.remove('show');
 });
@@ -230,10 +223,10 @@ function updateUserUI() {
   }
 }
 
-authActionBtn.addEventListener('click', () => {
+authActionBtn.addEventListener('click', function() {
   if (currentUser) {
-    const sid = localStorage.getItem('sessionId');
-    if (sid) fetch(AUTH+'/logout', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sessionId:sid}) }).catch(()=>{});
+    var sid = localStorage.getItem('sessionId');
+    if (sid) fetch(AUTH+'/logout', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sessionId:sid}) }).catch(function(){});
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('sessionId');
@@ -250,7 +243,7 @@ authActionBtn.addEventListener('click', () => {
   authModal.classList.remove('hidden');
 });
 
-toggleAuthMode.addEventListener('click', () => {
+toggleAuthMode.addEventListener('click', function() {
   authMode = authMode === 'login' ? 'register' : 'login';
   authTitle.textContent = authMode === 'login' ? 'Вход' : 'Регистрация';
   authSubmitBtn.textContent = authMode === 'login' ? 'Войти' : 'Зарегистрироваться';
@@ -258,22 +251,22 @@ toggleAuthMode.addEventListener('click', () => {
   authError.textContent = '';
 });
 
-closeAuthModalBtn.addEventListener('click', () => {
+closeAuthModalBtn.addEventListener('click', function() {
   authModal.classList.add('hidden');
 });
 
-authSubmitBtn.addEventListener('click', async () => {
-  const u = document.getElementById('authUsername').value.trim();
-  const p = document.getElementById('authPassword').value.trim();
+authSubmitBtn.addEventListener('click', async function() {
+  var u = document.getElementById('authUsername').value.trim();
+  var p = document.getElementById('authPassword').value.trim();
   if (!u || !p) { authError.textContent = 'Заполните все поля'; return; }
-  const endpoint = authMode === 'login' ? '/login' : '/register';
+  var endpoint = authMode === 'login' ? '/login' : '/register';
   try {
-    const res = await fetch(AUTH + endpoint, {
+    var res = await fetch(AUTH + endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: u, password: p })
     });
-    const data = await res.json();
+    var data = await res.json();
     if (!res.ok) { authError.textContent = data.error || 'Ошибка'; return; }
     if (data.token) {
       localStorage.setItem('token', data.token);
@@ -299,9 +292,9 @@ authSubmitBtn.addEventListener('click', async () => {
 function navigateTo(url) { history.pushState(null, '', url); loadPage(url); }
 window.loadPage = loadPage;
 async function loadPage(url) {
-  const container = document.getElementById('contentContainer');
+  var container = document.getElementById('contentContainer');
   container.innerHTML = '<p>Загрузка...</p>';
-  const titles = {
+  var titles = {
     '/': 'Проекты',
     '/automation': 'Системы автоматизации',
     '/components-systems': 'Компоненты систем',
@@ -317,7 +310,7 @@ async function loadPage(url) {
     pageTitle.textContent = titles[url] || 'Конфигуратор вентиляции';
   }
   try {
-    let file = '';
+    var file = '';
     if (url === '/') file = 'pages/home.html';
     else if (url === '/automation') file = 'pages/automation.html';
     else if (url === '/components-systems') file = 'pages/components-systems.html';
@@ -328,12 +321,12 @@ async function loadPage(url) {
     else if (url.startsWith('/cabinet/')) file = 'pages/cabinet.html';
     else file = 'pages/home.html';
 
-    const res = await fetch(file + '?_=' + Date.now());
+    var res = await fetch(file + '?_=' + Date.now());
     if (!res.ok) throw new Error('Страница не найдена');
-    const html = await res.text();
+    var html = await res.text();
     container.innerHTML = html;
-    container.querySelectorAll('script').forEach(oldScript => {
-      const newScript = document.createElement('script');
+    container.querySelectorAll('script').forEach(function(oldScript) {
+      var newScript = document.createElement('script');
       if (oldScript.src) {
         newScript.src = oldScript.src; newScript.async = false;
       } else {
@@ -346,7 +339,7 @@ async function loadPage(url) {
   }
 }
 
-sidebar.querySelectorAll('a').forEach(link => {
+sidebar.querySelectorAll('a').forEach(function(link) {
   link.addEventListener('click', function(e) {
     e.preventDefault();
     sidebar.classList.remove('open');
@@ -355,10 +348,10 @@ sidebar.querySelectorAll('a').forEach(link => {
   });
 });
 
-window.addEventListener('popstate', () => { loadPage(location.pathname || '/'); });
-window.addEventListener('load', () => {
-  const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
+window.addEventListener('popstate', function() { loadPage(location.pathname || '/'); });
+window.addEventListener('load', function() {
+  var token = localStorage.getItem('token');
+  var user = JSON.parse(localStorage.getItem('user') || 'null');
   if (token && user) {
     currentUser = user;
     updateUserUI();

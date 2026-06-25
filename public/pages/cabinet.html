@@ -6,9 +6,9 @@
 
 <script>
 (function() {
-    const token = localStorage.getItem('token');
-    const parts = location.pathname.split('/');
-    const cabinetId = parts[2];
+    var token = localStorage.getItem('token');
+    var parts = location.pathname.split('/');
+    var cabinetId = parts[2];
 
     if (!cabinetId || !token) {
         document.getElementById('cabinetContent').innerHTML = '<p>Шкаф не найден</p>';
@@ -16,7 +16,7 @@
     }
 
     function esc(str) {
-        const div = document.createElement('div');
+        var div = document.createElement('div');
         div.textContent = str || '';
         return div.innerHTML;
     }
@@ -27,56 +27,57 @@
     }
 
     async function loadCabinet() {
-        const container = document.getElementById('cabinetContent');
+        var container = document.getElementById('cabinetContent');
         try {
-            const res = await fetch(API_BASE + '/cabinets/' + cabinetId, {
+            var res = await fetch(API_BASE + '/cabinets/' + cabinetId, {
                 headers: { 'Authorization': 'Bearer ' + token }
             });
             if (!res.ok) throw new Error('Шкаф не найден');
-            const cabinet = await res.json();
+            var cabinet = await res.json();
 
-            let html = `
-                <div class="page-header">
-                    <h2>${esc(cabinet.name)}</h2>
-                    <div style="display:flex; gap:8px;">
-                        <button class="btn btn-secondary back-project-btn">← К проекту</button>
-                        <button class="btn btn-secondary back-admin-btn">← Администрирование</button>
-                    </div>
-                </div>
-                <div style="background:white; padding:20px; border-radius:8px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-                    <table class="data-table">
-                        <tr><td><strong>Проект:</strong></td><td><a href="/project/${cabinet.project_id}" class="spa-link">${esc(cabinet.project_name || '—')}</a></td></tr>
-                        <tr><td><strong>Владелец:</strong></td><td>${esc(cabinet.owner || '—')}</td></tr>
-                        <tr><td><strong>Создан:</strong></td><td>${cabinet.created_at ? new Date(cabinet.created_at).toLocaleString('ru-RU') : '—'}</td></tr>
-                    </table>
-                </div>
-                <h3>Блоки шкафа</h3>
-            `;
+            var html = '';
+            html += '<div class="page-header">';
+            html += '<h2>' + esc(cabinet.name) + '</h2>';
+            html += '<div style="display:flex; gap:8px;">';
+            html += '<button class="btn btn-secondary" id="backToProjectBtn">← К проекту</button>';
+            html += '<button class="btn btn-secondary" id="backToAdminBtn">← Администрирование</button>';
+            html += '</div></div>';
+            html += '<div style="background:white; padding:20px; border-radius:8px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">';
+            html += '<table class="data-table">';
+            html += '<tr><td><strong>Проект:</strong></td><td><a href="/project/' + cabinet.project_id + '" class="spa-link">' + esc(cabinet.project_name || '—') + '</a></td></tr>';
+            html += '<tr><td><strong>Владелец:</strong></td><td>' + esc(cabinet.owner || '—') + '</td></tr>';
+            html += '<tr><td><strong>Создан:</strong></td><td>' + (cabinet.created_at ? new Date(cabinet.created_at).toLocaleString('ru-RU') : '—') + '</td></tr>';
+            html += '</table></div>';
+            html += '<h3>Блоки шкафа</h3>';
 
             if (!cabinet.blocks || cabinet.blocks.length === 0) {
                 html += '<p>Нет блоков</p>';
             } else {
                 html += '<div class="table-container"><table class="data-table"><thead><tr><th>#</th><th>Название блока</th><th>Тип</th><th>Компонент</th><th>Производитель</th><th>Артикул</th><th>Кол-во</th></tr></thead><tbody>';
-                cabinet.blocks.forEach(b => {
-                    html += `<tr>
-                        <td>${b.order_index || 0}</td>
-                        <td>${esc(b.block_name)}</td>
-                        <td>${esc(b.type_name || '—')}</td>
-                        <td>${esc(b.template_name || '—')}</td>
-                        <td>${esc(b.manufacturer_name || '—')}</td>
-                        <td>${esc(b.article || '—')}</td>
-                        <td>${b.quantity || 1}</td>
-                    </tr>`;
+                cabinet.blocks.forEach(function(b) {
+                    html += '<tr>';
+                    html += '<td>' + (b.order_index || 0) + '</td>';
+                    html += '<td>' + esc(b.block_name) + '</td>';
+                    html += '<td>' + esc(b.type_name || '—') + '</td>';
+                    html += '<td>' + esc(b.template_name || '—') + '</td>';
+                    html += '<td>' + esc(b.manufacturer_name || '—') + '</td>';
+                    html += '<td>' + esc(b.article || '—') + '</td>';
+                    html += '<td>' + (b.quantity || 1) + '</td>';
+                    html += '</tr>';
                 });
                 html += '</tbody></table></div>';
             }
 
             container.innerHTML = html;
 
-            container.querySelector('.back-project-btn').addEventListener('click', () => navigate('/project/' + cabinet.project_id));
-            container.querySelector('.back-admin-btn').addEventListener('click', () => navigate('/admin'));
+            document.getElementById('backToProjectBtn').addEventListener('click', function() {
+                navigate('/project/' + cabinet.project_id);
+            });
+            document.getElementById('backToAdminBtn').addEventListener('click', function() {
+                navigate('/admin');
+            });
 
-            container.querySelectorAll('.spa-link').forEach(link => {
+            container.querySelectorAll('.spa-link').forEach(function(link) {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
                     navigate(this.getAttribute('href'));
