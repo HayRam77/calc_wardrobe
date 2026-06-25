@@ -1,1 +1,268 @@
-<p>Здесь будет панель администратора.</p>
+<div class="page-content">
+    <div class="page-header">
+        <h2>Администрирование</h2>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="projects">Все проекты</button>
+        <button class="tab-btn" data-tab="cabinets">Все шкафы</button>
+        <button class="tab-btn" data-tab="users">Управление пользователями</button>
+    </div>
+
+    <!-- Вкладка: Все проекты -->
+    <div class="tab-content active" id="tab-projects">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название</th>
+                        <th>Владелец</th>
+                        <th>Напряжение</th>
+                        <th>Примечание</th>
+                        <th>Дата создания</th>
+                    </tr>
+                </thead>
+                <tbody id="allProjectsBody">
+                    <tr><td colspan="6" class="loading">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="allProjectsEmpty" class="empty-state" style="display:none;">
+            <p>Проектов нет</p>
+        </div>
+    </div>
+
+    <!-- Вкладка: Все шкафы -->
+    <div class="tab-content" id="tab-cabinets">
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название шкафа</th>
+                        <th>Проект</th>
+                        <th>Владелец</th>
+                        <th>Дата создания</th>
+                    </tr>
+                </thead>
+                <tbody id="allCabinetsBody">
+                    <tr><td colspan="5" class="loading">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="allCabinetsEmpty" class="empty-state" style="display:none;">
+            <p>Шкафов нет</p>
+        </div>
+    </div>
+
+    <!-- Вкладка: Управление пользователями -->
+    <div class="tab-content" id="tab-users">
+        <div class="tab-header">
+            <h3>Пользователи</h3>
+        </div>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Имя пользователя</th>
+                        <th>Роль</th>
+                        <th>Статус</th>
+                        <th>Дата регистрации</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <tr><td colspan="6" class="loading">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const token = localStorage.getItem('token');
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+    if (!user || user.role !== 'admin') {
+        document.getElementById('contentContainer').innerHTML = '<p>Доступ запрещён</p>';
+        return;
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
+    }
+
+    // ==================== ВКЛАДКИ ====================
+    const tabs = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+            tabs.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+
+            if (btn.dataset.tab === 'projects') loadAllProjects();
+            else if (btn.dataset.tab === 'cabinets') loadAllCabinets();
+            else if (btn.dataset.tab === 'users') loadUsers();
+        });
+    });
+
+    // ==================== ВСЕ ПРОЕКТЫ ====================
+    async function loadAllProjects() {
+        const tbody = document.getElementById('allProjectsBody');
+        const empty = document.getElementById('allProjectsEmpty');
+        try {
+            const res = await fetch(API_BASE + '/projects/all', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) throw new Error('Ошибка');
+            const projects = await res.json();
+            if (projects.length === 0) {
+                tbody.parentElement.parentElement.style.display = 'none';
+                empty.style.display = 'block';
+                return;
+            }
+            tbody.parentElement.parentElement.style.display = '';
+            empty.style.display = 'none';
+            tbody.innerHTML = projects.map(p => `
+                <tr>
+                    <td>${p.id}</td>
+                    <td>${escapeHtml(p.name)}</td>
+                    <td>${escapeHtml(p.owner || '—')}</td>
+                    <td>${escapeHtml(p.voltage)}</td>
+                    <td>${escapeHtml(p.remark || '')}</td>
+                    <td>${p.created_at ? new Date(p.created_at).toLocaleDateString('ru-RU') : ''}</td>
+                </tr>
+            `).join('');
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="6" class="error">Ошибка загрузки</td></tr>';
+        }
+    }
+
+    // ==================== ВСЕ ШКАФЫ ====================
+    async function loadAllCabinets() {
+        const tbody = document.getElementById('allCabinetsBody');
+        const empty = document.getElementById('allCabinetsEmpty');
+        try {
+            const res = await fetch(API_BASE + '/cabinets', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) throw new Error('Ошибка');
+            const cabinets = await res.json();
+            if (cabinets.length === 0) {
+                tbody.parentElement.parentElement.style.display = 'none';
+                empty.style.display = 'block';
+                return;
+            }
+            tbody.parentElement.parentElement.style.display = '';
+            empty.style.display = 'none';
+            tbody.innerHTML = cabinets.map(c => `
+                <tr>
+                    <td>${c.id}</td>
+                    <td>${escapeHtml(c.name)}</td>
+                    <td>${escapeHtml(c.project_name || '—')}</td>
+                    <td>${escapeHtml(c.owner || '—')}</td>
+                    <td>${c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU') : ''}</td>
+                </tr>
+            `).join('');
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="5" class="error">Ошибка загрузки</td></tr>';
+        }
+    }
+
+    // ==================== ПОЛЬЗОВАТЕЛИ ====================
+    async function loadUsers() {
+        const tbody = document.getElementById('usersTableBody');
+        try {
+            const res = await fetch(API_BASE + '/admin/users', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) throw new Error('Ошибка');
+            const users = await res.json();
+            tbody.innerHTML = users.map(u => `
+                <tr>
+                    <td>${u.id}</td>
+                    <td>${escapeHtml(u.username)}</td>
+                    <td>${u.role === 'admin' ? 'Админ' : 'Пользователь'}</td>
+                    <td>${u.is_blocked ? '🔒 Заблокирован' : '✅ Активен'}</td>
+                    <td>${u.created_at ? new Date(u.created_at).toLocaleDateString('ru-RU') : ''}</td>
+                    <td>
+                        ${u.role !== 'admin' ? `
+                            <button class="btn btn-sm ${u.is_blocked ? 'btn-edit' : 'btn-secondary'} toggle-block-btn" data-id="${u.id}" data-blocked="${u.is_blocked}">
+                                ${u.is_blocked ? 'Разблокировать' : 'Заблокировать'}
+                            </button>
+                            <button class="btn btn-sm btn-secondary reset-password-btn" data-id="${u.id}">Сброс пароля</button>
+                            <button class="btn btn-sm btn-delete delete-user-btn" data-id="${u.id}">Удалить</button>
+                        ` : '<span style="color:#888;">Администратор</span>'}
+                    </td>
+                </tr>
+            `).join('');
+
+            // Блокировка/разблокировка
+            tbody.querySelectorAll('.toggle-block-btn').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const id = this.dataset.id;
+                    const blocked = this.dataset.blocked === 'true';
+                    const action = blocked ? 'разблокировать' : 'заблокировать';
+                    if (!confirm(`Вы уверены, что хотите ${action} пользователя?`)) return;
+                    try {
+                        const res = await fetch(API_BASE + '/admin/users/' + id + '/block', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                            body: JSON.stringify({ is_blocked: !blocked })
+                        });
+                        if (!res.ok) throw new Error('Ошибка');
+                        loadUsers();
+                    } catch(e) { alert('Ошибка'); }
+                });
+            });
+
+            // Сброс пароля
+            tbody.querySelectorAll('.reset-password-btn').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const id = this.dataset.id;
+                    const newPassword = prompt('Введите новый пароль (минимум 4 символа):');
+                    if (!newPassword || newPassword.length < 4) return;
+                    try {
+                        const res = await fetch(API_BASE + '/admin/users/' + id + '/reset-password', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                            body: JSON.stringify({ password: newPassword })
+                        });
+                        if (!res.ok) throw new Error('Ошибка');
+                        alert('Пароль сброшен');
+                    } catch(e) { alert('Ошибка сброса пароля'); }
+                });
+            });
+
+            // Удаление
+            tbody.querySelectorAll('.delete-user-btn').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const id = this.dataset.id;
+                    if (!confirm('Удалить пользователя? Это действие необратимо.')) return;
+                    try {
+                        const res = await fetch(API_BASE + '/admin/users/' + id, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+                        if (!res.ok) throw new Error('Ошибка');
+                        loadUsers();
+                    } catch(e) { alert('Ошибка удаления'); }
+                });
+            });
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="6" class="error">Ошибка загрузки</td></tr>';
+        }
+    }
+
+    // Загрузка при открытии
+    loadAllProjects();
+})();
+</script>
