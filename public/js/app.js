@@ -2,7 +2,7 @@
 
 const API_URL = '/api';
 
-// ========== Глобальный перехват fetch (401 = авто-выход) ==========
+// Глобальный перехват fetch (401 = авто-выход)
 const originalFetch = window.fetch;
 window.fetch = async function(url, options = {}) {
   const token = localStorage.getItem('token');
@@ -33,11 +33,9 @@ function initApp() {
     currentUser = user;
   }
 
-  // Глобальная функция для обновления пользователя (вызывается из auth.js)
   window.updateUser = (newUser) => {
     currentUser = newUser;
     renderMenu();
-    // Если пользователь только что авторизовался, перенаправляем на главную
     if (newUser) {
       window.location.hash = '#/home';
     }
@@ -45,11 +43,9 @@ function initApp() {
 
   renderMenu();
 
-  // Запускаем роутер (только если Router существует)
+  // Запуск роутера только после определения меню
   if (typeof Router !== 'undefined' && Router.init) {
     Router.init();
-  } else {
-    console.error('Router не найден!');
   }
 }
 
@@ -58,15 +54,12 @@ function renderMenu() {
   if (!menuEl) return;
 
   if (!currentUser) {
-    // Скрываем меню, если пользователь не авторизован
-    menuEl.style.display = 'none';
-    // Также можно скрыть другие элементы, если нужно
+    menuEl.innerHTML = '';           // очищаем меню
+    menuEl.style.display = 'none';  // скрываем блок
     return;
   }
 
-  // Показываем меню
-  menuEl.style.display = ''; // или 'block', если требуется
-
+  menuEl.style.display = ''; // показываем
   let html = `
     <a href="#/home">🏠 Главная</a>
     <a href="#/projects">📁 Проекты</a>
@@ -80,10 +73,8 @@ function renderMenu() {
   }
 
   html += `<a href="#" id="logout-btn">🚪 Выход (${currentUser.username})</a>`;
-
   menuEl.innerHTML = html;
 
-  // Обработчик выхода
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', (e) => {
@@ -93,7 +84,7 @@ function renderMenu() {
       } else {
         localStorage.clear();
         window.location.hash = '#/login';
-        renderMenu(); // скроет меню
+        renderMenu();
       }
     });
   }

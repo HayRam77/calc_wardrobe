@@ -21,30 +21,29 @@ const Router = {
 
   async init() {
     window.addEventListener('hashchange', () => this.handle());
-    await this.handle();
+    await this.handle(); // первая загрузка
   },
 
   async handle() {
     const hash = window.location.hash.slice(1) || '/home';
     const [base, param] = hash.split('/').filter(Boolean);
     const route = '/' + (base || 'home');
-    const fullPath = param ? `/${base}/${param}` : route;
 
     const user = JSON.parse(localStorage.getItem('user') || 'null');
 
-    // Проверка авторизации для защищённых страниц
+    // Редирект на логин, если не авторизован и страница не публичная
     if (!user && !this.publicPages.includes(route)) {
       window.location.hash = '#/login';
       return;
     }
 
-    // Проверка прав администратора
+    // Админ-страницы доступны только админу
     if (user && user.role !== 'admin' && this.adminPages.includes(route)) {
       window.location.hash = '#/home';
       return;
     }
 
-    // Управление видимостью меню (публичные страницы — без меню)
+    // Управление меню: скрываем для публичных страниц и неавторизованных
     const menuEl = document.getElementById('side-menu');
     if (menuEl) {
       if (!user || this.publicPages.includes(route)) {
