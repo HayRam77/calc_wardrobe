@@ -1,23 +1,57 @@
-<div class="auth-form">
-  <h2>Вход в систему</h2>
-  <form id="loginForm">
-    <input type="email" id="loginEmail" placeholder="Email" required>
-    <input type="password" id="loginPassword" placeholder="Пароль" required>
-    <button type="submit">Войти</button>
-    <div id="loginError" style="color:red;display:none;"></div>
-  </form>
+<div class="mb-3">
+  <label for="loginUsername" class="form-label">Имя пользователя</label>
+  <input type="text" class="form-control" id="loginUsername" placeholder="Введите логин" required autocomplete="username">
 </div>
+<div class="mb-3">
+  <label for="loginPassword" class="form-label">Пароль</label>
+  <input type="password" class="form-control" id="loginPassword" placeholder="Введите пароль" required autocomplete="current-password">
+</div>
+<button type="submit" class="btn btn-primary w-100">Войти</button>
 <script>
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const email = document.getElementById('loginEmail').value.trim();
-  const password = document.getElementById('loginPassword').value;
-  try {
-    await Auth.login(email, password);
-    window.location.hash = '#/home';
-  } catch (err) {
-    document.getElementById('loginError').textContent = err.message;
-    document.getElementById('loginError').style.display = 'block';
-  }
-});
+  document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorDiv = document.getElementById('loginError');
+    errorDiv.style.display = 'none';
+
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    if (!username || !password) {
+      errorDiv.textContent = 'Заполните все поля';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Ошибка входа');
+      }
+
+      // Сохраняем токен и объект пользователя (важно для SPA)
+      localStorage.setItem('token', data.token);
+      try {
+        const payload = JSON.parse(atob(data.token.split('.')[1]));
+        const user = {
+          id: payload.id,
+          username: payload.username,
+          email: payload.email,
+          role: payload.role
+        };
+        localStorage.setItem('user', JSON.stringify(user));
+      } catch (e) {}
+
+      window.location.href = '/';
+    } catch (err) {
+      errorDiv.textContent = err.message;
+      errorDiv.style.display = 'block';
+    }
+  });
 </script>
