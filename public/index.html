@@ -168,7 +168,7 @@
   <a href="/components-systems" data-title="Компоненты систем">Компоненты систем</a>
   <a href="/components-cabinets" data-title="Компоненты шкафов">Компоненты шкафов</a>
   <a href="/manufacturers" data-title="Производители">Производители</a>
-  <a href="/admin" data-title="Администрирование">Администрирование</a>
+  <a href="/admin" data-title="Администрирование" id="adminLink" style="display:none;">Администрирование</a>
 </nav>
 
 <div class="content" id="contentContainer"></div>
@@ -214,6 +214,10 @@ overlay.addEventListener('click', function() {
 });
 
 function updateUserUI() {
+  var adminLink = document.getElementById('adminLink');
+  if (adminLink) {
+    adminLink.style.display = (currentUser && currentUser.role === 'admin') ? 'block' : 'none';
+  }
   if (currentUser) {
     usernameDisplay.textContent = currentUser.username;
     authActionBtn.textContent = 'Выйти';
@@ -316,7 +320,13 @@ async function loadPage(url) {
     else if (url === '/components-systems') file = 'pages/components-systems.html';
     else if (url === '/components-cabinets') file = 'pages/components-cabinets.html';
     else if (url === '/manufacturers') file = 'pages/manufacturers.html';
-    else if (url === '/admin') file = 'pages/admin.html';
+    else if (url === '/admin') {
+      if (!currentUser || currentUser.role !== 'admin') {
+        container.innerHTML = '<p>Доступ запрещён</p>';
+        return;
+      }
+      file = 'pages/admin.html';
+    }
     else if (url.startsWith('/project/')) file = 'pages/project.html';
     else if (url.startsWith('/cabinet/')) file = 'pages/cabinet.html';
     else file = 'pages/home.html';
