@@ -1,11 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
-const { isAdmin } = require('../middleware/isAdmin');
 const { checkOwner } = require('../middleware/ownerCheck');
 const { validate, rules } = require('../middleware/validation');
-
-// ============ БАЗОВЫЕ CRUD ПРОЕКТОВ ============
 
 // Получить все проекты (свои или все для админа)
 router.get('/', async (req, res) => {
@@ -31,7 +28,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-// Получить конкретный проект
+// Получить конкретный проект (с проверкой владельца)
 router.get('/:id', checkOwner('projects'), async (req, res) => {
     try {
         const result = await pool.query(
@@ -60,7 +57,7 @@ router.post('/', rules.project.create, validate, async (req, res) => {
     }
 });
 
-// Обновить проект
+// Обновить проект (с проверкой владельца)
 router.put('/:id', checkOwner('projects'), async (req, res) => {
     try {
         const { name, description } = req.body;
@@ -75,7 +72,7 @@ router.put('/:id', checkOwner('projects'), async (req, res) => {
     }
 });
 
-// Удалить проект
+// Удалить проект (с проверкой владельца)
 router.delete('/:id', checkOwner('projects'), async (req, res) => {
     try {
         await pool.query('DELETE FROM projects WHERE id = $1', [req.params.id]);
@@ -88,7 +85,7 @@ router.delete('/:id', checkOwner('projects'), async (req, res) => {
 
 // ============ ШКАФЫ ПРОЕКТА ============
 
-// Получить все шкафы проекта
+// Получить все шкафы проекта (с проверкой владельца проекта)
 router.get('/:projectId/cabinets', checkOwner('projects', 'projectId'), async (req, res) => {
     try {
         const result = await pool.query(
@@ -102,8 +99,8 @@ router.get('/:projectId/cabinets', checkOwner('projects', 'projectId'), async (r
     }
 });
 
-// Создать шкаф в проекте
-router.post('/:projectId/cabinets', rules.cabinet.create, validate, checkOwner('projects', 'projectId'), async (req, res) => {
+// Создать шкаф в проекте (с проверкой владельца проекта)
+router.post('/:projectId/cabinets', checkOwner('projects', 'projectId'), async (req, res) => {
     try {
         const { name } = req.body;
         const result = await pool.query(
@@ -119,7 +116,7 @@ router.post('/:projectId/cabinets', rules.cabinet.create, validate, checkOwner('
 
 // ============ БЛОКИ ПРОЕКТА ============
 
-// Получить все блоки проекта
+// Получить все блоки проекта (с проверкой владельца проекта)
 router.get('/:projectId/blocks', checkOwner('projects', 'projectId'), async (req, res) => {
     try {
         const result = await pool.query(
@@ -137,7 +134,7 @@ router.get('/:projectId/blocks', checkOwner('projects', 'projectId'), async (req
     }
 });
 
-// Добавить блок в проект
+// Добавить блок в проект (с проверкой владельца проекта)
 router.post('/:projectId/blocks', checkOwner('projects', 'projectId'), async (req, res) => {
     try {
         const { template_id, cabinet_id, position, params } = req.body;
@@ -146,7 +143,6 @@ router.post('/:projectId/blocks', checkOwner('projects', 'projectId'), async (re
         try {
             await client.query('BEGIN');
             
-            // Создаём блок
             const blockResult = await client.query(
                 `INSERT INTO project_blocks (project_id, template_id, cabinet_id, position) 
                  VALUES ($1, $2, $3, $4) RETURNING *`,
@@ -155,7 +151,6 @@ router.post('/:projectId/blocks', checkOwner('projects', 'projectId'), async (re
             
             const block = blockResult.rows[0];
             
-            // Добавляем параметры блока
             if (params && Array.isArray(params)) {
                 for (const param of params) {
                     await client.query(
@@ -167,24 +162,7 @@ router.post('/:projectId/blocks', checkOwner('projects', 'projectId'), async (re
             }
             
             await client.query('COMMIT');
-            
-            // Получаем блок с параметрами
-            const fullBlock = await client.query(
-                `SELECT pb.*, 
-                        json_agg(json_build_object(
-                            'param_id', pbp.param_id,
-                            'value', pbp.value,
-                            'param_name', p.name
-                        )) as params
-                 FROM project_blocks pb
-                 LEFT JOIN project_block_params pbp ON pb.id = pbp.block_id
-                 LEFT JOIN parameters p ON pbp.param_id = p.id
-                 WHERE pb.id = $1
-                 GROUP BY pb.id`,
-                [block.id]
-            );
-            
-            res.status(201).json(fullBlock.rows[0]);
+            res.status(201).json(block);
         } catch (error) {
             await client.query('ROLLBACK');
             throw error;
@@ -197,7 +175,7 @@ router.post('/:projectId/blocks', checkOwner('projects', 'projectId'), async (re
     }
 });
 
-// Удалить блок
+// Удалить блок (с проверкой владельца проекта)
 router.delete('/:projectId/blocks/:blockId', checkOwner('projects', 'projectId'), async (req, res) => {
     try {
         const result = await pool.query(
