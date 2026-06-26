@@ -1,93 +1,149 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'defaultsecret';
+const pool = require('../config/db');
+const { authenticateToken } = require('../middleware/auth');
+const { validate, rules } = require('../middleware/validation');
 
 // Регистрация
-router.post('/register', async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Требуются имя пользователя и пароль' });
-  }
-  try {
-    const existing = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
-    if (existing.rows.length > 0) {
-      return res.status(400).json({ error: 'Пользователь уже существует' });
+router.post('/register', rules.auth.register, validate, async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
+
+        // Проверка уникальности
+        const userCheck = await pool.query(
+            'SELECT id FROM users WHERE username = $1 OR email = $2',
+            [username, email]
+        );
+
+        if (userCheck.rows.length > 0) {
+            const existing = userCheck.rows[0];
+            return res.status(409).json({
+                error: 'Пользователь с таким именем или email уже существует'
+            });
+        }
+
+        // Хеширование пароля (12 раундов соли для лучшей безопасности)
+        const salt = await bcrypt.genSalt(12);
+        const password_hash = await bcrypt.hash(password, salt);
+
+        // Создание пользователя (роль 'user' по умолчанию)
+        const result = await pool.query(
+            'INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
+            [username, email, password_hash, 'user']
+        );
+
+        const user = result.rows[0];
+
+        // Генерация токена
+        const token = jwt.sign(
+            { id: user.id, username: user.username, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        res.status(201).json({
+            message: 'Регистрация успешна',
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                role: user.role
+            },
+            token
+        });
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ error: 'Ошибка регистрации' });
     }
-    const hashed = await bcrypt.hash(password, 10);
-    const result = await pool.query(
-      "INSERT INTO users (username, password_hash, role) VALUES ($1, $2, 'user') RETURNING id, username, role",
-      [username, hashed]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 });
 
-// Вход (сохраняем ip и user-agent)
-router.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
+// Вход
+router.post('/login', rules.auth.login, validate, async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        // Поиск пользователя
+        const result = await pool.query(
+            'SELECT * FROM users WHERE username = $1 OR email = $1',
+            [username]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(401).json({
+                error: 'Неверное имя пользователя или пароль'
+            });
+        }
+
+        const user = result.rows[0];
+
+        // Проверка пароля
+        const isValidPassword = await bcrypt.compare(password, user.password_hash);
+        if (!isValidPassword) {
+            return res.status(401).json({
+                error: 'Неверное имя пользователя или пароль'
+            });
+        }
+
+        // Генерация токена
+        const token = jwt.sign(
+            { id: user.id, username: user.username, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        // Сохранение сессии
+        await pool.query(
+            'INSERT INTO user_sessions (user_id, token) VALUES ($1, $2)',
+            [user.id, token]
+        );
+
+        res.json({
+            message: 'Вход выполнен',
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                role: user.role
+            },
+            token
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Ошибка входа' });
     }
-    const user = result.rows[0];
-
-    if (user.is_blocked) {
-      return res.status(403).json({ error: 'Пользователь заблокирован' });
-    }
-
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) {
-      return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
-    }
-
-    // Сохраняем сессию с ip и user-agent
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-    const userAgent = req.headers['user-agent'] || '';
-    const session = await pool.query(
-      'INSERT INTO user_sessions (user_id, ip_address, user_agent) VALUES ($1, $2, $3) RETURNING id, login_time',
-      [user.id, ip, userAgent]
-    );
-    const { id: sessionId, login_time: loginTime } = session.rows[0];
-
-    const token = jwt.sign(
-      { userId: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-    res.json({
-      token,
-      sessionId,
-      loginTime,
-      user: { id: user.id, username: user.username, role: user.role }
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
 });
 
 // Выход
-router.post('/logout', async (req, res) => {
-  const { sessionId } = req.body;
-  try {
-    if (sessionId) {
-      await pool.query(
-        'UPDATE user_sessions SET logout_time = CURRENT_TIMESTAMP WHERE id = $1 AND logout_time IS NULL',
-        [sessionId]
-      );
-    } else {
-      return res.status(400).json({ error: 'sessionId не передан' });
+router.post('/logout', authenticateToken, async (req, res) => {
+    try {
+        const token = req.headers['authorization'].split(' ')[1];
+        await pool.query('DELETE FROM user_sessions WHERE token = $1', [token]);
+        res.json({ message: 'Выход выполнен' });
+    } catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({ error: 'Ошибка выхода' });
     }
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+});
+
+// Проверка токена
+router.get('/verify', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT id, username, email, role FROM users WHERE id = $1',
+            [req.user.id]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Пользователь не найден' });
+        }
+        
+        res.json({ user: result.rows[0] });
+    } catch (error) {
+        console.error('Verify error:', error);
+        res.status(500).json({ error: 'Ошибка проверки' });
+    }
 });
 
 module.exports = router;
