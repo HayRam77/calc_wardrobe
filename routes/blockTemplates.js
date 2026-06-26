@@ -1,139 +1,95 @@
+// routes/blockTemplates.js
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
-const { isAdmin } = require('../middleware/isAdmin');
-const multer = require('multer');
-const XLSX = require('xlsx');
+const auth = require('../middleware/auth');
+const isAdmin = require('../middleware/isAdmin');
+const { body } = require('express-validator');
+const validate = require('../middleware/validation');
 
-const upload = multer({ 
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+// Получить все шаблоны блоков
+router.get('/', auth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM block_templates ORDER BY id');
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка получения шаблонов блоков' });
+  }
 });
 
-// Получить все шаблоны
-router.get('/', async (req, res) => {
-    try {
-        const result = await pool.query(
-            'SELECT * FROM block_templates ORDER BY created_at DESC'
-        );
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching templates:', error);
-        res.status(500).json({ error: 'Ошибка получения шаблонов' });
-    }
+// Получить один шаблон
+router.get('/:id', auth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query('SELECT * FROM block_templates WHERE id = $1', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Шаблон не найден' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка получения шаблона' });
+  }
 });
 
-// Создать шаблон
-router.post('/', async (req, res) => {
-    try {
-        const { name, type, parameters } = req.body;
-        
-        const result = await pool.query(
-            'INSERT INTO block_templates (name, type, parameters) VALUES ($1, $2, $3) RETURNING *',
-            [name, type, JSON.stringify(parameters || {})]
-        );
-        
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        console.error('Error creating template:', error);
-        res.status(500).json({ error: 'Ошибка создания шаблона' });
-    }
+// Создать шаблон (только админ)
+router.post('/', auth, isAdmin, validate([
+  body('name').trim().notEmpty().withMessage('Название обязательно'),
+  body('description').optional().trim()
+]), async (req, res) => {
+  const { name, description } = req.body;
+  try {
+    const result = await pool.query(
+      'INSERT INTO block_templates (name, description) VALUES ($1, $2) RETURNING *',
+      [name, description || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка создания шаблона' });
+  }
 });
 
-// Обновить шаблон
-router.put('/:id', async (req, res) => {
-    try {
-        const { name, type, parameters } = req.body;
-        
-        const result = await pool.query(
-            'UPDATE block_templates SET name = $1, type = $2, parameters = $3 WHERE id = $4 RETURNING *',
-            [name, type, JSON.stringify(parameters || {}), req.params.id]
-        );
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Шаблон не найден' });
-        }
-        
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('Error updating template:', error);
-        res.status(500).json({ error: 'Ошибка обновления шаблона' });
+// Обновить шаблон (только админ)
+router.put('/:id', auth, isAdmin, validate([
+  body('name').optional().trim().notEmpty(),
+  body('description').optional().trim()
+]), async (req, res) => {
+  const { id } = req.params;
+  const fields = [];
+  const values = [];
+  let counter = 1;
+  for (const field of ['name', 'description']) {
+    if (req.body[field] !== undefined) {
+      fields.push(`${field} = $${counter++}`);
+      values.push(req.body[field]);
     }
+  }
+  if (fields.length === 0) return res.status(400).json({ message: 'Нет данных для обновления' });
+
+  values.push(id);
+  try {
+    const result = await pool.query(
+      `UPDATE block_templates SET ${fields.join(', ')} WHERE id = $${counter} RETURNING *`,
+      values
+    );
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Шаблон не найден' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка обновления шаблона' });
+  }
 });
 
 // Удалить шаблон (только админ)
-router.delete('/:id', isAdmin, async (req, res) => {
-    try {
-        const result = await pool.query(
-            'DELETE FROM block_templates WHERE id = $1 RETURNING *',
-            [req.params.id]
-        );
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Шаблон не найден' });
-        }
-        
-        res.json({ message: 'Шаблон удалён' });
-    } catch (error) {
-        console.error('Error deleting template:', error);
-        res.status(500).json({ error: 'Ошибка удаления шаблона' });
-    }
-});
-
-// Экспорт в Excel
-router.get('/export', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM block_templates');
-        
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.json_to_sheet(result.rows);
-        XLSX.utils.book_append_sheet(wb, ws, 'Templates');
-        
-        const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', 'attachment; filename=templates.xlsx');
-        res.send(buffer);
-    } catch (error) {
-        console.error('Error exporting templates:', error);
-        res.status(500).json({ error: 'Ошибка экспорта' });
-    }
-});
-
-// Импорт из Excel
-router.post('/import', upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'Файл не загружен' });
-        }
-        
-        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(sheet);
-        
-        const client = await pool.connect();
-        try {
-            await client.query('BEGIN');
-            
-            for (const row of data) {
-                await client.query(
-                    'INSERT INTO block_templates (name, type, parameters) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-                    [row.name, row.type, JSON.stringify(row.parameters || {})]
-                );
-            }
-            
-            await client.query('COMMIT');
-            res.json({ message: `Импортировано ${data.length} записей` });
-        } catch (error) {
-            await client.query('ROLLBACK');
-            throw error;
-        } finally {
-            client.release();
-        }
-    } catch (error) {
-        console.error('Error importing templates:', error);
-        res.status(500).json({ error: 'Ошибка импорта' });
-    }
+router.delete('/:id', auth, isAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM block_templates WHERE id = $1', [id]);
+    res.json({ message: 'Шаблон удалён' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка удаления шаблона' });
+  }
 });
 
 module.exports = router;

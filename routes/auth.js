@@ -3,83 +3,123 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
-const { authenticateToken } = require('../middleware/auth');
-const { validate, rules } = require('../middleware/validation');
+const auth = require('../middleware/auth');
+const { body } = require('express-validator');
+const validate = require('../middleware/validation');
 
-router.post('/register', rules.auth.register, validate, async (req, res) => {
-    try {
-        const { username, email, password } = req.body;
-        const userCheck = await pool.query(
-            'SELECT id FROM users WHERE username = $1 OR email = $2',
-            [username, email]
-        );
-        if (userCheck.rows.length > 0) {
-            return res.status(409).json({ error: 'Пользователь с таким именем или email уже существует' });
-        }
-        const salt = await bcrypt.genSalt(12);
-        const password_hash = await bcrypt.hash(password, salt);
-        const result = await pool.query(
-            'INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
-            [username, email, password_hash, 'user']
-        );
-        const user = result.rows[0];
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-        res.status(201).json({ message: 'Регистрация успешна', user: { id: user.id, username: user.username, email: user.email, role: user.role }, token });
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ error: 'Ошибка регистрации' });
+// Регистрация
+router.post('/register', validate([
+  body('username').trim().notEmpty().withMessage('Имя пользователя обязательно'),
+  body('email').isEmail().normalizeEmail().withMessage('Введите корректный email'),
+  body('password').isLength({ min: 6 }).withMessage('Пароль должен содержать минимум 6 символов')
+]), async (req, res) => {
+  const { username, email, password } = req.body;
+
+  try {
+    const userExists = await pool.query(
+      'SELECT id FROM users WHERE email = $1 OR username = $2',
+      [email, username]
+    );
+    if (userExists.rows.length > 0) {
+      return res.status(400).json({ message: 'Пользователь с таким email или именем уже существует' });
     }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const result = await pool.query(
+      'INSERT INTO users (username, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
+      [username, email, hashedPassword, 'user']
+    );
+
+    const token = jwt.sign(
+      { id: result.rows[0].id, role: result.rows[0].role },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.status(201).json({ token, user: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка сервера при регистрации' });
+  }
 });
 
-router.post('/login', rules.auth.login, validate, async (req, res) => {
-    try {
-        const { username, password } = req.body;
-        const result = await pool.query('SELECT * FROM users WHERE username = $1 OR email = $1', [username]);
-        if (result.rows.length === 0) {
-            return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
-        }
-        const user = result.rows[0];
-        const isValidPassword = await bcrypt.compare(password, user.password_hash);
-        if (!isValidPassword) {
-            return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
-        }
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-        await pool.query('INSERT INTO user_sessions (user_id, token) VALUES ($1, $2)', [user.id, token]);
-        res.json({ message: 'Вход выполнен', user: { id: user.id, username: user.username, email: user.email, role: user.role }, token });
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Ошибка входа' });
+// Вход
+router.post('/login', validate([
+  body('email').isEmail().normalizeEmail().withMessage('Введите корректный email'),
+  body('password').notEmpty().withMessage('Пароль обязателен')
+]), async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) {
+      return res.status(400).json({ message: 'Неверный email или пароль' });
     }
+
+    const user = result.rows[0];
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Неверный email или пароль' });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({ token, user: { id: user.id, username: user.username, email: user.email, role: user.role } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка сервера при входе' });
+  }
 });
 
-router.post('/logout', authenticateToken, async (req, res) => {
-    try {
-        const token = req.headers['authorization'].split(' ')[1];
-        await pool.query('DELETE FROM user_sessions WHERE token = $1', [token]);
-        res.json({ message: 'Выход выполнен' });
-    } catch (error) {
-        console.error('Logout error:', error);
-        res.status(500).json({ error: 'Ошибка выхода' });
+// Смена пароля
+router.put('/password', auth, validate([
+  body('currentPassword').notEmpty().withMessage('Текущий пароль обязателен'),
+  body('newPassword').isLength({ min: 6 }).withMessage('Новый пароль должен содержать минимум 6 символов')
+]), async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const userId = req.user.id;
+
+  try {
+    const result = await pool.query('SELECT password FROM users WHERE id = $1', [userId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Пользователь не найден' });
     }
+
+    const user = result.rows[0];
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Текущий пароль неверен' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+
+    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashedNewPassword, userId]);
+    res.json({ message: 'Пароль успешно изменён' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка сервера при смене пароля' });
+  }
 });
 
-router.get('/verify', authenticateToken, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT id, username, email, role FROM users WHERE id = $1', [req.user.id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: 'Пользователь не найден' });
-        res.json({ user: result.rows[0] });
-    } catch (error) {
-        console.error('Verify error:', error);
-        res.status(500).json({ error: 'Ошибка проверки' });
+// Проверка токена и получение данных пользователя
+router.get('/me', auth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, username, email, role FROM users WHERE id = $1', [req.user.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Пользователь не найден' });
     }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка сервера' });
+  }
 });
 
 module.exports = router;
