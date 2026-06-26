@@ -17,7 +17,7 @@ window.fetch = async function(url, options = {}) {
   if (response.status === 401) {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    window.location.hash = '#/login';
+    window.location.hash = '/login';
     throw new Error('Unauthorized');
   }
 

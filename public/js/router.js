@@ -1,10 +1,6 @@
-// public/js/router.js
-
 const Router = {
   routes: {
     '/home': 'home.html',
-    '/login': 'login.html',
-    '/register': 'register.html',
     '/projects': 'projects.html',
     '/project': 'project.html',
     '/cabinet': 'cabinet.html',
@@ -16,12 +12,12 @@ const Router = {
     '/admin-users': 'admin-users.html'
   },
 
-  publicPages: ['/login', '/register'],
+  publicPages: [],
   adminPages: ['/admin', '/admin-users'],
 
   async init() {
     window.addEventListener('hashchange', () => this.handle());
-    await this.handle(); // первая загрузка
+    await this.handle();
   },
 
   async handle() {
@@ -31,26 +27,22 @@ const Router = {
 
     const user = JSON.parse(localStorage.getItem('user') || 'null');
 
-    // Редирект на логин, если не авторизован и страница не публичная
-    if (!user && !this.publicPages.includes(route)) {
-      window.location.hash = '#/login';
+    // Если пользователь не авторизован — отправляем на чистую страницу логина
+    if (!user) {
+      window.location.href = '/login';
       return;
     }
 
     // Админ-страницы доступны только админу
-    if (user && user.role !== 'admin' && this.adminPages.includes(route)) {
+    if (user.role !== 'admin' && this.adminPages.includes(route)) {
       window.location.hash = '#/home';
       return;
     }
 
-    // Управление меню: скрываем для публичных страниц и неавторизованных
+    // Управление отображением меню
     const menuEl = document.getElementById('side-menu');
     if (menuEl) {
-      if (!user || this.publicPages.includes(route)) {
-        menuEl.style.display = 'none';
-      } else {
-        menuEl.style.display = '';
-      }
+      menuEl.style.display = user ? '' : 'none';
     }
 
     const pageFile = this.routes[route];
