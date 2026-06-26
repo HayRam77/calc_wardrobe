@@ -45,9 +45,6 @@
   }
   .overlay.show { display: block; }
   .content { margin-top: 50px; padding: 20px; }
-  .auth-container { max-width: 350px; margin: 40px auto; padding: 20px; background: white; border-radius: 8px; }
-  .auth-container input { width: 100%; padding: 8px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; }
-  .auth-container button { width: 100%; padding: 8px; background: #1a5f7a; color: white; border: none; border-radius: 4px; cursor: pointer; }
   .hidden { display: none !important; }
 
   .page-content { }
@@ -173,23 +170,10 @@
 
 <div class="content" id="contentContainer"></div>
 
-<div id="authModal" class="auth-container hidden" style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:1001; background:white; padding:20px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3);">
-  <h3 id="authTitle">Вход</h3>
-  <div id="authError" style="color:red; font-size:13px;"></div>
-  <input type="text" id="authUsername" placeholder="Имя пользователя">
-  <input type="password" id="authPassword" placeholder="Пароль">
-  <button id="authSubmitBtn">Войти</button>
-  <p style="text-align:center; font-size:13px;">
-    <span id="toggleAuthMode" style="color:#1a5f7a; cursor:pointer;">Нет аккаунта? Зарегистрироваться</span>
-  </p>
-  <button id="closeAuthModal" style="background:#888; margin-top:5px;">Закрыть</button>
-</div>
-
 <script>
 var API_BASE = '/api';
 var AUTH = API_BASE + '/auth';
 var currentUser = null;
-var authMode = 'login';
 
 var burgerBtn = document.getElementById('burgerBtn');
 var sidebar = document.getElementById('sidebar');
@@ -197,12 +181,6 @@ var overlay = document.getElementById('overlay');
 var pageTitle = document.getElementById('pageTitle');
 var usernameDisplay = document.getElementById('usernameDisplay');
 var authActionBtn = document.getElementById('authActionBtn');
-var authModal = document.getElementById('authModal');
-var authTitle = document.getElementById('authTitle');
-var authSubmitBtn = document.getElementById('authSubmitBtn');
-var toggleAuthMode = document.getElementById('toggleAuthMode');
-var authError = document.getElementById('authError');
-var closeAuthModalBtn = document.getElementById('closeAuthModal');
 
 burgerBtn.addEventListener('click', function() {
   sidebar.classList.toggle('open');
@@ -229,68 +207,14 @@ function updateUserUI() {
 
 authActionBtn.addEventListener('click', function() {
   if (currentUser) {
-    var sid = localStorage.getItem('sessionId');
-    if (sid) fetch(AUTH+'/logout', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sessionId:sid}) }).catch(function(){});
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    localStorage.removeItem('sessionId');
     currentUser = null;
     updateUserUI();
-    loadPage(location.pathname || '/');
+    window.location.href = '/login.html';
     return;
   }
-  authMode = 'login';
-  authTitle.textContent = 'Вход';
-  authSubmitBtn.textContent = 'Войти';
-  toggleAuthMode.textContent = 'Нет аккаунта? Зарегистрироваться';
-  authError.textContent = '';
-  authModal.classList.remove('hidden');
-});
-
-toggleAuthMode.addEventListener('click', function() {
-  authMode = authMode === 'login' ? 'register' : 'login';
-  authTitle.textContent = authMode === 'login' ? 'Вход' : 'Регистрация';
-  authSubmitBtn.textContent = authMode === 'login' ? 'Войти' : 'Зарегистрироваться';
-  toggleAuthMode.textContent = authMode === 'login' ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
-  authError.textContent = '';
-});
-
-closeAuthModalBtn.addEventListener('click', function() {
-  authModal.classList.add('hidden');
-});
-
-authSubmitBtn.addEventListener('click', async function() {
-  var u = document.getElementById('authUsername').value.trim();
-  var p = document.getElementById('authPassword').value.trim();
-  if (!u || !p) { authError.textContent = 'Заполните все поля'; return; }
-  var endpoint = authMode === 'login' ? '/login' : '/register';
-  try {
-    var res = await fetch(AUTH + endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: u, password: p })
-    });
-    var data = await res.json();
-    if (!res.ok) { authError.textContent = data.error || 'Ошибка'; return; }
-    if (data.token) {
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      if (data.sessionId) localStorage.setItem('sessionId', data.sessionId);
-      currentUser = data.user;
-      updateUserUI();
-      authModal.classList.add('hidden');
-      loadPage(location.pathname || '/');
-    } else {
-      authMode = 'login';
-      authTitle.textContent = 'Вход';
-      authSubmitBtn.textContent = 'Войти';
-      toggleAuthMode.textContent = 'Нет аккаунта? Зарегистрироваться';
-      authError.textContent = '';
-      document.getElementById('authUsername').value = '';
-      document.getElementById('authPassword').value = '';
-      alert('Регистрация успешна! Теперь войдите.');
-    }
-  } catch (e) { authError.textContent = 'Ошибка соединения'; }
+  window.location.href = '/login.html';
 });
 
 function navigateTo(url) { history.pushState(null, '', url); loadPage(url); }
@@ -365,8 +289,10 @@ window.addEventListener('load', function() {
   if (token && user) {
     currentUser = user;
     updateUserUI();
+    loadPage(location.pathname || '/');
+  } else {
+    window.location.href = '/login.html';
   }
-  loadPage(location.pathname || '/');
 });
 </script>
 </body>

@@ -1,93 +1,111 @@
-// public/js/app.js
+// Файл: public/js/app.js
+const API_BASE = '/api';
 
-const API_URL = '/api';
-
-// Глобальный перехват fetch (401 = авто-выход)
-const originalFetch = window.fetch;
-window.fetch = async function(url, options = {}) {
-  const token = localStorage.getItem('token');
-  const headers = options.headers || {};
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  options.headers = headers;
-
-  const response = await originalFetch(url, options);
-
-  if (response.status === 401) {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    window.location.hash = '/login';
-    throw new Error('Unauthorized');
-  }
-
-  return response;
-};
-
+// Глобальные переменные
 let currentUser = null;
 
-function initApp() {
-  const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
-  if (token && user) {
-    currentUser = user;
+// Инициализация приложения
+document.addEventListener('DOMContentLoaded', async () => {
+  // Проверяем авторизацию
+  const userData = localStorage.getItem('user');
+  if (userData) {
+    try {
+      currentUser = JSON.parse(userData);
+    } catch (e) {
+      console.error('Error parsing user data:', e);
+      localStorage.removeItem('user');
+    }
   }
 
-  window.updateUser = (newUser) => {
-    currentUser = newUser;
-    renderMenu();
-    if (newUser) {
-      window.location.hash = '#/home';
+  // Глобальный перехват fetch для добавления токена
+  const originalFetch = window.fetch;
+  window.fetch = async (url, options = {}) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      options.headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`
+      };
     }
+
+    const response = await originalFetch(url, options);
+
+    // Если получаем 401, разлогиниваем пользователя
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      currentUser = null;
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+
+    return response;
   };
 
-  renderMenu();
-
-  // Запуск роутера только после определения меню
-  if (typeof Router !== 'undefined' && Router.init) {
-    Router.init();
+  // Инициализируем роутер
+  if (typeof Router !== 'undefined') {
+    await Router.init();
   }
-}
 
+  // Рендерим меню
+  renderMenu();
+});
+
+// Рендеринг бокового меню
 function renderMenu() {
   const menuEl = document.getElementById('side-menu');
   if (!menuEl) return;
 
   if (!currentUser) {
-    menuEl.innerHTML = '';           // очищаем меню
-    menuEl.style.display = 'none';  // скрываем блок
+    menuEl.style.display = 'none';
     return;
   }
 
-  menuEl.style.display = ''; // показываем
-  let html = `
-    <a href="#/home">🏠 Главная</a>
-    <a href="#/projects">📁 Проекты</a>
-    <a href="#/manufacturers">🏭 Производители</a>
-    <a href="#/components">🧩 Компоненты</a>
-    <a href="#/automation">⚙️ Автоматизация</a>
+  menuEl.style.display = '';
+  const menuList = menuEl.querySelector('ul');
+  if (!menuList) return;
+
+  const isAdmin = currentUser.role === 'admin';
+  
+  let menuHTML = `
+    <li class="nav-item">
+      <a class="nav-link" href="#/home">🏠 Главная</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#/projects">📋 Проекты</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#/manufacturers">🏭 Производители</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#/components">🔧 Компоненты</a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" href="#/automation">⚡ Автоматизация</a>
+    </li>
   `;
 
-  if (currentUser.role === 'admin') {
-    html += `<a href="#/admin">👑 Администрирование</a>`;
+  if (isAdmin) {
+    menuHTML += `
+      <li class="nav-item mt-3">
+        <a class="nav-link" href="#/admin">👑 Администрирование</a>
+      </li>
+    `;
   }
 
-  html += `<a href="#" id="logout-btn">🚪 Выход (${currentUser.username})</a>`;
-  menuEl.innerHTML = html;
+  menuHTML += `
+    <li class="nav-item mt-3">
+      <a class="nav-link" href="#" onclick="logout()">🚪 Выход</a>
+    </li>
+  `;
 
-  const logoutBtn = document.getElementById('logout-btn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      if (typeof Auth !== 'undefined' && Auth.logout) {
-        Auth.logout();
-      } else {
-        localStorage.clear();
-        window.location.hash = '#/login';
-        renderMenu();
-      }
-    });
-  }
+  menuList.innerHTML = menuHTML;
 }
 
-document.addEventListener('DOMContentLoaded', initApp);
+// Выход из системы
+function logout() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  currentUser = null;
+  window.location.href = '/login';
+}

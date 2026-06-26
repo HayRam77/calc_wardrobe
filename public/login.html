@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Вход в систему</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  .login-card {
+    background: white;
+    border-radius: 15px;
+    padding: 2.5rem;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    width: 100%;
+    max-width: 400px;
+  }
+  .login-card h2 {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: #333;
+    font-size: 1.5rem;
+  }
+  .mb-3 { margin-bottom: 1rem; }
+  .form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #555;
+    font-size: 0.9rem;
+  }
+  .form-control {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+  }
+  .form-control:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    padding: 0.8rem;
+    font-size: 1.1rem;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 1rem;
+    font-weight: 500;
+    transition: opacity 0.2s;
+  }
+  .btn-primary:hover { opacity: 0.9; }
+  .text-danger {
+    color: #d32f2f;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+  }
+  .text-center { text-align: center; }
+  .mt-3 { margin-top: 1rem; }
+  .w-100 { width: 100%; }
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <h2>Вход в систему</h2>
+  <form id="loginForm">
+    <div class="mb-3">
+      <label for="loginUsername" class="form-label">Имя пользователя</label>
+      <input type="text" class="form-control" id="loginUsername" placeholder="Введите логин" required autocomplete="username">
+    </div>
+    <div class="mb-3">
+      <label for="loginPassword" class="form-label">Пароль</label>
+      <input type="password" class="form-control" id="loginPassword" placeholder="Введите пароль" required autocomplete="current-password">
+    </div>
+    <button type="submit" class="btn-primary w-100">Войти</button>
+  </form>
+  <div id="loginError" class="text-danger mt-3 text-center" style="display: none;"></div>
+</div>
+
+<script>
+  document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorDiv = document.getElementById('loginError');
+    errorDiv.style.display = 'none';
+
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    if (!username || !password) {
+      errorDiv.textContent = 'Заполните все поля';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Ошибка входа');
+      }
+
+      localStorage.setItem('token', data.token);
+      try {
+        const payload = JSON.parse(atob(data.token.split('.')[1]));
+        const user = {
+          id: payload.id,
+          username: payload.username,
+          email: payload.email,
+          role: payload.role
+        };
+        localStorage.setItem('user', JSON.stringify(user));
+      } catch (e) {}
+
+      window.location.href = '/';
+    } catch (err) {
+      errorDiv.textContent = err.message;
+      errorDiv.style.display = 'block';
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,7 +1,10 @@
 // public/js/router.js
+
 const Router = {
   routes: {
     '/home': 'home.html',
+    '/login': 'login.html',
+    '/register': 'register.html',
     '/projects': 'projects.html',
     '/project': 'project.html',
     '/cabinet': 'cabinet.html',
@@ -12,12 +15,13 @@ const Router = {
     '/admin': 'admin.html',
     '/admin-users': 'admin-users.html'
   },
-  publicPages: [],
+
+  publicPages: ['/login', '/register'],
   adminPages: ['/admin', '/admin-users'],
 
   async init() {
     window.addEventListener('hashchange', () => this.handle());
-    await this.handle();
+    await this.handle(); // первая загрузка
   },
 
   async handle() {
@@ -26,19 +30,27 @@ const Router = {
     const route = '/' + (base || 'home');
 
     const user = JSON.parse(localStorage.getItem('user') || 'null');
-    if (!user) {
-      window.location.href = '/login';
+
+    // Редирект на логин, если не авторизован и страница не публичная
+    if (!user && !this.publicPages.includes(route)) {
+      window.location.hash = '#/login';
       return;
     }
 
-    if (user.role !== 'admin' && this.adminPages.includes(route)) {
+    // Админ-страницы доступны только админу
+    if (user && user.role !== 'admin' && this.adminPages.includes(route)) {
       window.location.hash = '#/home';
       return;
     }
 
+    // Управление меню: скрываем для публичных страниц и неавторизованных
     const menuEl = document.getElementById('side-menu');
     if (menuEl) {
-      menuEl.style.display = user ? '' : 'none';
+      if (!user || this.publicPages.includes(route)) {
+        menuEl.style.display = 'none';
+      } else {
+        menuEl.style.display = '';
+      }
     }
 
     const pageFile = this.routes[route];
@@ -51,21 +63,9 @@ const Router = {
       const res = await fetch(`/pages/${pageFile}`);
       if (!res.ok) throw new Error('Ошибка загрузки');
       const html = await res.text();
-
-      const content = document.getElementById('app-content');
-      content.innerHTML = html;
-
-      // Выполняем все скрипты из загруженного HTML
-      content.querySelectorAll('script').forEach(oldScript => {
-        const newScript = document.createElement('script');
-        for (const attr of oldScript.attributes) {
-          newScript.setAttribute(attr.name, attr.value);
-        }
-        newScript.textContent = oldScript.textContent;
-        oldScript.parentNode.replaceChild(newScript, oldScript);
-      });
-
+      document.getElementById('app-content').innerHTML = html;
       window.pageParam = param || null;
+
       if (typeof window.pageInit === 'function') {
         window.pageInit();
       }
