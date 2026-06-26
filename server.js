@@ -28,7 +28,7 @@ app.use('/api/projects', authenticateToken, projectRoutes);
 app.use('/api/block-templates', authenticateToken, blockTemplateRoutes);
 app.use('/api/cabinets', authenticateToken, cabinetRoutes);
 app.use('/api/component-types', authenticateToken, componentTypeRoutes);
-app.use('/api/manufacturers', authenticateToken, manufacturerRoutes);
+app.use('/api/manufacturers', manufacturerRoutes);  // без authenticateToken — внутри свой checkToken
 app.use('/api/parameters', authenticateToken, parameterRoutes);
 app.use('/api/admin', authenticateToken, adminRoutes);
 
