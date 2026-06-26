@@ -12,7 +12,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 router.get('/', async (req, res) => {
     try {
         let result;
-        if (req.user.role === 'admin' && req.query.all === 'true') {
+        if (req.user.role === 'admin') {
             result = await pool.query('SELECT p.*, u.username as owner_name FROM projects p JOIN users u ON p.user_id = u.id ORDER BY p.created_at DESC');
         } else {
             result = await pool.query('SELECT * FROM projects WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
