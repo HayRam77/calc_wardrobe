@@ -1,230 +1,167 @@
-<div class="page-content">
-    <div class="page-header">
-        <h2>Производители</h2>
-        <button id="addManufacturerBtn" class="btn btn-primary" style="display:none;">Добавить производителя</button>
+<div class="page-container">
+    <h2>Производители</h2>
+    
+    <div class="toolbar" style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <button id="addBtn" style="background: #1a5f7a; color: white;">+ Добавить</button>
+        <button id="exportBtn" style="background: #28a745; color: white;">📥 Экспорт Excel</button>
+        <label style="background: #ffc107; color: black; padding: 6px 12px; border-radius: 4px; cursor: pointer;">
+            📤 Импорт Excel
+            <input type="file" id="importFile" accept=".xlsx,.xls" style="display: none;">
+        </label>
     </div>
-
-    <div id="manufacturersTableContainer" class="table-container">
-        <table id="manufacturersTable" class="data-table">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Название</th>
-                    <th class="actions-col" style="display:none;">Действия</th>
-                </tr>
-            </thead>
-            <tbody id="manufacturersTableBody">
-                <tr><td colspan="3" class="loading">Загрузка...</td></tr>
-            </tbody>
-        </table>
-    </div>
-    <div id="manufacturersEmpty" class="empty-state" style="display:none;">
-        <p>Список производителей пуст</p>
-    </div>
-</div>
-
-<!-- Модальное окно для добавления/редактирования -->
-<div id="manufacturerModal" class="modal" style="display:none;">
-    <div class="modal-content">
-        <span class="modal-close">&times;</span>
-        <h3 id="manufacturerModalTitle">Добавить производителя</h3>
-        <form id="manufacturerForm">
-            <input type="hidden" id="manufacturerId">
-            <div class="form-group">
-                <label for="manufacturerName">Название</label>
-                <input type="text" id="manufacturerName" required maxlength="255" placeholder="Введите название">
-            </div>
-            <div id="manufacturerError" class="error-message" style="display:none;"></div>
-            <div class="form-actions">
-                <button type="button" id="manufacturerCancelBtn" class="btn btn-secondary">Отмена</button>
-                <button type="submit" class="btn btn-primary">Сохранить</button>
-            </div>
-        </form>
+    
+    <table id="manufacturersTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Название</th>
+                <th>Страна</th>
+                <th>Сайт</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    
+    <!-- Модальное окно -->
+    <div class="modal" id="manufacturerModal">
+        <div class="modal-content">
+            <h3 id="modalTitle">Добавить производителя</h3>
+            <form id="manufacturerForm">
+                <input type="hidden" id="manufacturerId">
+                <label>Название: <input type="text" id="manufacturerName" required style="width: 100%; padding: 8px; margin: 5px 0;"></label>
+                <label>Страна: <input type="text" id="manufacturerCountry" style="width: 100%; padding: 8px; margin: 5px 0;"></label>
+                <label>Сайт: <input type="text" id="manufacturerWebsite" style="width: 100%; padding: 8px; margin: 5px 0;"></label>
+                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button type="submit" style="background: #1a5f7a; color: white;">Сохранить</button>
+                    <button type="button" onclick="closeManufacturerModal()" style="background: #6c757d; color: white;">Отмена</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
 <script>
-(function() {
-    // Используем глобальную API_BASE из index.html
-    const manufacturersTableBody = document.getElementById('manufacturersTableBody');
-    const manufacturersEmpty = document.getElementById('manufacturersEmpty');
-    const addBtn = document.getElementById('addManufacturerBtn');
-    const actionsCols = document.querySelectorAll('#manufacturersTable .actions-col');
-    const modal = document.getElementById('manufacturerModal');
-    const modalTitle = document.getElementById('manufacturerModalTitle');
-    const form = document.getElementById('manufacturerForm');
-    const manufacturerId = document.getElementById('manufacturerId');
-    const manufacturerName = document.getElementById('manufacturerName');
-    const manufacturerError = document.getElementById('manufacturerError');
-    const cancelBtn = document.getElementById('manufacturerCancelBtn');
-    const closeBtn = document.querySelector('#manufacturerModal .modal-close');
+var token = localStorage.getItem('token');
+var currentUser = JSON.parse(localStorage.getItem('user') || 'null');
 
-    let manufacturers = [];
+async function loadManufacturers() {
+    try {
+        var response = await fetch('/api/manufacturers', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        var data = await response.json();
+        var tbody = document.querySelector('#manufacturersTable tbody');
+        tbody.innerHTML = '';
+        data.forEach(function(m) {
+            tbody.innerHTML += '<tr>' +
+                '<td>' + m.id + '</td>' +
+                '<td>' + m.name + '</td>' +
+                '<td>' + (m.country || '') + '</td>' +
+                '<td>' + (m.website ? '<a href="' + m.website + '" target="_blank">' + m.website + '</a>' : '') + '</td>' +
+                '<td>' +
+                    '<button onclick="editManufacturer(' + m.id + ')" style="background: #17a2b8; color: white; margin-right: 5px;">✎</button>' +
+                    '<button onclick="deleteManufacturer(' + m.id + ')" style="background: #dc3545; color: white;">✕</button>' +
+                '</td>' +
+            '</tr>';
+        });
+    } catch (err) { console.error(err); }
+}
 
-    // Проверка на админа
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const isAdmin = user && user.role === 'admin';
+function closeManufacturerModal() {
+    document.getElementById('manufacturerModal').classList.remove('active');
+}
 
-    if (isAdmin) {
-        addBtn.style.display = 'inline-block';
-        actionsCols.forEach(col => col.style.display = '');
-    }
+document.getElementById('addBtn').addEventListener('click', function() {
+    document.getElementById('modalTitle').textContent = 'Добавить производителя';
+    document.getElementById('manufacturerId').value = '';
+    document.getElementById('manufacturerName').value = '';
+    document.getElementById('manufacturerCountry').value = '';
+    document.getElementById('manufacturerWebsite').value = '';
+    document.getElementById('manufacturerModal').classList.add('active');
+});
 
-    // Загрузка списка
-    async function loadManufacturers() {
-        try {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                manufacturersTableBody.innerHTML = '<tr><td colspan="3">Необходимо авторизоваться</td></tr>';
-                return;
-            }
-
-            const response = await fetch(API_BASE + '/manufacturers', {
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
-
-            if (!response.ok) throw new Error('Ошибка загрузки');
-
-            manufacturers = await response.json();
-            renderTable();
-        } catch (err) {
-            console.error(err);
-            manufacturersTableBody.innerHTML = '<tr><td colspan="3" class="error">Ошибка загрузки данных</td></tr>';
-        }
-    }
-
-    // Рендер таблицы
-    function renderTable() {
-        if (manufacturers.length === 0) {
-            document.getElementById('manufacturersTableContainer').style.display = 'none';
-            manufacturersEmpty.style.display = 'block';
-            return;
-        }
-        document.getElementById('manufacturersTableContainer').style.display = '';
-        manufacturersEmpty.style.display = 'none';
-
-        manufacturersTableBody.innerHTML = manufacturers.map(m => `
-            <tr>
-                <td>${m.id}</td>
-                <td>${escapeHtml(m.name)}</td>
-                ${isAdmin ? `
-                <td class="actions-col">
-                    <button class="btn btn-sm btn-edit" onclick="editManufacturer(${m.id})">✏️</button>
-                    <button class="btn btn-sm btn-delete" onclick="deleteManufacturer(${m.id})">🗑️</button>
-                </td>` : ''}
-            </tr>
-        `).join('');
-    }
-
-    function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
-
-    // Открытие модалки для добавления
-    addBtn.addEventListener('click', () => {
-        manufacturerId.value = '';
-        manufacturerName.value = '';
-        manufacturerError.style.display = 'none';
-        modalTitle.textContent = 'Добавить производителя';
-        modal.style.display = 'flex';
-        manufacturerName.focus();
+async function editManufacturer(id) {
+    var response = await fetch('/api/manufacturers', {
+        headers: { 'Authorization': 'Bearer ' + token }
     });
-
-    // Закрытие модалки
-    function closeModal() {
-        modal.style.display = 'none';
+    var data = await response.json();
+    var m = data.find(function(item) { return item.id === id; });
+    if (m) {
+        document.getElementById('modalTitle').textContent = 'Редактировать производителя';
+        document.getElementById('manufacturerId').value = m.id;
+        document.getElementById('manufacturerName').value = m.name;
+        document.getElementById('manufacturerCountry').value = m.country || '';
+        document.getElementById('manufacturerWebsite').value = m.website || '';
+        document.getElementById('manufacturerModal').classList.add('active');
     }
-    cancelBtn.addEventListener('click', closeModal);
-    closeBtn.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal();
-    });
+}
 
-    // Отправка формы
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        manufacturerError.style.display = 'none';
-
-        const id = manufacturerId.value;
-        const name = manufacturerName.value.trim();
-
-        if (!name) {
-            showError('Введите название');
-            return;
-        }
-
-        try {
-            const token = localStorage.getItem('token');
-            const url = id 
-                ? API_BASE + '/manufacturers/' + id 
-                : API_BASE + '/manufacturers';
-            const method = id ? 'PUT' : 'POST';
-
-            const response = await fetch(url, {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token
-                },
-                body: JSON.stringify({ name })
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Ошибка сохранения');
-            }
-
-            closeModal();
-            await loadManufacturers();
-        } catch (err) {
-            showError(err.message);
-        }
-    });
-
-    function showError(msg) {
-        manufacturerError.textContent = msg;
-        manufacturerError.style.display = 'block';
+document.getElementById('manufacturerForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    var id = document.getElementById('manufacturerId').value;
+    var name = document.getElementById('manufacturerName').value;
+    var country = document.getElementById('manufacturerCountry').value;
+    var website = document.getElementById('manufacturerWebsite').value;
+    
+    var url = '/api/manufacturers';
+    var method = 'POST';
+    if (id) {
+        url += '/' + id;
+        method = 'PUT';
     }
+    
+    var response = await fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ name: name, country: country, website: website })
+    });
+    
+    if (response.ok) {
+        closeManufacturerModal();
+        loadManufacturers();
+    } else {
+        var err = await response.json();
+        alert(err.error);
+    }
+});
 
-    // Глобальные функции для кнопок в таблице
-    window.editManufacturer = function(id) {
-        const m = manufacturers.find(x => x.id === id);
-        if (!m) return;
-        manufacturerId.value = m.id;
-        manufacturerName.value = m.name;
-        manufacturerError.style.display = 'none';
-        modalTitle.textContent = 'Редактировать производителя';
-        modal.style.display = 'flex';
-        manufacturerName.focus();
-    };
-
-    window.deleteManufacturer = async function(id) {
-        const m = manufacturers.find(x => x.id === id);
-        if (!m) return;
-        if (!confirm('Удалить производителя "' + m.name + '"?')) return;
-
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(API_BASE + '/manufacturers/' + id, {
-                method: 'DELETE',
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
-
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || 'Ошибка удаления');
-            }
-
-            await loadManufacturers();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    // Загрузка при открытии страницы
+async function deleteManufacturer(id) {
+    if (!confirm('Удалить производителя?')) return;
+    await fetch('/api/manufacturers/' + id, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
     loadManufacturers();
-})();
+}
+
+// Экспорт
+document.getElementById('exportBtn').addEventListener('click', function() {
+    window.open('/api/manufacturers/export?token=' + token);
+});
+
+// Импорт
+document.getElementById('importFile').addEventListener('change', async function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    
+    var formData = new FormData();
+    formData.append('file', file);
+    
+    var response = await fetch('/api/manufacturers/import', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: formData
+    });
+    
+    var data = await response.json();
+    alert(data.message || data.error);
+    loadManufacturers();
+    e.target.value = '';
+});
+
+loadManufacturers();
 </script>
