@@ -3,9 +3,6 @@
 const Auth = {
   /**
    * Авторизация пользователя
-   * @param {string} email
-   * @param {string} password
-   * @returns {Promise<object>} данные пользователя
    */
   async login(email, password) {
     const res = await fetch('/api/auth/login', {
@@ -21,8 +18,9 @@ const Auth = {
 
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
-    // Обновляем currentUser в app.js
-    if (window.updateUser) {
+
+    // Обновляем состояние в app.js
+    if (typeof window.updateUser === 'function') {
       window.updateUser(data.user);
     }
 
@@ -46,13 +44,16 @@ const Auth = {
 
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
-    if (window.updateUser) window.updateUser(data.user);
+
+    if (typeof window.updateUser === 'function') {
+      window.updateUser(data.user);
+    }
 
     return data.user;
   },
 
   /**
-   * Смена пароля (требует авторизации)
+   * Смена пароля
    */
   async changePassword(currentPassword, newPassword) {
     const res = await fetch('/api/auth/password', {
@@ -69,12 +70,14 @@ const Auth = {
   },
 
   /**
-   * Выход из системы
+   * Выход
    */
   logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    if (window.updateUser) window.updateUser(null);
+    if (typeof window.updateUser === 'function') {
+      window.updateUser(null);
+    }
     window.location.hash = '#/login';
   }
 };

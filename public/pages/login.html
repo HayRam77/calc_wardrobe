@@ -1,0 +1,53 @@
+<!-- public/pages/login.html -->
+<div class="auth-form">
+  <h2>Вход в систему</h2>
+  <form id="loginForm">
+    <div class="form-group">
+      <label for="loginEmail">Email</label>
+      <input type="email" id="loginEmail" placeholder="Введите email" required>
+    </div>
+    <div class="form-group">
+      <label for="loginPassword">Пароль</label>
+      <input type="password" id="loginPassword" placeholder="Пароль" required>
+    </div>
+    <div id="loginError" class="error-message" style="display:none;"></div>
+    <button type="submit" class="btn btn-primary">Войти</button>
+  </form>
+  <p style="margin-top: 10px;">
+    Нет аккаунта? <a href="#/register">Зарегистрироваться</a>
+  </p>
+</div>
+
+<script>
+(function() {
+  const form = document.getElementById('loginForm');
+  const errorDiv = document.getElementById('loginError');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    if (!email || !password) {
+      errorDiv.textContent = 'Заполните все поля';
+      errorDiv.style.display = 'block';
+      return;
+    }
+
+    try {
+      // Используем глобальный объект Auth из auth.js
+      if (typeof Auth === 'undefined') {
+        throw new Error('Модуль авторизации не загружен');
+      }
+      await Auth.login(email, password);
+      // После успешного входа Auth.login обновит состояние и вызовет updateUser, 
+      // а затем перенаправит на главную (если в updateUser задан редирект на #/home)
+      // Если редирект не сработал, делаем его принудительно:
+      window.location.hash = '#/home';
+    } catch (err) {
+      errorDiv.textContent = err.message;
+      errorDiv.style.display = 'block';
+    }
+  });
+})();
+</script>
