@@ -1,33 +1,220 @@
-<div id="projectsTable">Загрузка...</div>
+<div class="page-content">
+    <h2>Проекты</h2>
+    <div style="margin-bottom:10px;">
+        <button id="addProjectBtn" class="btn btn-primary" style="display: inline-block;">Создать проект</button>
+        <button id="exportBtn" class="btn btn-secondary" style="display: inline-block;">Экспорт Excel</button>
+        <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls">
+        <button id="importBtn" class="btn btn-secondary" style="display: inline-block;">Импорт Excel</button>
+    </div>
+    <div id="projectsTable" style="margin-top:15px;"></div>
+</div>
+
+<div id="projectModal" class="modal">
+    <div class="modal-content" style="max-width:500px;">
+        <span class="modal-close">&times;</span>
+        <h3 id="projectModalTitle">Создать проект</h3>
+        <form id="projectForm">
+            <input type="hidden" id="projectId">
+            <div class="form-group">
+                <label for="projectName">Название *</label>
+                <input type="text" id="projectName" required maxlength="255">
+            </div>
+            <div class="form-group">
+                <label for="projectDescription">Описание</label>
+                <textarea id="projectDescription" maxlength="1000" rows="3"></textarea>
+            </div>
+            <div id="projectError" class="error-message" style="display:none;"></div>
+            <div class="form-actions" style="margin-top:15px;">
+                <button type="button" id="projectCancelBtn" class="btn btn-secondary">Отмена</button>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
-(async function() {
-  const token = localStorage.getItem('token');
-  const container = document.getElementById('projectsTable');
-  if (!token) {
-    container.innerHTML = '<p>Для просмотра проектов необходимо <a href="#" onclick="document.getElementById(\'authActionBtn\').click()">войти</a>.</p>';
-    return;
-  }
-  try {
-    const res = await fetch('/api/projects', { headers: { 'Authorization': 'Bearer ' + token } });
-    if (!res.ok) throw new Error('Ошибка загрузки');
-    const projects = await res.json();
-    if (projects.length === 0) {
-      container.innerHTML = '<p>У вас пока нет проектов.</p>';
-      return;
+(function() {
+    var token = localStorage.getItem('token');
+    var user = JSON.parse(localStorage.getItem('user') || '{}');
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
     }
-    let html = '<table border="1" cellpadding="6" cellspacing="0"><tr><th>Название</th><th>Напряжение</th><th>Примечание</th><th>Дата создания</th></tr>';
-    projects.forEach(p => {
-      html += `<tr>
-        <td>${p.name}</td>
-        <td>${p.voltage} В</td>
-        <td>${p.remark || ''}</td>
-        <td>${new Date(p.created_at).toLocaleString('ru-RU')}</td>
-      </tr>`;
+
+    // ==================== ЗАГРУЗКА ТАБЛИЦЫ ====================
+    async function loadProjects() {
+        var container = document.getElementById('projectsTable');
+        if (!container) return;
+        try {
+            var res = await fetch('/api/projects', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) throw new Error('Ошибка загрузки');
+            var data = await res.json();
+
+            if (data.length === 0) {
+                container.innerHTML = '<p>Нет проектов.</p>';
+                return;
+            }
+
+            var html = '<div class="table-container"><table class="data-table"><thead><tr>';
+            html += '<th>ID</th><th>Название</th><th>Описание</th><th>Дата создания</th>';
+            html += '<th>Действия</th>';
+            html += '</tr></thead><tbody>';
+
+            data.forEach(function(p) {
+                html += '<tr>';
+                html += '<td>' + p.id + '</td>';
+                html += '<td><a href="/project/' + p.id + '" class="spa-link">' + escapeHtml(p.name) + '</a></td>';
+                html += '<td>' + escapeHtml(p.description || '') + '</td>';
+                html += '<td>' + new Date(p.created_at).toLocaleDateString('ru-RU') + '</td>';
+                html += '<td>';
+                html += '<button class="btn btn-sm btn-edit edit-project-btn" data-id="' + p.id + '">✏️</button> ';
+                html += '<button class="btn btn-sm btn-delete delete-project-btn" data-id="' + p.id + '">🗑️</button>';
+                html += '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+
+            container.querySelectorAll('.edit-project-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() { openProjectModal(this.dataset.id); });
+            });
+            container.querySelectorAll('.delete-project-btn').forEach(function(btn) {
+                btn.addEventListener('click', async function() {
+                    if (!confirm('Удалить проект?')) return;
+                    try {
+                        await fetch('/api/projects/' + this.dataset.id, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+                        loadProjects();
+                    } catch(e) { alert('Ошибка удаления'); }
+                });
+            });
+        } catch(e) {
+            container.innerHTML = '<p style="color:red;">Ошибка загрузки проектов</p>';
+        }
+    }
+
+    // ==================== МОДАЛЬНОЕ ОКНО ====================
+    var modal = document.getElementById('projectModal');
+    var modalTitle = document.getElementById('projectModalTitle');
+    var form = document.getElementById('projectForm');
+    var errorDiv = document.getElementById('projectError');
+
+    function closeModal() { modal.classList.remove('active'); }
+    function openModal() { modal.classList.add('active'); }
+
+    document.querySelector('#projectModal .modal-close').addEventListener('click', closeModal);
+    document.getElementById('projectCancelBtn').addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
+
+    window.openProjectModal = function(id) {
+        errorDiv.style.display = 'none';
+        form.reset();
+        document.getElementById('projectId').value = '';
+
+        if (id) {
+            modalTitle.textContent = 'Редактировать проект';
+            document.getElementById('projectId').value = id;
+            fetch('/api/projects/' + id, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            }).then(function(res) { return res.json(); })
+              .then(function(p) {
+                document.getElementById('projectName').value = p.name || '';
+                document.getElementById('projectDescription').value = p.description || '';
+            });
+        } else {
+            modalTitle.textContent = 'Создать проект';
+        }
+        openModal();
+    };
+
+    document.getElementById('addProjectBtn').addEventListener('click', function() { openProjectModal(); });
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        errorDiv.style.display = 'none';
+
+        var id = document.getElementById('projectId').value;
+        var name = document.getElementById('projectName').value.trim();
+        if (!name) {
+            errorDiv.textContent = 'Название обязательно';
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        var body = {
+            name: name,
+            description: document.getElementById('projectDescription').value.trim() || null
+        };
+
+        var url = id ? '/api/projects/' + id : '/api/projects';
+        var method = id ? 'PUT' : 'POST';
+
+        try {
+            var res = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) {
+                var data = await res.json();
+                throw new Error(data.error || 'Ошибка сохранения');
+            }
+            closeModal();
+            loadProjects();
+        } catch(err) {
+            errorDiv.textContent = err.message;
+            errorDiv.style.display = 'block';
+        }
     });
-    html += '</table>';
-    container.innerHTML = html;
-  } catch(e) {
-    container.innerHTML = '<p style="color:red;">Ошибка загрузки проектов</p>';
-  }
+
+    // ==================== ЭКСПОРТ / ИМПОРТ ====================
+    document.getElementById('exportBtn').addEventListener('click', async function() {
+        try {
+            var res = await fetch('/api/projects/export?token=' + encodeURIComponent(token));
+            if (!res.ok) { var err = await res.json(); alert(err.error || 'Ошибка экспорта'); return; }
+            var blob = await res.blob();
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'projects.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch(e) { alert('Ошибка соединения'); }
+    });
+
+    var fileInput = document.getElementById('importFile');
+    document.getElementById('importBtn').addEventListener('click', function() { fileInput.click(); });
+    fileInput.addEventListener('change', async function() {
+        var file = fileInput.files[0];
+        if (!file) return;
+        var formData = new FormData();
+        formData.append('file', file);
+        try {
+            var res = await fetch('/api/projects/import', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token },
+                body: formData
+            });
+            var data = await res.json();
+            if (!res.ok) { alert(data.error || 'Ошибка импорта'); return; }
+            alert(data.message);
+            loadProjects();
+        } catch(e) { alert('Ошибка соединения'); }
+        fileInput.value = '';
+    });
+
+    loadProjects();
 })();
 </script>
