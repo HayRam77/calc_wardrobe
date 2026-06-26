@@ -43,7 +43,6 @@
 
 <script>
 var token = localStorage.getItem('token');
-var currentUser = JSON.parse(localStorage.getItem('user') || 'null');
 
 async function loadManufacturers() {
     try {
@@ -138,9 +137,9 @@ async function deleteManufacturer(id) {
     loadManufacturers();
 }
 
-// Экспорт
+// Экспорт — теперь с токеном в query
 document.getElementById('exportBtn').addEventListener('click', function() {
-    window.open('/api/manufacturers/export?token=' + token);
+    window.location.href = '/api/manufacturers/export?token=' + encodeURIComponent(token);
 });
 
 // Импорт

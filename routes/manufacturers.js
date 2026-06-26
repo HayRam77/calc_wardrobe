@@ -3,11 +3,31 @@ const router = express.Router();
 const pool = require('../config/db');
 const multer = require('multer');
 const XLSX = require('xlsx');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
 
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 }
 });
+
+// Middleware для проверки токена (из заголовка или query)
+function checkToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1] || req.query.token;
+    
+    if (!token) {
+        return res.status(401).json({ error: 'Требуется авторизация', code: 'TOKEN_REQUIRED' });
+    }
+    
+    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+        if (err) return res.status(403).json({ error: 'Недействительный токен' });
+        req.user = decoded;
+        next();
+    });
+}
+
+router.use(checkToken);
 
 // Получить всех производителей
 router.get('/', async (req, res) => {
