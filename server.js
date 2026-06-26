@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const path = require('path');
 const authRouter = require('./routes/auth');
@@ -8,6 +9,9 @@ const componentTypesRouter = require('./routes/componentTypes');
 const manufacturersRouter = require('./routes/manufacturers');
 const parametersRouter = require('./routes/parameters');
 const adminRouter = require('./routes/admin');
+const systemComponentsRouter = require('./routes/systemComponents');
+const systemComponentTypesRouter = require('./routes/systemComponentTypes');
+const systemParametersRouter = require('./routes/systemParameters');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -30,8 +34,11 @@ app.use('/api/component-types', componentTypesRouter);
 app.use('/api/manufacturers', manufacturersRouter);
 app.use('/api/parameters', parametersRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/system-components', systemComponentsRouter);
+app.use('/api/system-component-types', systemComponentTypesRouter);
+app.use('/api/system-parameters', systemParametersRouter);
 
-// SPA fallback — все не-API и не-статические запросы возвращают index.html
+// SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

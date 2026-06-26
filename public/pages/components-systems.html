@@ -1,1 +1,437 @@
-<p>Здесь будет список компонентов систем.</p>
+<!-- public/pages/components-systems.html -->
+<div class="page-content">
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="components">Компоненты систем</button>
+        <button class="tab-btn" data-tab="types">Типы компонентов систем</button>
+        <button class="tab-btn" data-tab="params">Параметры компонентов систем</button>
+    </div>
+
+    <!-- Вкладка: Компоненты систем -->
+    <div class="tab-content active" id="tab-components">
+        <div style="margin-bottom:10px;">
+            <button id="addComponentBtn" class="btn btn-primary" style="display:none;">Добавить компонент систем</button>
+            <button id="exportComponentsBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
+            <input type="file" id="importComponentsFile" style="display:none" accept=".xlsx,.xls">
+            <button id="importComponentsBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
+        </div>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Тип</th>
+                        <th>Название</th>
+                        <th>Производитель</th>
+                        <th>Артикул</th>
+                        <th>Описание</th>
+                        <th>Параметры</th>
+                        <th id="componentsActionsCol" style="display:none;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="componentsBody">
+                    <tr><td colspan="8" class="loading">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="componentsEmpty" class="empty-state" style="display:none;"><p>Компонентов нет</p></div>
+    </div>
+
+    <!-- Вкладка: Типы компонентов систем -->
+    <div class="tab-content" id="tab-types">
+        <div style="margin-bottom:10px;">
+            <button id="addTypeBtn" class="btn btn-primary" style="display:none;">Добавить тип компонента систем</button>
+            <button id="exportTypesBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
+            <input type="file" id="importTypesFile" style="display:none" accept=".xlsx,.xls">
+            <button id="importTypesBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
+        </div>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название</th>
+                        <th>Описание</th>
+                        <th id="typesActionsCol" style="display:none;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="typesBody">
+                    <tr><td colspan="4" class="loading">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="typesEmpty" class="empty-state" style="display:none;"><p>Типов нет</p></div>
+    </div>
+
+    <!-- Вкладка: Параметры компонентов систем -->
+    <div class="tab-content" id="tab-params">
+        <div style="margin-bottom:10px;">
+            <button id="addParamBtn" class="btn btn-primary" style="display:none;">Добавить параметр компонента систем</button>
+            <button id="exportParamsBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
+            <input type="file" id="importParamsFile" style="display:none" accept=".xlsx,.xls">
+            <button id="importParamsBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
+        </div>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название</th>
+                        <th>Значение</th>
+                        <th>Описание</th>
+                        <th id="paramsActionsCol" style="display:none;">Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="paramsBody">
+                    <tr><td colspan="5" class="loading">Загрузка...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="paramsEmpty" class="empty-state" style="display:none;"><p>Параметров нет</p></div>
+    </div>
+
+    <!-- Модальное окно (будет использоваться для всех форм) -->
+    <div id="modal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h3 id="modalTitle"></h3>
+            <form id="modalForm"></form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // ---------- Глобальные переменные ----------
+    let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+    const isAdmin = currentUser && currentUser.role === 'admin';
+
+    // ---------- Управление видимостью кнопок и колонок действий ----------
+    function applyPermissions() {
+        const actionButtons = document.querySelectorAll('#addComponentBtn, #addTypeBtn, #addParamBtn, #exportComponentsBtn, #importComponentsBtn, #exportTypesBtn, #importTypesBtn, #exportParamsBtn, #importParamsBtn');
+        const actionCols = ['componentsActionsCol', 'typesActionsCol', 'paramsActionsCol'];
+
+        if (isAdmin) {
+            actionButtons.forEach(btn => btn.style.display = '');
+            actionCols.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = '';
+            });
+        } else {
+            actionButtons.forEach(btn => btn.style.display = 'none');
+            actionCols.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+        }
+    }
+
+    // ---------- Инициализация вкладок ----------
+    function initTabs() {
+        const tabs = document.querySelectorAll('.tab-btn');
+        const contents = document.querySelectorAll('.tab-content');
+
+        tabs.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabs.forEach(b => b.classList.remove('active'));
+                contents.forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                const target = document.getElementById('tab-' + btn.dataset.tab);
+                if (target) target.classList.add('active');
+
+                // Ленивая загрузка данных при первом открытии
+                if (btn.dataset.tab === 'types' && !typesLoaded) loadTypes();
+                if (btn.dataset.tab === 'params' && !paramsLoaded) loadParams();
+            });
+        });
+    }
+
+    // ---------- Модальное окно ----------
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalForm = document.getElementById('modalForm');
+    const closeModalBtn = document.querySelector('.close-modal');
+
+    closeModalBtn.addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+    window.addEventListener('click', (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+    });
+
+    function showModal(title, formHtml) {
+        modalTitle.textContent = title;
+        modalForm.innerHTML = formHtml;
+        modal.style.display = 'block';
+    }
+
+    // ---------- Вкладка: Компоненты систем ----------
+    let componentsLoaded = false;
+    async function loadComponents() {
+        try {
+            const res = await fetch('/api/system-components');
+            if (!res.ok) throw new Error('Ошибка загрузки');
+            const data = await res.json();
+            const tbody = document.getElementById('componentsBody');
+            if (data.length === 0) {
+                document.getElementById('componentsEmpty').style.display = '';
+                tbody.innerHTML = '';
+            } else {
+                document.getElementById('componentsEmpty').style.display = 'none';
+                tbody.innerHTML = data.map(item => `
+                    <tr>
+                        <td>${item.id}</td>
+                        <td>${escapeHtml(item.type_name || '')}</td>
+                        <td>${escapeHtml(item.name)}</td>
+                        <td>${escapeHtml(item.manufacturer_name || '')}</td>
+                        <td>${escapeHtml(item.article || '')}</td>
+                        <td>${escapeHtml(item.description || '')}</td>
+                        <td>${renderParamList(item.params)}</td>
+                        <td class="actions-col" style="display:${isAdmin ? '' : 'none'};">
+                            <button class="btn btn-sm" onclick="editSystemComponent(${item.id})">✏️</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteSystemComponent(${item.id})">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+            componentsLoaded = true;
+        } catch (err) {
+            console.error(err);
+            document.getElementById('componentsBody').innerHTML = '<tr><td colspan="8">Ошибка загрузки</td></tr>';
+        }
+    }
+
+    function renderParamList(params) {
+        if (!params || params.length === 0) return '-';
+        return params.map(p => `${p.name}: ${p.value}`).join('<br>');
+    }
+
+    // Форма добавления компонента
+    document.getElementById('addComponentBtn').addEventListener('click', async () => {
+        // Загружаем списки типов и параметров для селектов
+        let types = [], params = [];
+        try {
+            const tRes = await fetch('/api/system-component-types');
+            if (tRes.ok) types = await tRes.json();
+            const pRes = await fetch('/api/system-parameters');
+            if (pRes.ok) params = await pRes.json();
+        } catch (e) {}
+
+        const formHtml = `
+            <label>Тип:</label>
+            <select id="compType" required>
+                <option value="">-- выберите тип --</option>
+                ${types.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}
+            </select>
+            <button type="button" id="newTypeBtn" class="btn btn-sm">Добавить новый тип</button>
+
+            <label>Название:</label>
+            <input type="text" id="compName" required>
+
+            <label>Производитель:</label>
+            <select id="compManufacturer">
+                <option value="">-- выберите производителя --</option>
+            </select>
+
+            <label>Артикул:</label>
+            <input type="text" id="compArticle">
+
+            <label>Описание:</label>
+            <textarea id="compDescription" rows="3"></textarea>
+
+            <label>Параметры:</label>
+            <div id="modalParams">
+                <div class="param-row" style="display:flex; gap:10px; margin-bottom:5px;">
+                    <select class="param-select" style="flex:1;">
+                        <option value="">-- новый параметр --</option>
+                        ${params.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+                    </select>
+                    <input type="text" class="param-value" placeholder="Значение" style="flex:1;">
+                    <input type="text" class="param-name" placeholder="Новый параметр" style="flex:1; display:none;">
+                    <button type="button" class="small danger remove-param-btn">×</button>
+                </div>
+            </div>
+            <button type="button" id="addParamRowBtn" class="btn btn-sm">Добавить параметр</button>
+        `;
+
+        showModal('Добавить компонент системы', formHtml);
+
+        // После отрисовки формы подгружаем производителей
+        loadManufacturers('#compManufacturer');
+
+        // Обработчик добавления строки параметра
+        document.getElementById('addParamRowBtn').addEventListener('click', () => {
+            const container = document.getElementById('modalParams');
+            const row = document.createElement('div');
+            row.className = 'param-row';
+            row.style.display = 'flex';
+            row.style.gap = '10px';
+            row.style.marginBottom = '5px';
+            row.innerHTML = `
+                <select class="param-select" style="flex:1;">
+                    <option value="">-- новый параметр --</option>
+                    ${params.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
+                </select>
+                <input type="text" class="param-value" placeholder="Значение" style="flex:1;">
+                <input type="text" class="param-name" placeholder="Новый параметр" style="flex:1; display:none;">
+                <button type="button" class="small danger remove-param-btn">×</button>
+            `;
+            container.appendChild(row);
+            row.querySelector('.remove-param-btn').addEventListener('click', () => row.remove());
+            // Показываем поле "Новый параметр", если выбран вариант "-- новый параметр --"
+            const select = row.querySelector('.param-select');
+            const paramNameInput = row.querySelector('.param-name');
+            select.addEventListener('change', () => {
+                paramNameInput.style.display = select.value === '' ? '' : 'none';
+            });
+        });
+
+        // Удаление строк параметров
+        document.querySelectorAll('.remove-param-btn').forEach(btn => {
+            btn.addEventListener('click', () => btn.closest('.param-row').remove());
+        });
+    });
+
+    // Заглушка для производителей (можно подгрузить отдельно)
+    async function loadManufacturers(selector) {
+        try {
+            const res = await fetch('/api/manufacturers');
+            if (!res.ok) return;
+            const data = await res.json();
+            const sel = document.querySelector(selector);
+            if (sel) {
+                sel.innerHTML = '<option value="">-- выберите производителя --</option>';
+                data.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.name;
+                    sel.appendChild(opt);
+                });
+            }
+        } catch (e) {}
+    }
+
+    // Функции редактирования/удаления (заглушки)
+    window.editSystemComponent = function(id) { alert('Редактирование компонента ' + id); };
+    window.deleteSystemComponent = async function(id) {
+        if (!confirm('Удалить компонент?')) return;
+        await fetch('/api/system-components/' + id, { method: 'DELETE' });
+        loadComponents();
+    };
+
+    // ---------- Вкладка: Типы компонентов систем ----------
+    let typesLoaded = false;
+    async function loadTypes() {
+        try {
+            const res = await fetch('/api/system-component-types');
+            if (!res.ok) throw new Error('Ошибка загрузки');
+            const data = await res.json();
+            const tbody = document.getElementById('typesBody');
+            if (data.length === 0) {
+                document.getElementById('typesEmpty').style.display = '';
+                tbody.innerHTML = '';
+            } else {
+                document.getElementById('typesEmpty').style.display = 'none';
+                tbody.innerHTML = data.map(item => `
+                    <tr>
+                        <td>${item.id}</td>
+                        <td>${escapeHtml(item.name)}</td>
+                        <td>${escapeHtml(item.description || '')}</td>
+                        <td class="actions-col" style="display:${isAdmin ? '' : 'none'};">
+                            <button class="btn btn-sm" onclick="editSystemComponentType(${item.id})">✏️</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteSystemComponentType(${item.id})">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+            typesLoaded = true;
+        } catch (err) {
+            console.error(err);
+            document.getElementById('typesBody').innerHTML = '<tr><td colspan="4">Ошибка загрузки</td></tr>';
+        }
+    }
+
+    document.getElementById('addTypeBtn').addEventListener('click', () => {
+        showModal('Добавить тип компонента систем', `
+            <label>Название:</label>
+            <input type="text" id="typeName" required>
+            <label>Описание:</label>
+            <textarea id="typeDescription" rows="3"></textarea>
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+        `);
+    });
+
+    window.editSystemComponentType = function(id) { alert('Редактирование типа ' + id); };
+    window.deleteSystemComponentType = async function(id) {
+        if (!confirm('Удалить тип?')) return;
+        await fetch('/api/system-component-types/' + id, { method: 'DELETE' });
+        loadTypes();
+    };
+
+    // ---------- Вкладка: Параметры компонентов систем ----------
+    let paramsLoaded = false;
+    async function loadParams() {
+        try {
+            const res = await fetch('/api/system-parameters');
+            if (!res.ok) throw new Error('Ошибка загрузки');
+            const data = await res.json();
+            const tbody = document.getElementById('paramsBody');
+            if (data.length === 0) {
+                document.getElementById('paramsEmpty').style.display = '';
+                tbody.innerHTML = '';
+            } else {
+                document.getElementById('paramsEmpty').style.display = 'none';
+                tbody.innerHTML = data.map(item => `
+                    <tr>
+                        <td>${item.id}</td>
+                        <td>${escapeHtml(item.name)}</td>
+                        <td>${escapeHtml(item.value || '')}</td>
+                        <td>${escapeHtml(item.description || '')}</td>
+                        <td class="actions-col" style="display:${isAdmin ? '' : 'none'};">
+                            <button class="btn btn-sm" onclick="editSystemParameter(${item.id})">✏️</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteSystemParameter(${item.id})">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+            paramsLoaded = true;
+        } catch (err) {
+            console.error(err);
+            document.getElementById('paramsBody').innerHTML = '<tr><td colspan="5">Ошибка загрузки</td></tr>';
+        }
+    }
+
+    document.getElementById('addParamBtn').addEventListener('click', () => {
+        showModal('Добавить параметр компонента систем', `
+            <label>Название:</label>
+            <input type="text" id="paramName" required>
+            <label>Значение:</label>
+            <input type="text" id="paramValue">
+            <label>Описание:</label>
+            <textarea id="paramDescription" rows="3"></textarea>
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+        `);
+    });
+
+    window.editSystemParameter = function(id) { alert('Редактирование параметра ' + id); };
+    window.deleteSystemParameter = async function(id) {
+        if (!confirm('Удалить параметр?')) return;
+        await fetch('/api/system-parameters/' + id, { method: 'DELETE' });
+        loadParams();
+    };
+
+    // ---------- Утилиты ----------
+    function escapeHtml(text) {
+        return String(text).replace(/[&<>"]/g, m => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'
+        }[m]));
+    }
+
+    // ---------- Инициализация страницы ----------
+    window.pageInit = function() {
+        applyPermissions();
+        initTabs();
+        loadComponents(); // основная вкладка активна по умолчанию
+    };
+
+})();
+</script>
