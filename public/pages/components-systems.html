@@ -89,7 +89,7 @@
         <div id="paramsEmpty" class="empty-state" style="display:none;"><p>Параметров нет</p></div>
     </div>
 
-    <!-- Модальное окно -->
+    <!-- Модальное окно (используется для всех форм) -->
     <div id="modal" class="modal" style="display:none;">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
@@ -101,23 +101,23 @@
 
 <script>
 (function() {
-    // ---------- Состояние ----------
+    // ---------- Глобальные переменные ----------
     let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
     const isAdmin = currentUser && currentUser.role === 'admin';
 
-    // Видимость админских элементов
+    // ---------- Управление видимостью кнопок и колонок действий ----------
     function applyPermissions() {
-        const adminButtons = document.querySelectorAll('#addComponentBtn, #addTypeBtn, #addParamBtn, #exportComponentsBtn, #importComponentsBtn, #exportTypesBtn, #importTypesBtn, #exportParamsBtn, #importParamsBtn');
+        const actionButtons = document.querySelectorAll('#addComponentBtn, #addTypeBtn, #addParamBtn, #exportComponentsBtn, #importComponentsBtn, #exportTypesBtn, #importTypesBtn, #exportParamsBtn, #importParamsBtn');
         const actionCols = ['componentsActionsCol', 'typesActionsCol', 'paramsActionsCol'];
 
         if (isAdmin) {
-            adminButtons.forEach(btn => btn.style.display = '');
+            actionButtons.forEach(btn => btn.style.display = '');
             actionCols.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.style.display = '';
             });
         } else {
-            adminButtons.forEach(btn => btn.style.display = 'none');
+            actionButtons.forEach(btn => btn.style.display = 'none');
             actionCols.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.style.display = 'none';
@@ -125,7 +125,7 @@
         }
     }
 
-    // ---------- Вкладки ----------
+    // ---------- Инициализация вкладок ----------
     function initTabs() {
         const tabs = document.querySelectorAll('.tab-btn');
         const contents = document.querySelectorAll('.tab-content');
@@ -138,8 +138,7 @@
                 const target = document.getElementById('tab-' + btn.dataset.tab);
                 if (target) target.classList.add('active');
 
-                // Ленивая загрузка
-                if (btn.dataset.tab === 'components' && !componentsLoaded) loadComponents();
+                // Ленивая загрузка данных при первом открытии
                 if (btn.dataset.tab === 'types' && !typesLoaded) loadTypes();
                 if (btn.dataset.tab === 'params' && !paramsLoaded) loadParams();
             });
@@ -152,9 +151,11 @@
     const modalForm = document.getElementById('modalForm');
     const closeModalBtn = document.querySelector('.close-modal');
 
-    closeModalBtn.addEventListener('click', closeModal);
+    closeModalBtn.addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
     window.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal();
+        if (e.target === modal) modal.style.display = 'none';
     });
 
     function closeModal() {
@@ -239,7 +240,6 @@
 
     // Открыть форму добавления компонента
     document.getElementById('addComponentBtn').addEventListener('click', async () => {
-        // Подгружаем типы и параметры
         let types = [], params = [];
         try {
             const tRes = await fetch('/api/system-component-types');
@@ -289,8 +289,6 @@
         `;
 
         showModal('Добавить компонент системы', formHtml);
-
-        // Подгружаем производителей в селект
         await loadManufacturersForSelect('#compManufacturer');
 
         // Обработчик добавления строки параметра
@@ -319,7 +317,7 @@
             row.querySelector('.remove-param-btn').addEventListener('click', () => row.remove());
         });
 
-        // Показывать/скрывать поле "Новый параметр"
+        // Показывать/скрывать поле "Новый параметр" для существующих строк
         document.querySelectorAll('.param-select').forEach(select => {
             const paramNameInput = select.closest('.param-row').querySelector('.param-name');
             select.addEventListener('change', () => {
@@ -352,17 +350,10 @@
             paramRows.forEach(row => {
                 const select = row.querySelector('.param-select');
                 const valueInput = row.querySelector('.param-value');
-                const nameInput = row.querySelector('.param-name');
                 const paramId = select.value;
                 const value = valueInput.value.trim();
-                const newName = nameInput.value.trim();
-
                 if (paramId) {
                     params.push({ parameter_id: parseInt(paramId), value });
-                } else if (newName) {
-                    // Если выбран "-- новый параметр --", надо создать его на сервере, но упростим: пока игнорируем
-                    // Либо можно сначала создать параметр через API и получить его id. Пропустим или сделаем alert.
-                    alert('Создание нового параметра через форму пока не поддерживается. Создайте параметр в отдельной вкладке.');
                 }
             });
 
@@ -443,7 +434,6 @@
             showModal('Редактировать компонент системы', formHtml);
             await loadManufacturersForSelect('#compManufacturer', comp.manufacturer_id);
 
-            // Обработчики добавления строк параметров
             document.getElementById('addParamRowBtn').addEventListener('click', () => {
                 const container = document.getElementById('modalParams');
                 const row = document.createElement('div');
@@ -469,12 +459,10 @@
                 row.querySelector('.remove-param-btn').addEventListener('click', () => row.remove());
             });
 
-            // Удаление строк
             document.querySelectorAll('.remove-param-btn').forEach(btn => {
                 btn.addEventListener('click', () => btn.closest('.param-row').remove());
             });
 
-            // Отправка формы
             modalForm.onsubmit = async (e) => {
                 e.preventDefault();
                 const name = document.getElementById('compName').value.trim();
@@ -777,7 +765,7 @@
     window.pageInit = function() {
         applyPermissions();
         initTabs();
-        loadComponents(); // активная вкладка по умолчанию
+        loadComponents();
     };
 })();
 </script>
