@@ -1,38 +1,28 @@
-const { body } = require('express-validator');
+const { validationResult } = require('express-validator');
 
-const validate = (req, res, next) => {
-    const { validationResult } = require('express-validator');
+/**
+ * Middleware-обёртка для выполнения массива валидаций
+ * и возврата ошибок в формате JSON при неудаче.
+ */
+const validate = (validations) => {
+  return async (req, res, next) => {
+    // Выполняем все проверки из массива
+    for (const validation of validations) {
+      const result = await validation.run(req);
+      if (result.errors.length) break; // можно остановить, если уже есть ошибки
+    }
+
     const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'Ошибка валидации', details: errors.array() });
+    if (errors.isEmpty()) {
+      return next();
     }
-    next();
+
+    // Возвращаем первую ошибку или все (здесь все)
+    res.status(400).json({
+      message: 'Ошибка валидации',
+      errors: errors.array().map(e => e.msg)
+    });
+  };
 };
 
-const rules = {
-    project: {
-        create: [
-            body('name').trim().notEmpty().withMessage('Название проекта обязательно').isLength({ min: 2, max: 255 }),
-            body('description').optional().trim().isLength({ max: 1000 })
-        ]
-    },
-    cabinet: {
-        create: [
-            body('name').trim().notEmpty().withMessage('Название шкафа обязательно').isLength({ min: 2, max: 255 }),
-            body('project_id').isInt().withMessage('ID проекта должен быть числом')
-        ]
-    },
-    auth: {
-        login: [
-            body('username').trim().notEmpty().withMessage('Имя пользователя обязательно'),
-            body('password').notEmpty().withMessage('Пароль обязателен')
-        ],
-        register: [
-            body('username').trim().isLength({ min: 3, max: 50 }),
-            body('email').isEmail().normalizeEmail(),
-            body('password').isLength({ min: 6 })
-        ]
-    }
-};
-
-module.exports = { validate, rules };
+module.exports = validate;

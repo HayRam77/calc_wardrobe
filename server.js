@@ -1,46 +1,44 @@
-require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
-const morgan = require('morgan');
 const path = require('path');
-const { authenticateToken } = require('./middleware/auth');
-
-const authRoutes = require('./routes/auth');
-const projectRoutes = require('./routes/projects');
-const blockTemplateRoutes = require('./routes/blockTemplates');
-const cabinetRoutes = require('./routes/cabinets');
-const componentTypeRoutes = require('./routes/componentTypes');
-const manufacturerRoutes = require('./routes/manufacturers');
-const parameterRoutes = require('./routes/parameters');
-const adminRoutes = require('./routes/admin');
+const authRouter = require('./routes/auth');
+const projectsRouter = require('./routes/projects');
+const cabinetsRouter = require('./routes/cabinets');
+const blockTemplatesRouter = require('./routes/blockTemplates');
+const componentTypesRouter = require('./routes/componentTypes');
+const manufacturersRouter = require('./routes/manufacturers');
+const parametersRouter = require('./routes/parameters');
+const adminRouter = require('./routes/admin');
+const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const HOST = process.env.HOST || '127.0.0.1';
 
-app.use(cors());
-app.use(morgan('dev'));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Статические файлы
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/api/auth', authRoutes);
-app.use('/api/projects', authenticateToken, projectRoutes);
-app.use('/api/block-templates', authenticateToken, blockTemplateRoutes);
-app.use('/api/cabinets', authenticateToken, cabinetRoutes);
-app.use('/api/component-types', authenticateToken, componentTypeRoutes);
-app.use('/api/manufacturers', manufacturerRoutes);  // без authenticateToken — внутри свой checkToken
-app.use('/api/parameters', authenticateToken, parameterRoutes);
-app.use('/api/admin', authenticateToken, adminRoutes);
+// API маршруты
+app.use('/api/auth', authRouter);
+app.use('/api/projects', projectsRouter);
+app.use('/api/cabinets', cabinetsRouter);
+app.use('/api/block-templates', blockTemplatesRouter);
+app.use('/api/component-types', componentTypesRouter);
+app.use('/api/manufacturers', manufacturersRouter);
+app.use('/api/parameters', parametersRouter);
+app.use('/api/admin', adminRouter);
 
+// SPA fallback — все не-API и не-статические запросы возвращают index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.use((err, req, res, next) => {
-  console.error('Server Error:', err);
-  res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-});
+// Обработчик ошибок
+app.use(errorHandler);
 
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`Server running on http://127.0.0.1:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Сервер запущен на http://${HOST}:${PORT}`);
 });

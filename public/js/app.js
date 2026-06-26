@@ -1,61 +1,102 @@
-var API_BASE = '/api';
-var currentUser = JSON.parse(localStorage.getItem('user') || 'null');
-var authMode = 'login';
+// public/js/app.js
 
-document.getElementById('burgerBtn').addEventListener('click', function() {
-    document.getElementById('sidebar').classList.toggle('active');
-});
+const API_URL = '/api';
 
-window.renderPage = async function(url) {
-    const response = await fetch(url);
-    const html = await response.text();
-    const main = document.getElementById('main-content');
-    main.innerHTML = html;
-    
-    var scripts = main.querySelectorAll('script');
-    scripts.forEach(function(script) {
-        var newScript = document.createElement('script');
-        newScript.textContent = script.textContent;
-        document.body.appendChild(newScript);
-    });
+// ========== Глобальный перехват fetch (401 = авто-выход) ==========
+const originalFetch = window.fetch;
+window.fetch = async function(url, options = {}) {
+  const token = localStorage.getItem('token');
+  const headers = options.headers || {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  options.headers = headers;
+
+  const response = await originalFetch(url, options);
+
+  if (response.status === 401) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.hash = '#/login';
+    throw new Error('Unauthorized');
+  }
+
+  return response;
 };
 
-document.addEventListener('click', function(e) {
-    if (e.target.classList.contains('spa-link')) {
-        e.preventDefault();
-        var href = e.target.getAttribute('href');
-        history.pushState({}, '', href);
-        loadPageByPath(href);
-    }
-});
+let currentUser = null;
 
-window.addEventListener('popstate', function() {
-    loadPageByPath(window.location.pathname);
-});
+function initApp() {
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  if (token && user) {
+    currentUser = user;
+  }
 
-function loadPageByPath(path) {
-    var routes = {
-        '/': '/pages/home.html',
-        '/automation': '/pages/automation.html',
-        '/components-systems': '/pages/components-systems.html',
-        '/components-cabinets': '/pages/components-cabinets.html',
-        '/manufacturers': '/pages/manufacturers.html',
-        '/admin': '/pages/admin.html',
-        '/admin/users': '/pages/admin-users.html'
-    };
-    
-    if (path.startsWith('/project/')) {
-        window.renderPage('/pages/project.html?id=' + path.split('/')[2]);
-    } else if (path.startsWith('/cabinet/')) {
-        window.renderPage('/pages/cabinet.html?id=' + path.split('/')[2]);
-    } else {
-        var page = routes[path] || '/pages/home.html';
-        window.renderPage(page);
+  // Глобальная функция для обновления пользователя (вызывается из auth.js)
+  window.updateUser = (newUser) => {
+    currentUser = newUser;
+    renderMenu();
+    // Если пользователь только что авторизовался, перенаправляем на главную
+    if (newUser) {
+      window.location.hash = '#/home';
     }
+  };
+
+  renderMenu();
+
+  // Запускаем роутер (только если Router существует)
+  if (typeof Router !== 'undefined' && Router.init) {
+    Router.init();
+  } else {
+    console.error('Router не найден!');
+  }
 }
 
-if (currentUser) {
-    document.getElementById('authBtn').textContent = currentUser.username;
+function renderMenu() {
+  const menuEl = document.getElementById('side-menu');
+  if (!menuEl) return;
+
+  if (!currentUser) {
+    // Скрываем меню, если пользователь не авторизован
+    menuEl.style.display = 'none';
+    // Также можно скрыть другие элементы, если нужно
+    return;
+  }
+
+  // Показываем меню
+  menuEl.style.display = ''; // или 'block', если требуется
+
+  let html = `
+    <a href="#/home">🏠 Главная</a>
+    <a href="#/projects">📁 Проекты</a>
+    <a href="#/manufacturers">🏭 Производители</a>
+    <a href="#/components">🧩 Компоненты</a>
+    <a href="#/automation">⚙️ Автоматизация</a>
+  `;
+
+  if (currentUser.role === 'admin') {
+    html += `<a href="#/admin">👑 Администрирование</a>`;
+  }
+
+  html += `<a href="#" id="logout-btn">🚪 Выход (${currentUser.username})</a>`;
+
+  menuEl.innerHTML = html;
+
+  // Обработчик выхода
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (typeof Auth !== 'undefined' && Auth.logout) {
+        Auth.logout();
+      } else {
+        localStorage.clear();
+        window.location.hash = '#/login';
+        renderMenu(); // скроет меню
+      }
+    });
+  }
 }
 
-loadPageByPath(window.location.pathname);
+document.addEventListener('DOMContentLoaded', initApp);
