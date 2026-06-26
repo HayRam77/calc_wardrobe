@@ -1,3 +1,5 @@
+// public/js/router.js
+
 const Router = {
   routes: {
     '/home': 'home.html',
@@ -27,19 +29,16 @@ const Router = {
 
     const user = JSON.parse(localStorage.getItem('user') || 'null');
 
-    // Если пользователь не авторизован — отправляем на чистую страницу логина
     if (!user) {
       window.location.href = '/login';
       return;
     }
 
-    // Админ-страницы доступны только админу
     if (user.role !== 'admin' && this.adminPages.includes(route)) {
       window.location.hash = '#/home';
       return;
     }
 
-    // Управление отображением меню
     const menuEl = document.getElementById('side-menu');
     if (menuEl) {
       menuEl.style.display = user ? '' : 'none';
@@ -55,7 +54,20 @@ const Router = {
       const res = await fetch(`/pages/${pageFile}`);
       if (!res.ok) throw new Error('Ошибка загрузки');
       const html = await res.text();
-      document.getElementById('app-content').innerHTML = html;
+
+      const content = document.getElementById('app-content');
+      content.innerHTML = html;
+
+      // Выполняем все скрипты из загруженного HTML
+      content.querySelectorAll('script').forEach(oldScript => {
+        const newScript = document.createElement('script');
+        for (const attr of oldScript.attributes) {
+          newScript.setAttribute(attr.name, attr.value);
+        }
+        newScript.textContent = oldScript.textContent;
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+      });
+
       window.pageParam = param || null;
 
       if (typeof window.pageInit === 'function') {
