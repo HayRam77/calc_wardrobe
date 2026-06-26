@@ -6,9 +6,9 @@
 
 <script>
 (function() {
-    const token = localStorage.getItem('token');
-    const parts = location.pathname.split('/');
-    const projectId = parts[2];
+    var token = localStorage.getItem('token');
+    var parts = location.pathname.split('/');
+    var projectId = parts[2];
 
     if (!projectId || !token) {
         document.getElementById('projectContent').innerHTML = '<p>Проект не найден</p>';
@@ -16,7 +16,7 @@
     }
 
     function esc(str) {
-        const div = document.createElement('div');
+        var div = document.createElement('div');
         div.textContent = str || '';
         return div.innerHTML;
     }
@@ -29,8 +29,8 @@
     async function loadProject() {
         var container = document.getElementById('projectContent');
         try {
-            var projectRes = await fetch(API_BASE + '/projects/' + projectId, { headers: { 'Authorization': 'Bearer ' + token } });
-            var cabinetsRes = await fetch(API_BASE + '/projects/' + projectId + '/cabinets', { headers: { 'Authorization': 'Bearer ' + token } });
+            var projectRes = await fetch('/api/projects/' + projectId, { headers: { 'Authorization': 'Bearer ' + token } });
+            var cabinetsRes = await fetch('/api/projects/' + projectId + '/cabinets', { headers: { 'Authorization': 'Bearer ' + token } });
 
             if (!projectRes.ok) throw new Error('Проект не найден');
             var project = await projectRes.json();
@@ -43,23 +43,23 @@
             html += '</div>';
             html += '<div style="background:white; padding:20px; border-radius:8px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">';
             html += '<table class="data-table">';
-            html += '<tr><td><strong>Напряжение:</strong></td><td>' + esc(project.voltage) + ' В</td></tr>';
-            html += '<tr><td><strong>Коэфф. одновременности:</strong></td><td>' + (project.simultaneity_factor || '—') + '</td></tr>';
-            html += '<tr><td><strong>Примечание:</strong></td><td>' + esc(project.remark || '—') + '</td></tr>';
-            html += '<tr><td><strong>Владелец:</strong></td><td>' + esc(project.owner || '—') + '</td></tr>';
+            html += '<tr><td><strong>Описание:</strong></td><td>' + esc(project.description || '—') + '</td></tr>';
+            html += '<tr><td><strong>Владелец:</strong></td><td>' + esc(project.owner_name || '—') + '</td></tr>';
             html += '<tr><td><strong>Создан:</strong></td><td>' + (project.created_at ? new Date(project.created_at).toLocaleString('ru-RU') : '—') + '</td></tr>';
             html += '</table></div>';
             html += '<h3>Шкафы проекта</h3>';
+            html += '<button class="btn btn-primary" id="addCabinetBtn" style="margin-bottom:10px;">+ Добавить шкаф</button>';
 
             if (cabinets.length === 0) {
-                html += '<p>Нет шкафов</p>';
+                html += '<p id="noCabinetsMsg">Нет шкафов</p>';
             } else {
-                html += '<div class="table-container"><table class="data-table"><thead><tr><th>ID</th><th>Название</th><th>Создан</th></tr></thead><tbody>';
+                html += '<div class="table-container"><table class="data-table"><thead><tr><th>ID</th><th>Название</th><th>Создан</th><th>Действия</th></tr></thead><tbody id="cabinetsBody">';
                 cabinets.forEach(function(c) {
                     html += '<tr>';
                     html += '<td>' + c.id + '</td>';
                     html += '<td><a href="/cabinet/' + c.id + '" class="spa-link">' + esc(c.name) + '</a></td>';
                     html += '<td>' + (c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU') : '') + '</td>';
+                    html += '<td><button class="btn btn-sm btn-delete delete-cabinet-btn" data-id="' + c.id + '">🗑️</button></td>';
                     html += '</tr>';
                 });
                 html += '</tbody></table></div>';
@@ -71,6 +71,32 @@
                 navigate('/');
             });
 
+            // Добавление шкафа
+            document.getElementById('addCabinetBtn').addEventListener('click', async function() {
+                var name = prompt('Название шкафа:');
+                if (!name) return;
+                var res = await fetch('/api/projects/' + projectId + '/cabinets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ name: name })
+                });
+                if (res.ok) loadProject();
+                else alert('Ошибка создания шкафа');
+            });
+
+            // Удаление шкафов
+            container.querySelectorAll('.delete-cabinet-btn').forEach(function(btn) {
+                btn.addEventListener('click', async function() {
+                    if (!confirm('Удалить шкаф?')) return;
+                    var res = await fetch('/api/cabinets/' + this.dataset.id, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (res.ok) loadProject();
+                });
+            });
+
+            // SPA-ссылки
             container.querySelectorAll('.spa-link').forEach(function(link) {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
