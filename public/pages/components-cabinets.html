@@ -1,15 +1,11 @@
 <div class="page-content">
-    <div class="page-header">
-        <h2>Компоненты</h2>
-    </div>
-
+    <div class="page-header"><h2>Компоненты</h2></div>
     <div class="tabs">
         <button class="tab-btn active" data-tab="templates">Компоненты шкафов</button>
         <button class="tab-btn" data-tab="types">Типы компонентов</button>
         <button class="tab-btn" data-tab="params">Параметры компонентов</button>
     </div>
 
-    <!-- Вкладка: Компоненты шкафов -->
     <div class="tab-content active" id="tab-templates">
         <div style="margin-bottom:10px;">
             <button id="addTemplateBtn" class="btn btn-primary" style="display:none;">Добавить компонент</button>
@@ -17,24 +13,9 @@
             <input type="file" id="importTemplatesFile" style="display:none" accept=".xlsx,.xls">
             <button id="importTemplatesBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
         </div>
-        <div class="table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th>
-                        <th>Цена, руб.</th><th>Вес, гр.</th><th>Q, Вт</th><th>LN</th><th>Ссылка</th>
-                        <th id="templatesActionsCol" style="display:none;">Действия</th>
-                    </tr>
-                </thead>
-                <tbody id="templatesBody">
-                    <tr><td colspan="10" class="loading">Загрузка...</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div id="templatesEmpty" class="empty-state" style="display:none;"><p>Компонентов нет</p></div>
+        <div class="table-container"><table class="data-table"><thead><tr><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th><th>Вес, гр.</th><th>Q, Вт</th><th>LN</th><th>Ссылка</th><th id="templatesActionsCol" style="display:none;">Действия</th></tr></thead><tbody id="templatesBody"><tr><td colspan="10">Загрузка...</td></tr></tbody></table></div>
     </div>
 
-    <!-- Вкладка: Типы компонентов -->
     <div class="tab-content" id="tab-types">
         <div style="margin-bottom:10px;">
             <button id="addTypeBtn" class="btn btn-primary" style="display:none;">Добавить тип</button>
@@ -42,23 +23,9 @@
             <input type="file" id="importTypesFile" style="display:none" accept=".xlsx,.xls">
             <button id="importTypesBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
         </div>
-        <div class="table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>ID</th><th>Название</th><th>Категория</th><th>Описание</th>
-                        <th id="typesActionsCol" style="display:none;">Действия</th>
-                    </tr>
-                </thead>
-                <tbody id="typesBody">
-                    <tr><td colspan="5" class="loading">Загрузка...</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div id="typesEmpty" class="empty-state" style="display:none;"><p>Типов нет</p></div>
+        <div class="table-container"><table class="data-table"><thead><tr><th>ID</th><th>Название</th><th>Категория</th><th>Описание</th><th id="typesActionsCol" style="display:none;">Действия</th></tr></thead><tbody id="typesBody"><tr><td colspan="5" class="loading">Загрузка...</td></tr></tbody></table></div>
     </div>
 
-    <!-- Вкладка: Параметры компонентов -->
     <div class="tab-content" id="tab-params">
         <div style="margin-bottom:10px;">
             <button id="addParamBtn" class="btn btn-primary" style="display:none;">Добавить параметр</button>
@@ -66,388 +33,164 @@
             <input type="file" id="importParamsFile" style="display:none" accept=".xlsx,.xls">
             <button id="importParamsBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
         </div>
-        <div class="table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>ID</th><th>Название</th><th>Ед. изм.</th><th>Тип</th><th>Описание</th>
-                        <th id="paramsActionsCol" style="display:none;">Действия</th>
-                    </tr>
-                </thead>
-                <tbody id="paramsBody">
-                    <tr><td colspan="6" class="loading">Загрузка...</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <div id="paramsEmpty" class="empty-state" style="display:none;"><p>Параметров нет</p></div>
+        <div class="table-container"><table class="data-table"><thead><tr><th>ID</th><th>Название</th><th>Ед. изм.</th><th>Тип</th><th>Описание</th><th id="paramsActionsCol" style="display:none;">Действия</th></tr></thead><tbody id="paramsBody"><tr><td colspan="6" class="loading">Загрузка...</td></tr></tbody></table></div>
     </div>
 </div>
 
-<!-- Модальные окна -->
-<div id="templateModal" class="modal">
-    <div class="modal-content" style="max-width:700px; max-height:90vh; overflow-y:auto;">
-        <span class="modal-close">&times;</span>
-        <h3 id="templateModalTitle">Добавить компонент</h3>
-        <form id="templateForm">
-            <input type="hidden" id="templateId">
-            <div class="form-row">
-                <div class="form-group"><label for="templateType">Тип</label><select id="templateType"></select></div>
-                <div class="form-group"><label for="templateManufacturer">Производитель</label><select id="templateManufacturer"></select></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label for="templateName">Название *</label><input type="text" id="templateName" required maxlength="255"></div>
-                <div class="form-group"><label for="templateArticle">Артикул</label><input type="text" id="templateArticle" maxlength="255"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label for="templatePrice">Цена, руб.</label><input type="number" id="templatePrice" step="0.01"></div>
-                <div class="form-group"><label for="templateLabor">Работа, ч</label><input type="number" id="templateLabor" step="0.01"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label for="templateWeight">Вес, гр.</label><input type="number" id="templateWeight" step="0.01"></div>
-                <div class="form-group"><label for="templatePower">Мощность, Вт</label><input type="number" id="templatePower" step="0.01"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label for="templateLn">LN</label><input type="text" id="templateLn" maxlength="255"></div>
-                <div class="form-group"><label for="templateUrl">Ссылка</label><input type="url" id="templateUrl" maxlength="500"></div>
-            </div>
-            <div class="form-group"><label for="templateDescription">Описание</label><textarea id="templateDescription" maxlength="500" rows="2"></textarea></div>
-            <h4>Параметры</h4>
-            <div id="parametersContainer"></div>
-            <button type="button" id="addParamRowBtn" class="btn btn-secondary btn-sm">+ Добавить параметр</button>
-            <div id="templateError" class="error-message" style="display:none;"></div>
-            <div class="form-actions" style="margin-top:15px;">
-                <button type="button" id="templateCancelBtn" class="btn btn-secondary">Отмена</button>
-                <button type="submit" class="btn btn-primary">Сохранить</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div id="typeModal" class="modal">
-    <div class="modal-content" style="max-width:500px;">
-        <span class="modal-close">&times;</span>
-        <h3 id="typeModalTitle">Добавить тип</h3>
-        <form id="typeForm">
-            <input type="hidden" id="typeId">
-            <div class="form-group"><label for="typeName">Название *</label><input type="text" id="typeName" required maxlength="255"></div>
-            <div class="form-group"><label for="typeCategory">Категория</label><input type="text" id="typeCategory" maxlength="100"></div>
-            <div class="form-group"><label for="typeDescription">Описание</label><textarea id="typeDescription" maxlength="500" rows="2"></textarea></div>
-            <div id="typeError" class="error-message" style="display:none;"></div>
-            <div class="form-actions" style="margin-top:15px;">
-                <button type="button" id="typeCancelBtn" class="btn btn-secondary">Отмена</button>
-                <button type="submit" class="btn btn-primary">Сохранить</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div id="paramModal" class="modal">
-    <div class="modal-content" style="max-width:500px;">
-        <span class="modal-close">&times;</span>
-        <h3 id="paramModalTitle">Добавить параметр</h3>
-        <form id="paramForm">
-            <input type="hidden" id="paramId">
-            <div class="form-group"><label for="paramName">Название *</label><input type="text" id="paramName" required maxlength="255"></div>
-            <div class="form-group"><label for="paramUnit">Ед. измерения</label><input type="text" id="paramUnit" maxlength="50"></div>
-            <div class="form-group"><label for="paramType">Тип</label><input type="text" id="paramType" maxlength="50"></div>
-            <div class="form-group"><label for="paramDescription">Описание</label><textarea id="paramDescription" maxlength="500" rows="2"></textarea></div>
-            <div id="paramError" class="error-message" style="display:none;"></div>
-            <div class="form-actions" style="margin-top:15px;">
-                <button type="button" id="paramCancelBtn" class="btn btn-secondary">Отмена</button>
-                <button type="submit" class="btn btn-primary">Сохранить</button>
-            </div>
-        </form>
-    </div>
-</div>
+<div id="templateModal" class="modal"><div class="modal-content" style="max-width:700px; max-height:90vh; overflow-y:auto;"><span class="modal-close">&times;</span><h3 id="templateModalTitle">Добавить компонент</h3><form id="templateForm"><input type="hidden" id="templateId"></form></div></div>
+<div id="typeModal" class="modal"><div class="modal-content" style="max-width:500px;"><span class="modal-close">&times;</span><h3 id="typeModalTitle">Добавить тип</h3><form id="typeForm"><input type="hidden" id="typeId"></form></div></div>
+<div id="paramModal" class="modal"><div class="modal-content" style="max-width:500px;"><span class="modal-close">&times;</span><h3 id="paramModalTitle">Добавить параметр</h3><form id="paramForm"><input type="hidden" id="paramId"></form></div></div>
 
 <script>
 (function() {
-    var token = localStorage.getItem('token');
     var user = JSON.parse(localStorage.getItem('user') || '{}');
     var isAdmin = user && user.role === 'admin';
-
-    function escapeHtml(str) {
-        var div = document.createElement('div');
-        div.textContent = str || '';
-        return div.innerHTML;
+    function escapeHtml(str) { var d=document.createElement('div'); d.textContent=str||''; return d.innerHTML; }
+    function createNewParam(name, unit, type, cb) {
+        fetch('/api/parameters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,unit:unit||'',type:type||''})})
+        .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});return r.json();})
+        .then(function(np){if(cb)cb(np);}).catch(function(e){alert('Ошибка: '+e.message);});
+    }
+    function createNewType(name, category, cb) {
+        fetch('/api/component-types',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,category:category||''})})
+        .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});return r.json();})
+        .then(function(nt){if(cb)cb(nt);}).catch(function(e){alert('Ошибка: '+e.message);});
+    }
+    function buildParamSelect(selId) {
+        var h='';
+        if(window._allParams&&window._allParams.length>0){h+='<optgroup label="Существующие параметры">';window._allParams.forEach(function(p){h+='<option value="'+p.id+'"'+(selId==p.id?' selected':'')+'>'+escapeHtml(p.name)+'</option>';});h+='</optgroup>';}
+        h+='<optgroup label="Добавить"><option value="__new__"'+(selId?'':' selected')+'>+ новый параметр</option></optgroup>';
+        return h;
+    }
+    function buildTypeSelect(selId) {
+        var h='';
+        if(window._allTypes&&window._allTypes.length>0){h+='<optgroup label="Существующие типы">';window._allTypes.forEach(function(t){h+='<option value="'+t.id+'"'+(selId==t.id?' selected':'')+'>'+escapeHtml(t.name)+'</option>';});h+='</optgroup>';}
+        h+='<optgroup label="Добавить"><option value="__new__"'+(selId?'':' selected')+'>+ новый тип</option></optgroup>';
+        return h;
     }
 
-    // ==================== ВКЛАДКИ ====================
-    document.querySelectorAll('.tab-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
-            document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
-            btn.classList.add('active');
-            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-        });
-    });
+    document.querySelectorAll('.tab-btn').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.tab-btn').forEach(function(x){x.classList.remove('active');});document.querySelectorAll('.tab-content').forEach(function(x){x.classList.remove('active');});b.classList.add('active');document.getElementById('tab-'+b.dataset.tab).classList.add('active');if(b.dataset.tab==='types')loadTypes();if(b.dataset.tab==='params')loadParams();});});
+    function setAdmin(){var d=isAdmin?'':'none';['addTemplateBtn','exportTemplatesBtn','importTemplatesBtn','addTypeBtn','exportTypesBtn','importTypesBtn','addParamBtn','exportParamsBtn','importParamsBtn','templatesActionsCol','typesActionsCol','paramsActionsCol'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=d;});}
+    setAdmin();
 
-    // Показываем/скрываем колонки действий и кнопки для админа
-    function setAdminUI() {
-        var display = isAdmin ? '' : 'none';
-        var els = [
-            'addTemplateBtn','exportTemplatesBtn','importTemplatesBtn',
-            'addTypeBtn','exportTypesBtn','importTypesBtn',
-            'addParamBtn','exportParamsBtn','importParamsBtn',
-            'templatesActionsCol','typesActionsCol','paramsActionsCol'
-        ];
-        els.forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el) el.style.display = display;
-        });
-    }
-    setAdminUI();
+    // Шаблоны
+    async function loadTemplates(){var t=document.getElementById('templatesBody');try{var r=await fetch('/api/block-templates');var d=await r.json();if(!d.length){t.innerHTML='<tr><td colspan="10">Нет компонентов</td></tr>';return;}var h='';d.forEach(function(x){h+='<tr><td>'+escapeHtml(x.type_name||'')+'</td><td>'+escapeHtml(x.name)+'</td><td>'+escapeHtml(x.manufacturer_name||'')+'</td><td>'+escapeHtml(x.article||'')+'</td><td>'+(x.price||'')+'</td><td>'+(x.weight_grams||'')+'</td><td>'+(x.power_watts||'')+'</td><td>'+escapeHtml(x.ln||'')+'</td><td>'+(x.url?'<a href="'+escapeHtml(x.url)+'" target="_blank">🔗</a>':'')+'</td>';if(isAdmin)h+='<td><button class="btn btn-sm btn-edit" data-id="'+x.id+'">✏️</button> <button class="btn btn-sm btn-delete" data-id="'+x.id+'">🗑️</button></td>';h+='</tr>';});t.innerHTML=h;t.querySelectorAll('.btn-edit').forEach(function(b){b.addEventListener('click',function(){openTemplateModal(this.dataset.id);});});t.querySelectorAll('.btn-delete').forEach(function(b){b.addEventListener('click',function(){if(confirm('Удалить?'))deleteTemplate(this.dataset.id);});});}catch(e){t.innerHTML='<tr><td colspan="10">Ошибка загрузки</td></tr>';}}
+    async function deleteTemplate(id){await fetch('/api/block-templates/'+id,{method:'DELETE'});loadTemplates();}
 
-    // ==================== 1. КОМПОНЕНТЫ ШКАФОВ ====================
-    async function loadTemplates() {
-        var tbody = document.getElementById('templatesBody');
-        try {
-            var res = await fetch('/api/block-templates', { headers: { 'Authorization': 'Bearer ' + token } });
-            var data = await res.json();
-            if (!data.length) { tbody.innerHTML = '<tr><td colspan="10">Нет компонентов</td></tr>'; return; }
-            var paramNames = new Set();
-            data.forEach(function(t) { if (t.parameters) t.parameters.forEach(function(p) { paramNames.add(p.param_name); }); });
-            paramNames = Array.from(paramNames).sort();
+    var tModal=document.getElementById('templateModal');
+    document.querySelector('#templateModal .modal-close').addEventListener('click',function(){tModal.classList.remove('active');});
 
-            var html = '';
-            data.forEach(function(t) {
-                html += '<tr>';
-                html += '<td>' + escapeHtml(t.type_name || '') + '</td>';
-                html += '<td>' + escapeHtml(t.name) + '</td>';
-                html += '<td>' + escapeHtml(t.manufacturer_name || '') + '</td>';
-                html += '<td>' + escapeHtml(t.article || '') + '</td>';
-                html += '<td>' + (t.price || '') + '</td>';
-                html += '<td>' + (t.weight_grams || '') + '</td>';
-                html += '<td>' + (t.power_watts || '') + '</td>';
-                html += '<td>' + escapeHtml(t.ln || '') + '</td>';
-                html += '<td>' + (t.url ? '<a href="' + escapeHtml(t.url) + '" target="_blank">🔗</a>' : '') + '</td>';
-                if (isAdmin) html += '<td><button class="btn btn-sm btn-edit edit-template-btn" data-id="' + t.id + '">✏️</button> <button class="btn btn-sm btn-delete delete-template-btn" data-id="' + t.id + '">🗑️</button></td>';
-                html += '</tr>';
-            });
-            tbody.innerHTML = html;
+    async function openTemplateModal(id){
+        tModal.classList.add('active');
+        var types=await(await fetch('/api/component-types')).json();
+        var manufacturers=await(await fetch('/api/manufacturers')).json();
+        var allParams=await(await fetch('/api/parameters')).json();
+        window._allTypes=types; window._allParams=allParams;
 
-            tbody.querySelectorAll('.edit-template-btn').forEach(function(b) { b.addEventListener('click', function() { openTemplateModal(this.dataset.id); }); });
-            tbody.querySelectorAll('.delete-template-btn').forEach(function(b) { b.addEventListener('click', function() { if(confirm('Удалить?')) deleteTemplate(this.dataset.id); }); });
-        } catch(e) { tbody.innerHTML = '<tr><td colspan="10">Ошибка загрузки</td></tr>'; }
-    }
+        var form=document.getElementById('templateForm');
+        var isEdit=!!id;
+        var tData={};
+        if(id){var r=await fetch('/api/block-templates');var d=await r.json();tData=d.find(function(x){return x.id==id;})||{};}
 
-    async function deleteTemplate(id) {
-        await fetch('/api/block-templates/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
-        loadTemplates();
-    }
+        form.innerHTML='<input type="hidden" id="templateId" value="'+(tData.id||'')+'">'+
+            '<div class="form-row"><div class="form-group"><label for="templateType">Тип</label><select id="templateType" required></select><div class="new-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;"><input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;"><button type="button" class="btn btn-sm btn-primary save-new-type-btn">✓</button></div></div><div class="form-group"><label for="templateManufacturer">Производитель</label><select id="templateManufacturer"></select></div></div>'+
+            '<div class="form-row"><div class="form-group"><label for="templateName">Название *</label><input type="text" id="templateName" required maxlength="255" value="'+escapeHtml(tData.name||'')+'"></div><div class="form-group"><label for="templateArticle">Артикул</label><input type="text" id="templateArticle" maxlength="255" value="'+escapeHtml(tData.article||'')+'"></div></div>'+
+            '<div class="form-row"><div class="form-group"><label for="templatePrice">Цена, руб.</label><input type="number" id="templatePrice" step="0.01" value="'+(tData.price||'')+'"></div><div class="form-group"><label for="templateLabor">Работа, ч</label><input type="number" id="templateLabor" step="0.01" value="'+(tData.labor||'')+'"></div></div>'+
+            '<div class="form-row"><div class="form-group"><label for="templateWeight">Вес, гр.</label><input type="number" id="templateWeight" step="0.01" value="'+(tData.weight_grams||'')+'"></div><div class="form-group"><label for="templatePower">Мощность, Вт</label><input type="number" id="templatePower" step="0.01" value="'+(tData.power_watts||'')+'"></div></div>'+
+            '<div class="form-row"><div class="form-group"><label for="templateLn">LN</label><input type="text" id="templateLn" maxlength="255" value="'+escapeHtml(tData.ln||'')+'"></div><div class="form-group"><label for="templateUrl">Ссылка</label><input type="url" id="templateUrl" maxlength="500" value="'+escapeHtml(tData.url||'')+'"></div></div>'+
+            '<div class="form-group"><label for="templateDescription">Описание</label><textarea id="templateDescription" maxlength="500" rows="2">'+escapeHtml(tData.description||'')+'</textarea></div>'+
+            '<h4>Параметры</h4><div id="parametersContainer"></div><button type="button" id="addParamRowBtn" class="btn btn-secondary btn-sm">+ Добавить параметр</button>'+
+            '<div id="templateError" class="error-message" style="display:none;"></div><div class="form-actions" style="margin-top:15px;"><button type="button" id="templateCancelBtn" class="btn btn-secondary">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';
 
-    // Модальное окно компонента
-    var templateModal = document.getElementById('templateModal');
-    document.querySelector('#templateModal .modal-close').addEventListener('click', function() { templateModal.classList.remove('active'); });
-    document.getElementById('templateCancelBtn').addEventListener('click', function() { templateModal.classList.remove('active'); });
+        document.getElementById('templateCancelBtn').addEventListener('click',function(){tModal.classList.remove('active');});
 
-    async function openTemplateModal(id) {
-        templateModal.classList.add('active');
-        document.getElementById('templateError').style.display = 'none';
-        document.getElementById('parametersContainer').innerHTML = '';
-        var types = await (await fetch('/api/component-types', { headers: { 'Authorization': 'Bearer ' + token } })).json();
-        var manufacturers = await (await fetch('/api/manufacturers', { headers: { 'Authorization': 'Bearer ' + token } })).json();
-        window.allParams = await (await fetch('/api/parameters', { headers: { 'Authorization': 'Bearer ' + token } })).json();
+        var ts=document.getElementById('templateType');
+        ts.innerHTML=buildTypeSelect(tData.type_id||null);
+        var newTypeRow=document.querySelector('.new-type-row');
+        var newTypeName=document.querySelector('.new-type-name');
+        var saveTypeBtn=document.querySelector('.save-new-type-btn');
+        if(ts.value==='__new__')newTypeRow.style.display='flex';
+        ts.addEventListener('change',function(){if(ts.value==='__new__')newTypeRow.style.display='flex';else newTypeRow.style.display='none';});
+        saveTypeBtn.addEventListener('click',function(){var n=newTypeName.value.trim();if(!n){alert('Введите название');return;}createNewType(n,'',function(nt){window._allTypes.push(nt);ts.innerHTML=buildTypeSelect(nt.id);newTypeRow.style.display='none';loadTypes();});});
 
-        var ts = document.getElementById('templateType'); ts.innerHTML = '<option value="">-- Тип --</option>';
-        types.forEach(function(t) { ts.innerHTML += '<option value="' + t.id + '">' + t.name + '</option>'; });
-        var ms = document.getElementById('templateManufacturer'); ms.innerHTML = '<option value="">-- Производитель --</option>';
-        manufacturers.forEach(function(m) { ms.innerHTML += '<option value="' + m.id + '">' + m.name + '</option>'; });
+        var ms=document.getElementById('templateManufacturer');
+        ms.innerHTML='<option value="">-- Производитель --</option>';
+        manufacturers.forEach(function(m){ms.innerHTML+='<option value="'+m.id+'">'+m.name+'</option>';});
+        if(tData.manufacturer_id)ms.value=tData.manufacturer_id;
 
-        if (id) {
-            var res = await fetch('/api/block-templates', { headers: { 'Authorization': 'Bearer ' + token } });
-            var data = await res.json();
-            var t = data.find(function(x) { return x.id == id; });
-            if (t) {
-                document.getElementById('templateId').value = t.id;
-                document.getElementById('templateName').value = t.name || '';
-                document.getElementById('templateArticle').value = t.article || '';
-                document.getElementById('templatePrice').value = t.price || '';
-                document.getElementById('templateLabor').value = t.labor || '';
-                document.getElementById('templateWeight').value = t.weight_grams || '';
-                document.getElementById('templatePower').value = t.power_watts || '';
-                document.getElementById('templateLn').value = t.ln || '';
-                document.getElementById('templateUrl').value = t.url || '';
-                document.getElementById('templateDescription').value = t.description || '';
-                if (t.type_id) ts.value = t.type_id;
-                if (t.manufacturer_id) ms.value = t.manufacturer_id;
-                if (t.parameters) t.parameters.forEach(function(p) { addParamRow(p.parameter_id, p.param_value); });
-            }
-        } else {
-            document.getElementById('templateForm').reset();
-            document.getElementById('templateId').value = '';
+        function addParamRow(pId,val){
+            var row=document.createElement('div');row.className='param-row';row.style.cssText='display:flex;gap:8px;margin-bottom:5px;align-items:center;';
+            var s=document.createElement('select');s.style.flex='1';s.innerHTML=buildParamSelect(pId);
+            var inp=document.createElement('input');inp.type='text';inp.placeholder='Значение';inp.style.flex='1';if(val)inp.value=val;
+            var ni=document.createElement('input');ni.type='text';ni.placeholder='Название нового параметра';ni.style.cssText='flex:2;display:none;';
+            var ui=document.createElement('input');ui.type='text';ui.placeholder='Ед.изм';ui.style.cssText='flex:1;display:none;';
+            var sv=document.createElement('button');sv.type='button';sv.textContent='✓';sv.className='btn btn-sm btn-primary';sv.style.display='none';
+            var dl=document.createElement('button');dl.type='button';dl.textContent='✕';dl.className='btn btn-sm btn-delete';
+            if(s.value==='__new__'||!pId){ni.style.display='';ui.style.display='';sv.style.display='';}
+            s.addEventListener('change',function(){if(s.value==='__new__'){ni.style.display='';ui.style.display='';sv.style.display='';}else{ni.style.display='none';ui.style.display='none';sv.style.display='none';}});
+            sv.addEventListener('click',function(){var n=ni.value.trim();if(!n){alert('Введите название');return;}createNewParam(n,ui.value.trim(),'',function(np){window._allParams.push(np);s.innerHTML=buildParamSelect(np.id);ni.style.display='none';ui.style.display='none';sv.style.display='none';document.querySelectorAll('.param-row select').forEach(function(sel){if(sel!==s)sel.innerHTML=buildParamSelect(sel.value==='__new__'?null:sel.value);});loadParams();});});
+            dl.addEventListener('click',function(){row.remove();});
+            row.appendChild(s);row.appendChild(inp);row.appendChild(ni);row.appendChild(ui);row.appendChild(sv);row.appendChild(dl);
+            document.getElementById('parametersContainer').appendChild(row);
         }
-    }
 
-    function addParamRow(paramId, value) {
-        var row = document.createElement('div'); row.className = 'param-row'; row.style.cssText = 'display:flex;gap:8px;margin-bottom:5px;';
-        var s = document.createElement('select'); s.style.flex = '1';
-        s.innerHTML = '<option value="">-- Параметр --</option>';
-        (window.allParams || []).forEach(function(p) { s.innerHTML += '<option value="' + p.id + '">' + p.name + '</option>'; });
-        if (paramId) s.value = paramId;
-        var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Значение'; inp.style.flex = '2';
-        if (value) inp.value = value;
-        var del = document.createElement('button'); del.type = 'button'; del.textContent = '✕'; del.className = 'btn btn-sm btn-delete';
-        del.addEventListener('click', function() { row.remove(); });
-        row.appendChild(s); row.appendChild(inp); row.appendChild(del);
-        document.getElementById('parametersContainer').appendChild(row);
-    }
+        if(tData.parameters&&tData.parameters.length)tData.parameters.forEach(function(p){addParamRow(p.parameter_id,p.param_value);});
+        else addParamRow(null,null);
 
-    document.getElementById('addParamRowBtn').addEventListener('click', function() { addParamRow(); });
-    document.getElementById('addTemplateBtn').addEventListener('click', function() { openTemplateModal(); });
+        document.getElementById('addParamRowBtn').addEventListener('click',function(){addParamRow(null,null);});
 
-    document.getElementById('templateForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        var id = document.getElementById('templateId').value;
-        var params = [];
-        document.querySelectorAll('.param-row').forEach(function(r) {
-            var s = r.querySelector('select'), inp = r.querySelector('input');
-            if (s.value) params.push({ parameter_id: parseInt(s.value), param_value: inp.value });
-        });
-        var body = {
-            name: document.getElementById('templateName').value.trim(),
-            type_id: document.getElementById('templateType').value || null,
-            manufacturer_id: document.getElementById('templateManufacturer').value || null,
-            article: document.getElementById('templateArticle').value.trim() || null,
-            price: document.getElementById('templatePrice').value || null,
-            labor: document.getElementById('templateLabor').value || null,
-            weight_grams: document.getElementById('templateWeight').value || null,
-            power_watts: document.getElementById('templatePower').value || null,
-            ln: document.getElementById('templateLn').value.trim() || null,
-            url: document.getElementById('templateUrl').value.trim() || null,
-            description: document.getElementById('templateDescription').value.trim() || null,
-            parameters: params
+        form.onsubmit=async function(e){
+            e.preventDefault();
+            var id=document.getElementById('templateId').value;
+            var params=[];
+            document.querySelectorAll('.param-row').forEach(function(r){var s=r.querySelector('select'),inp=r.querySelectorAll('input')[0];if(s.value&&s.value!=='__new__')params.push({parameter_id:parseInt(s.value),param_value:inp.value});});
+            var body={name:document.getElementById('templateName').value.trim(),type_id:document.getElementById('templateType').value||null,manufacturer_id:document.getElementById('templateManufacturer').value||null,article:document.getElementById('templateArticle').value.trim()||null,price:document.getElementById('templatePrice').value||null,labor:document.getElementById('templateLabor').value||null,weight_grams:document.getElementById('templateWeight').value||null,power_watts:document.getElementById('templatePower').value||null,ln:document.getElementById('templateLn').value.trim()||null,url:document.getElementById('templateUrl').value.trim()||null,description:document.getElementById('templateDescription').value.trim()||null,parameters:params};
+            if(!body.name||!body.type_id||body.type_id==='__new__'){alert('Заполните обязательные поля');return;}
+            var url=id?'/api/block-templates/'+id:'/api/block-templates';
+            var res=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+            if(res.ok){tModal.classList.remove('active');loadTemplates();}
+            else{var err=await res.json();document.getElementById('templateError').textContent=err.error||err.message;document.getElementById('templateError').style.display='block';}
         };
-        var url = id ? '/api/block-templates/' + id : '/api/block-templates';
-        var method = id ? 'PUT' : 'POST';
-        var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(body) });
-        if (res.ok) { templateModal.classList.remove('active'); loadTemplates(); }
-        else { var err = await res.json(); document.getElementById('templateError').textContent = err.error; document.getElementById('templateError').style.display = 'block'; }
-    });
-
-    document.getElementById('exportTemplatesBtn').addEventListener('click', async function() {
-        var res = await fetch('/api/block-templates/export', { headers: { 'Authorization': 'Bearer ' + token } });
-        var blob = await res.blob();
-        var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'components.xlsx'; a.click();
-    });
-    document.getElementById('importTemplatesBtn').addEventListener('click', function() { document.getElementById('importTemplatesFile').click(); });
-    document.getElementById('importTemplatesFile').addEventListener('change', async function() {
-        var fd = new FormData(); fd.append('file', this.files[0]);
-        await fetch('/api/block-templates/import', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd });
-        loadTemplates(); this.value = '';
-    });
-
-    // ==================== 2. ТИПЫ КОМПОНЕНТОВ ====================
-    async function loadTypes() {
-        var tbody = document.getElementById('typesBody');
-        var res = await fetch('/api/component-types', { headers: { 'Authorization': 'Bearer ' + token } });
-        var data = await res.json();
-        if (!data.length) { tbody.innerHTML = '<tr><td colspan="5">Нет типов</td></tr>'; return; }
-        var html = '';
-        data.forEach(function(t) {
-            html += '<tr><td>' + t.id + '</td><td>' + escapeHtml(t.name) + '</td><td>' + escapeHtml(t.category || '') + '</td><td>' + escapeHtml(t.description || '') + '</td>';
-            if (isAdmin) html += '<td><button class="btn btn-sm btn-edit edit-type-btn" data-id="' + t.id + '">✏️</button> <button class="btn btn-sm btn-delete delete-type-btn" data-id="' + t.id + '">🗑️</button></td>';
-            html += '</tr>';
-        });
-        tbody.innerHTML = html;
-        tbody.querySelectorAll('.edit-type-btn').forEach(function(b) { b.addEventListener('click', function() { openTypeModal(this.dataset.id); }); });
-        tbody.querySelectorAll('.delete-type-btn').forEach(function(b) { b.addEventListener('click', function() { if(confirm('Удалить?')) { fetch('/api/component-types/' + this.dataset.id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } }).then(loadTypes); } }); });
     }
 
-    var typeModal = document.getElementById('typeModal');
-    document.querySelector('#typeModal .modal-close').addEventListener('click', function() { typeModal.classList.remove('active'); });
-    document.getElementById('typeCancelBtn').addEventListener('click', function() { typeModal.classList.remove('active'); });
-    document.getElementById('addTypeBtn').addEventListener('click', function() { document.getElementById('typeForm').reset(); document.getElementById('typeId').value = ''; typeModal.classList.add('active'); });
+    document.getElementById('addTemplateBtn').addEventListener('click',function(){openTemplateModal();});
+    document.getElementById('exportTemplatesBtn').addEventListener('click',async function(){var r=await fetch('/api/block-templates/export');var b=await r.blob();var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='components.xlsx';a.click();});
+    document.getElementById('importTemplatesBtn').addEventListener('click',function(){document.getElementById('importTemplatesFile').click();});
+    document.getElementById('importTemplatesFile').addEventListener('change',async function(){var fd=new FormData();fd.append('file',this.files[0]);await fetch('/api/block-templates/import',{method:'POST',body:fd});loadTemplates();this.value='';});
 
-    function openTypeModal(id) {
-        document.getElementById('typeForm').reset(); document.getElementById('typeId').value = '';
-        typeModal.classList.add('active');
-        if (id) {
-            fetch('/api/component-types', { headers: { 'Authorization': 'Bearer ' + token } }).then(function(r) { return r.json(); }).then(function(data) {
-                var t = data.find(function(x) { return x.id == id; });
-                if (t) { document.getElementById('typeId').value = t.id; document.getElementById('typeName').value = t.name; document.getElementById('typeCategory').value = t.category || ''; document.getElementById('typeDescription').value = t.description || ''; }
-            });
-        }
+    // Типы
+    async function loadTypes(){var t=document.getElementById('typesBody');try{var r=await fetch('/api/component-types');var d=await r.json();if(!d.length){t.innerHTML='<tr><td colspan="5">Нет типов</td></tr>';return;}var h='';d.forEach(function(x){h+='<tr><td>'+x.id+'</td><td>'+escapeHtml(x.name)+'</td><td>'+escapeHtml(x.category||'')+'</td><td>'+escapeHtml(x.description||'')+'</td>';if(isAdmin)h+='<td><button class="btn btn-sm btn-edit" data-id="'+x.id+'">✏️</button> <button class="btn btn-sm btn-delete" data-id="'+x.id+'">🗑️</button></td>';h+='</tr>';});t.innerHTML=h;t.querySelectorAll('.btn-edit').forEach(function(b){b.addEventListener('click',function(){openTypeModal(this.dataset.id);});});t.querySelectorAll('.btn-delete').forEach(function(b){b.addEventListener('click',function(){if(confirm('Удалить?')){fetch('/api/component-types/'+this.dataset.id,{method:'DELETE'}).then(loadTypes);}});});}catch(e){t.innerHTML='<tr><td colspan="5">Ошибка загрузки</td></tr>';}}
+
+    var typeModal=document.getElementById('typeModal');
+    document.querySelector('#typeModal .modal-close').addEventListener('click',function(){typeModal.classList.remove('active');});
+    document.getElementById('addTypeBtn').addEventListener('click',function(){document.getElementById('typeForm').innerHTML='<input type="hidden" id="typeId" value=""><div class="form-group"><label for="typeName">Название *</label><input type="text" id="typeName" required maxlength="255"></div><div class="form-group"><label for="typeCategory">Категория</label><input type="text" id="typeCategory" maxlength="100"></div><div class="form-group"><label for="typeDescription">Описание</label><textarea id="typeDescription" maxlength="500" rows="2"></textarea></div><div id="typeError" class="error-message" style="display:none;"></div><div class="form-actions" style="margin-top:15px;"><button type="button" id="typeCancelBtn" class="btn btn-secondary">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';document.getElementById('typeCancelBtn').addEventListener('click',function(){typeModal.classList.remove('active');});typeModal.classList.add('active');
+        document.getElementById('typeForm').onsubmit=async function(e){e.preventDefault();var id=document.getElementById('typeId').value;var body={name:document.getElementById('typeName').value.trim(),category:document.getElementById('typeCategory').value.trim(),description:document.getElementById('typeDescription').value.trim()};var url=id?'/api/component-types/'+id:'/api/component-types';var res=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(res.ok){typeModal.classList.remove('active');loadTypes();}};
+    });
+
+    function openTypeModal(id){document.getElementById('typeForm').innerHTML='<input type="hidden" id="typeId" value=""><div class="form-group"><label for="typeName">Название *</label><input type="text" id="typeName" required maxlength="255"></div><div class="form-group"><label for="typeCategory">Категория</label><input type="text" id="typeCategory" maxlength="100"></div><div class="form-group"><label for="typeDescription">Описание</label><textarea id="typeDescription" maxlength="500" rows="2"></textarea></div><div id="typeError" class="error-message" style="display:none;"></div><div class="form-actions" style="margin-top:15px;"><button type="button" id="typeCancelBtn" class="btn btn-secondary">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';document.getElementById('typeCancelBtn').addEventListener('click',function(){typeModal.classList.remove('active');});typeModal.classList.add('active');if(id){fetch('/api/component-types').then(function(r){return r.json();}).then(function(d){var t=d.find(function(x){return x.id==id;});if(t){document.getElementById('typeId').value=t.id;document.getElementById('typeName').value=t.name;document.getElementById('typeCategory').value=t.category||'';document.getElementById('typeDescription').value=t.description||'';}});}
+        document.getElementById('typeForm').onsubmit=async function(e){e.preventDefault();var id=document.getElementById('typeId').value;var body={name:document.getElementById('typeName').value.trim(),category:document.getElementById('typeCategory').value.trim(),description:document.getElementById('typeDescription').value.trim()};var url=id?'/api/component-types/'+id:'/api/component-types';var res=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(res.ok){typeModal.classList.remove('active');loadTypes();}};
     }
 
-    document.getElementById('typeForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        var id = document.getElementById('typeId').value;
-        var body = { name: document.getElementById('typeName').value.trim(), category: document.getElementById('typeCategory').value.trim(), description: document.getElementById('typeDescription').value.trim() };
-        var url = id ? '/api/component-types/' + id : '/api/component-types';
-        var method = id ? 'PUT' : 'POST';
-        var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(body) });
-        if (res.ok) { typeModal.classList.remove('active'); loadTypes(); }
+    // Параметры
+    async function loadParams(){var t=document.getElementById('paramsBody');try{var r=await fetch('/api/parameters');var d=await r.json();if(!d.length){t.innerHTML='<tr><td colspan="6">Нет параметров</td></tr>';return;}var h='';d.forEach(function(p){h+='<tr><td>'+p.id+'</td><td>'+escapeHtml(p.name)+'</td><td>'+escapeHtml(p.unit||'')+'</td><td>'+escapeHtml(p.type||'')+'</td><td>'+escapeHtml(p.description||'')+'</td>';if(isAdmin)h+='<td><button class="btn btn-sm btn-edit" data-id="'+p.id+'">✏️</button> <button class="btn btn-sm btn-delete" data-id="'+p.id+'">🗑️</button></td>';h+='</tr>';});t.innerHTML=h;t.querySelectorAll('.btn-edit').forEach(function(b){b.addEventListener('click',function(){openParamModal(this.dataset.id);});});t.querySelectorAll('.btn-delete').forEach(function(b){b.addEventListener('click',function(){if(confirm('Удалить?')){fetch('/api/parameters/'+this.dataset.id,{method:'DELETE'}).then(loadParams);}});});}catch(e){t.innerHTML='<tr><td colspan="6">Ошибка загрузки</td></tr>';}}
+
+    var paramModal=document.getElementById('paramModal');
+    document.querySelector('#paramModal .modal-close').addEventListener('click',function(){paramModal.classList.remove('active');});
+    document.getElementById('addParamBtn').addEventListener('click',function(){document.getElementById('paramForm').innerHTML='<input type="hidden" id="paramId" value=""><div class="form-group"><label for="paramName">Название *</label><input type="text" id="paramName" required maxlength="255"></div><div class="form-group"><label for="paramUnit">Ед. измерения</label><input type="text" id="paramUnit" maxlength="50"></div><div class="form-group"><label for="paramType">Тип</label><input type="text" id="paramType" maxlength="50"></div><div class="form-group"><label for="paramDescription">Описание</label><textarea id="paramDescription" maxlength="500" rows="2"></textarea></div><div id="paramError" class="error-message" style="display:none;"></div><div class="form-actions" style="margin-top:15px;"><button type="button" id="paramCancelBtn" class="btn btn-secondary">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';document.getElementById('paramCancelBtn').addEventListener('click',function(){paramModal.classList.remove('active');});paramModal.classList.add('active');
+        document.getElementById('paramForm').onsubmit=async function(e){e.preventDefault();var id=document.getElementById('paramId').value;var body={name:document.getElementById('paramName').value.trim(),unit:document.getElementById('paramUnit').value.trim(),type:document.getElementById('paramType').value.trim(),description:document.getElementById('paramDescription').value.trim()};var url=id?'/api/parameters/'+id:'/api/parameters';var res=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(res.ok){paramModal.classList.remove('active');loadParams();}};
     });
 
-    document.getElementById('exportTypesBtn').addEventListener('click', async function() {
-        var res = await fetch('/api/component-types/export', { headers: { 'Authorization': 'Bearer ' + token } });
-        var blob = await res.blob(); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'component_types.xlsx'; a.click();
-    });
-    document.getElementById('importTypesBtn').addEventListener('click', function() { document.getElementById('importTypesFile').click(); });
-    document.getElementById('importTypesFile').addEventListener('change', async function() {
-        var fd = new FormData(); fd.append('file', this.files[0]);
-        await fetch('/api/component-types/import', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd });
-        loadTypes(); this.value = '';
-    });
-
-    // ==================== 3. ПАРАМЕТРЫ ====================
-    async function loadParams() {
-        var tbody = document.getElementById('paramsBody');
-        var res = await fetch('/api/parameters', { headers: { 'Authorization': 'Bearer ' + token } });
-        var data = await res.json();
-        if (!data.length) { tbody.innerHTML = '<tr><td colspan="6">Нет параметров</td></tr>'; return; }
-        var html = '';
-        data.forEach(function(p) {
-            html += '<tr><td>' + p.id + '</td><td>' + escapeHtml(p.name) + '</td><td>' + escapeHtml(p.unit || '') + '</td><td>' + escapeHtml(p.type || '') + '</td><td>' + escapeHtml(p.description || '') + '</td>';
-            if (isAdmin) html += '<td><button class="btn btn-sm btn-edit edit-param-btn" data-id="' + p.id + '">✏️</button> <button class="btn btn-sm btn-delete delete-param-btn" data-id="' + p.id + '">🗑️</button></td>';
-            html += '</tr>';
-        });
-        tbody.innerHTML = html;
-        tbody.querySelectorAll('.edit-param-btn').forEach(function(b) { b.addEventListener('click', function() { openParamModal(this.dataset.id); }); });
-        tbody.querySelectorAll('.delete-param-btn').forEach(function(b) { b.addEventListener('click', function() { if(confirm('Удалить?')) { fetch('/api/parameters/' + this.dataset.id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } }).then(loadParams); } }); });
+    function openParamModal(id){document.getElementById('paramForm').innerHTML='<input type="hidden" id="paramId" value=""><div class="form-group"><label for="paramName">Название *</label><input type="text" id="paramName" required maxlength="255"></div><div class="form-group"><label for="paramUnit">Ед. измерения</label><input type="text" id="paramUnit" maxlength="50"></div><div class="form-group"><label for="paramType">Тип</label><input type="text" id="paramType" maxlength="50"></div><div class="form-group"><label for="paramDescription">Описание</label><textarea id="paramDescription" maxlength="500" rows="2"></textarea></div><div id="paramError" class="error-message" style="display:none;"></div><div class="form-actions" style="margin-top:15px;"><button type="button" id="paramCancelBtn" class="btn btn-secondary">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';document.getElementById('paramCancelBtn').addEventListener('click',function(){paramModal.classList.remove('active');});paramModal.classList.add('active');if(id){fetch('/api/parameters').then(function(r){return r.json();}).then(function(d){var p=d.find(function(x){return x.id==id;});if(p){document.getElementById('paramId').value=p.id;document.getElementById('paramName').value=p.name;document.getElementById('paramUnit').value=p.unit||'';document.getElementById('paramType').value=p.type||'';document.getElementById('paramDescription').value=p.description||'';}});}
+        document.getElementById('paramForm').onsubmit=async function(e){e.preventDefault();var id=document.getElementById('paramId').value;var body={name:document.getElementById('paramName').value.trim(),unit:document.getElementById('paramUnit').value.trim(),type:document.getElementById('paramType').value.trim(),description:document.getElementById('paramDescription').value.trim()};var url=id?'/api/parameters/'+id:'/api/parameters';var res=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(res.ok){paramModal.classList.remove('active');loadParams();}};
     }
 
-    var paramModal = document.getElementById('paramModal');
-    document.querySelector('#paramModal .modal-close').addEventListener('click', function() { paramModal.classList.remove('active'); });
-    document.getElementById('paramCancelBtn').addEventListener('click', function() { paramModal.classList.remove('active'); });
-    document.getElementById('addParamBtn').addEventListener('click', function() { document.getElementById('paramForm').reset(); document.getElementById('paramId').value = ''; paramModal.classList.add('active'); });
+    document.getElementById('exportTypesBtn').addEventListener('click',async function(){var r=await fetch('/api/component-types/export');var b=await r.blob();var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='component_types.xlsx';a.click();});
+    document.getElementById('importTypesBtn').addEventListener('click',function(){document.getElementById('importTypesFile').click();});
+    document.getElementById('importTypesFile').addEventListener('change',async function(){var fd=new FormData();fd.append('file',this.files[0]);await fetch('/api/component-types/import',{method:'POST',body:fd});loadTypes();this.value='';});
+    document.getElementById('exportParamsBtn').addEventListener('click',async function(){var r=await fetch('/api/parameters/export');var b=await r.blob();var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='parameters.xlsx';a.click();});
+    document.getElementById('importParamsBtn').addEventListener('click',function(){document.getElementById('importParamsFile').click();});
+    document.getElementById('importParamsFile').addEventListener('change',async function(){var fd=new FormData();fd.append('file',this.files[0]);await fetch('/api/parameters/import',{method:'POST',body:fd});loadParams();this.value='';});
 
-    function openParamModal(id) {
-        document.getElementById('paramForm').reset(); document.getElementById('paramId').value = '';
-        paramModal.classList.add('active');
-        if (id) {
-            fetch('/api/parameters', { headers: { 'Authorization': 'Bearer ' + token } }).then(function(r) { return r.json(); }).then(function(data) {
-                var p = data.find(function(x) { return x.id == id; });
-                if (p) { document.getElementById('paramId').value = p.id; document.getElementById('paramName').value = p.name; document.getElementById('paramUnit').value = p.unit || ''; document.getElementById('paramType').value = p.type || ''; document.getElementById('paramDescription').value = p.description || ''; }
-            });
-        }
-    }
-
-    document.getElementById('paramForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        var id = document.getElementById('paramId').value;
-        var body = { name: document.getElementById('paramName').value.trim(), unit: document.getElementById('paramUnit').value.trim(), type: document.getElementById('paramType').value.trim(), description: document.getElementById('paramDescription').value.trim() };
-        var url = id ? '/api/parameters/' + id : '/api/parameters';
-        var method = id ? 'PUT' : 'POST';
-        var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify(body) });
-        if (res.ok) { paramModal.classList.remove('active'); loadParams(); }
-    });
-
-    document.getElementById('exportParamsBtn').addEventListener('click', async function() {
-        var res = await fetch('/api/parameters/export', { headers: { 'Authorization': 'Bearer ' + token } });
-        var blob = await res.blob(); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'parameters.xlsx'; a.click();
-    });
-    document.getElementById('importParamsBtn').addEventListener('click', function() { document.getElementById('importParamsFile').click(); });
-    document.getElementById('importParamsFile').addEventListener('change', async function() {
-        var fd = new FormData(); fd.append('file', this.files[0]);
-        await fetch('/api/parameters/import', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd });
-        loadParams(); this.value = '';
-    });
-
-    // Загрузка
-    loadTemplates();
-    loadTypes();
-    loadParams();
+    loadTemplates();loadTypes();loadParams();
 })();
 </script>
