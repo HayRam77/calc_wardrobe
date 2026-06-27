@@ -217,6 +217,28 @@ authActionBtn.addEventListener('click', function() {
   window.location.href = '/login.html';
 });
 
+// Глобальный перехват fetch для добавления токена
+var originalFetch = window.fetch;
+window.fetch = function(url, options) {
+  options = options || {};
+  var token = localStorage.getItem('token');
+  if (token) {
+    options.headers = options.headers || {};
+    if (!options.headers['Authorization']) {
+      options.headers['Authorization'] = 'Bearer ' + token;
+    }
+  }
+  return originalFetch(url, options).then(function(response) {
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      currentUser = null;
+      window.location.href = '/login.html';
+    }
+    return response;
+  });
+};
+
 function navigateTo(url) { history.pushState(null, '', url); loadPage(url); }
 window.loadPage = loadPage;
 async function loadPage(url) {
@@ -268,6 +290,11 @@ async function loadPage(url) {
       }
       oldScript.parentNode.replaceChild(newScript, oldScript);
     });
+    setTimeout(function() {
+      if (typeof window.pageInit === 'function') {
+        window.pageInit();
+      }
+    }, 100);
   } catch (e) {
     container.innerHTML = '<p>Ошибка загрузки страницы</p>';
   }

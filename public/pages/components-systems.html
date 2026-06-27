@@ -18,19 +18,11 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Тип</th>
-                        <th>Название</th>
-                        <th>Производитель</th>
-                        <th>Артикул</th>
-                        <th>Описание</th>
-                        <th>Параметры</th>
+                        <th>ID</th><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Описание</th><th>Параметры</th>
                         <th id="componentsActionsCol" style="display:none;">Действия</th>
                     </tr>
                 </thead>
-                <tbody id="componentsBody">
-                    <tr><td colspan="8" class="loading">Загрузка...</td></tr>
-                </tbody>
+                <tbody id="componentsBody"><tr><td colspan="8" class="loading">Загрузка...</td></tr></tbody>
             </table>
         </div>
         <div id="componentsEmpty" class="empty-state" style="display:none;"><p>Компонентов нет</p></div>
@@ -46,17 +38,8 @@
         </div>
         <div class="table-container">
             <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Название</th>
-                        <th>Описание</th>
-                        <th id="typesActionsCol" style="display:none;">Действия</th>
-                    </tr>
-                </thead>
-                <tbody id="typesBody">
-                    <tr><td colspan="4" class="loading">Загрузка...</td></tr>
-                </tbody>
+                <thead><tr><th>ID</th><th>Название</th><th>Описание</th><th id="typesActionsCol" style="display:none;">Действия</th></tr></thead>
+                <tbody id="typesBody"><tr><td colspan="4" class="loading">Загрузка...</td></tr></tbody>
             </table>
         </div>
         <div id="typesEmpty" class="empty-state" style="display:none;"><p>Типов нет</p></div>
@@ -72,24 +55,14 @@
         </div>
         <div class="table-container">
             <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Название</th>
-                        <th>Значение</th>
-                        <th>Описание</th>
-                        <th id="paramsActionsCol" style="display:none;">Действия</th>
-                    </tr>
-                </thead>
-                <tbody id="paramsBody">
-                    <tr><td colspan="5" class="loading">Загрузка...</td></tr>
-                </tbody>
+                <thead><tr><th>ID</th><th>Название</th><th>Значение</th><th>Описание</th><th id="paramsActionsCol" style="display:none;">Действия</th></tr></thead>
+                <tbody id="paramsBody"><tr><td colspan="5" class="loading">Загрузка...</td></tr></tbody>
             </table>
         </div>
         <div id="paramsEmpty" class="empty-state" style="display:none;"><p>Параметров нет</p></div>
     </div>
 
-    <!-- Модальное окно (используется для всех форм) -->
+    <!-- Модальное окно -->
     <div id="modal" class="modal" style="display:none;">
         <div class="modal-content">
             <span class="close-modal">&times;</span>
@@ -100,672 +73,367 @@
 </div>
 
 <script>
-(function() {
-    // ---------- Глобальные переменные ----------
-    let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
-    const isAdmin = currentUser && currentUser.role === 'admin';
+var currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+var isAdmin = currentUser && currentUser.role === 'admin';
 
-    // ---------- Управление видимостью кнопок и колонок действий ----------
-    function applyPermissions() {
-        const actionButtons = document.querySelectorAll('#addComponentBtn, #addTypeBtn, #addParamBtn, #exportComponentsBtn, #importComponentsBtn, #exportTypesBtn, #importTypesBtn, #exportParamsBtn, #importParamsBtn');
-        const actionCols = ['componentsActionsCol', 'typesActionsCol', 'paramsActionsCol'];
+function applyPermissions() {
+    var btns = ['addComponentBtn','exportComponentsBtn','importComponentsBtn',
+                'addTypeBtn','exportTypesBtn','importTypesBtn',
+                'addParamBtn','exportParamsBtn','importParamsBtn'];
+    var cols = ['componentsActionsCol','typesActionsCol','paramsActionsCol'];
+    btns.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = isAdmin ? '' : 'none';
+    });
+    cols.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = isAdmin ? '' : 'none';
+    });
+}
 
-        if (isAdmin) {
-            actionButtons.forEach(btn => btn.style.display = '');
-            actionCols.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.style.display = '';
-            });
+function initTabs() {
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+            btn.classList.add('active');
+            var target = document.getElementById('tab-' + btn.dataset.tab);
+            if (target) target.classList.add('active');
+            if (btn.dataset.tab === 'types' && !typesLoaded) loadTypes();
+            if (btn.dataset.tab === 'params' && !paramsLoaded) loadParams();
+        });
+    });
+}
+
+var modal = document.getElementById('modal');
+var modalTitle = document.getElementById('modalTitle');
+var modalForm = document.getElementById('modalForm');
+
+document.querySelector('.close-modal').addEventListener('click', function() { modal.style.display = 'none'; });
+window.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
+
+function closeModal() { modal.style.display = 'none'; modalForm.innerHTML = ''; }
+
+function showModal(title, html) {
+    modalTitle.textContent = title;
+    modalForm.innerHTML = html;
+    modal.style.display = 'block';
+}
+
+function escapeHtml(text) {
+    return String(text).replace(/[&<>"]/g, function(m) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];
+    });
+}
+
+function loadManufacturersForSelect(selector, selectedId, callback) {
+    fetch('/api/manufacturers').then(function(res) { return res.json(); }).then(function(data) {
+        var sel = document.querySelector(selector);
+        if (!sel) return;
+        sel.innerHTML = '<option value="">-- выберите --</option>';
+        data.forEach(function(m) {
+            var opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = m.name;
+            sel.appendChild(opt);
+        });
+        if (selectedId) sel.value = selectedId;
+        if (callback) callback();
+    }).catch(function(e) { console.error(e); });
+}
+
+// ==================== КОМПОНЕНТЫ СИСТЕМ ====================
+var componentsLoaded = false;
+
+function loadComponents() {
+    fetch('/api/system-components').then(function(res) {
+        if (!res.ok) throw new Error('Ошибка загрузки');
+        return res.json();
+    }).then(function(data) {
+        var tbody = document.getElementById('componentsBody');
+        var empty = document.getElementById('componentsEmpty');
+        if (!data.length) {
+            empty.style.display = '';
+            tbody.innerHTML = '';
         } else {
-            actionButtons.forEach(btn => btn.style.display = 'none');
-            actionCols.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.style.display = 'none';
-            });
+            empty.style.display = 'none';
+            tbody.innerHTML = data.map(function(item) {
+                var paramsHtml = item.params && item.params.length 
+                    ? item.params.map(function(p) { return escapeHtml(p.name) + ': ' + escapeHtml(p.value); }).join('<br>') 
+                    : '-';
+                return '<tr><td>' + item.id + '</td><td>' + escapeHtml(item.type_name || '') + '</td><td>' + escapeHtml(item.name) + '</td><td>' + escapeHtml(item.manufacturer_name || '') + '</td><td>' + escapeHtml(item.article || '') + '</td><td>' + escapeHtml(item.description || '') + '</td><td>' + paramsHtml + '</td><td class="actions-col" style="display:' + (isAdmin ? '' : 'none') + '"><button class="btn btn-sm btn-edit" onclick="editSystemComponent(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent(' + item.id + ')">🗑️</button></td></tr>';
+            }).join('');
         }
-    }
+        componentsLoaded = true;
+    }).catch(function(err) {
+        document.getElementById('componentsBody').innerHTML = '<tr><td colspan="8" class="error">Ошибка загрузки</td></tr>';
+    });
+}
 
-    // ---------- Инициализация вкладок ----------
-    function initTabs() {
-        const tabs = document.querySelectorAll('.tab-btn');
-        const contents = document.querySelectorAll('.tab-content');
+document.getElementById('addComponentBtn').addEventListener('click', function() {
+    Promise.all([fetch('/api/system-component-types'), fetch('/api/system-parameters')]).then(function(responses) {
+        return Promise.all([responses[0].ok ? responses[0].json() : [], responses[1].ok ? responses[1].json() : []]);
+    }).then(function(result) {
+        var types = result[0];
+        var allParams = result[1];
 
-        tabs.forEach(btn => {
-            btn.addEventListener('click', () => {
-                tabs.forEach(b => b.classList.remove('active'));
-                contents.forEach(c => c.classList.remove('active'));
-                btn.classList.add('active');
-                const target = document.getElementById('tab-' + btn.dataset.tab);
-                if (target) target.classList.add('active');
+        var formHtml = '<div class="form-group"><label>Тип: <span style="color:red;">*</span></label><select id="compType" required><option value="">-- выберите --</option>' + types.map(function(t) { return '<option value="' + t.id + '">' + escapeHtml(t.name) + '</option>'; }).join('') + '</select><button type="button" id="newTypeBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ новый тип</button></div>';
+        formHtml += '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="compName" required></div>';
+        formHtml += '<div class="form-group"><label>Производитель:</label><select id="compManufacturer"></select></div>';
+        formHtml += '<div class="form-group"><label>Артикул:</label><input type="text" id="compArticle"></div>';
+        formHtml += '<div class="form-group"><label>Описание:</label><textarea id="compDescription" rows="3"></textarea></div>';
+        formHtml += '<div class="form-group"><label>Параметры:</label><div id="modalParams"><div class="param-row" style="display:flex; gap:10px; margin-bottom:5px;"><select class="param-select" style="flex:1;"><option value="">-- новый параметр --</option>' + allParams.map(function(p) { return '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>'; }).join('') + '</select><input type="text" class="param-value" placeholder="Значение" style="flex:1;"><input type="text" class="param-name" placeholder="Новый параметр" style="flex:1; display:none;"><button type="button" class="btn btn-sm btn-delete remove-param-btn">×</button></div></div><button type="button" id="addParamRowBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить параметр</button></div>';
+        formHtml += '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>';
 
-                // Ленивая загрузка данных при первом открытии
-                if (btn.dataset.tab === 'types' && !typesLoaded) loadTypes();
-                if (btn.dataset.tab === 'params' && !paramsLoaded) loadParams();
-            });
+        showModal('Добавить компонент систем', formHtml);
+        loadManufacturersForSelect('#compManufacturer');
+
+        document.getElementById('newTypeBtn').addEventListener('click', function() {
+            var name = prompt('Название нового типа:');
+            if (!name) return;
+            fetch('/api/system-component-types', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})}).then(function(res) { return res.json(); }).then(function(newType) {
+                var select = document.getElementById('compType');
+                var opt = document.createElement('option');
+                opt.value = newType.id;
+                opt.textContent = newType.name;
+                select.appendChild(opt);
+                select.value = newType.id;
+            }).catch(function(e) { alert(e.message); });
         });
-    }
 
-    // ---------- Модальное окно ----------
-    const modal = document.getElementById('modal');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalForm = document.getElementById('modalForm');
-    const closeModalBtn = document.querySelector('.close-modal');
-
-    closeModalBtn.addEventListener('click', () => {
-        modal.style.display = 'none';
-    });
-    window.addEventListener('click', (e) => {
-        if (e.target === modal) modal.style.display = 'none';
-    });
-
-    function closeModal() {
-        modal.style.display = 'none';
-        modalForm.innerHTML = '';
-    }
-
-    function showModal(title, formHtml) {
-        modalTitle.textContent = title;
-        modalForm.innerHTML = formHtml;
-        modal.style.display = 'block';
-    }
-
-    // ---------- Утилиты ----------
-    function escapeHtml(text) {
-        return String(text).replace(/[&<>"]/g, m => ({
-            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'
-        }[m]));
-    }
-
-    async function loadManufacturersForSelect(selector, selectedId = null) {
-        try {
-            const res = await fetch('/api/manufacturers');
-            if (!res.ok) return;
-            const data = await res.json();
-            const sel = document.querySelector(selector);
-            if (!sel) return;
-            sel.innerHTML = '<option value="">-- выберите --</option>';
-            data.forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m.id;
-                opt.textContent = m.name;
-                sel.appendChild(opt);
-            });
-            if (selectedId) sel.value = selectedId;
-        } catch (e) {
-            console.error(e);
+        function bindParamRow(row) {
+            var select = row.querySelector('.param-select');
+            var nameInput = row.querySelector('.param-name');
+            select.addEventListener('change', function() { nameInput.style.display = select.value ? 'none' : ''; });
+            row.querySelector('.remove-param-btn').addEventListener('click', function() { row.remove(); });
         }
-    }
 
-    // ================== КОМПОНЕНТЫ ==================
-    let componentsLoaded = false;
+        document.querySelectorAll('.param-row').forEach(bindParamRow);
 
-    async function loadComponents() {
-        try {
-            const res = await fetch('/api/system-components');
-            if (!res.ok) throw new Error('Ошибка загрузки');
-            const data = await res.json();
-            const tbody = document.getElementById('componentsBody');
-            if (data.length === 0) {
-                document.getElementById('componentsEmpty').style.display = '';
-                tbody.innerHTML = '';
-            } else {
-                document.getElementById('componentsEmpty').style.display = 'none';
-                tbody.innerHTML = data.map(item => {
-                    const paramsHtml = item.params && item.params.length ?
-                        item.params.map(p => `${escapeHtml(p.name)}: ${escapeHtml(p.value)}`).join('<br>') :
-                        '-';
-                    return `
-                        <tr>
-                            <td>${item.id}</td>
-                            <td>${escapeHtml(item.type_name || '')}</td>
-                            <td>${escapeHtml(item.name)}</td>
-                            <td>${escapeHtml(item.manufacturer_name || '')}</td>
-                            <td>${escapeHtml(item.article || '')}</td>
-                            <td>${escapeHtml(item.description || '')}</td>
-                            <td>${paramsHtml}</td>
-                            <td class="actions-col" style="display:${isAdmin ? '' : 'none'};">
-                                <button class="btn btn-sm" onclick="editSystemComponent(${item.id})">✏️</button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteSystemComponent(${item.id})">🗑️</button>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-            }
-            componentsLoaded = true;
-        } catch (err) {
-            console.error(err);
-            document.getElementById('componentsBody').innerHTML = '<tr><td colspan="8">Ошибка загрузки</td></tr>';
-        }
-    }
-
-    // Открыть форму добавления компонента
-    document.getElementById('addComponentBtn').addEventListener('click', async () => {
-        let types = [], params = [];
-        try {
-            const tRes = await fetch('/api/system-component-types');
-            if (tRes.ok) types = await tRes.json();
-            const pRes = await fetch('/api/system-parameters');
-            if (pRes.ok) params = await pRes.json();
-        } catch (e) {}
-
-        const formHtml = `
-            <label>Тип: <span style="color:red;">*</span></label>
-            <select id="compType" required>
-                <option value="">-- выберите --</option>
-                ${types.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}
-            </select>
-            <button type="button" id="newTypeBtn" class="btn btn-sm">+ новый тип</button>
-
-            <label>Название: <span style="color:red;">*</span></label>
-            <input type="text" id="compName" required>
-
-            <label>Производитель:</label>
-            <select id="compManufacturer"></select>
-
-            <label>Артикул:</label>
-            <input type="text" id="compArticle">
-
-            <label>Описание:</label>
-            <textarea id="compDescription" rows="3"></textarea>
-
-            <label>Параметры:</label>
-            <div id="modalParams">
-                <div class="param-row" style="display:flex; gap:10px; margin-bottom:5px;">
-                    <select class="param-select" style="flex:1;">
-                        <option value="">-- новый параметр --</option>
-                        ${params.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
-                    </select>
-                    <input type="text" class="param-value" placeholder="Значение" style="flex:1;">
-                    <input type="text" class="param-name" placeholder="Новый параметр" style="flex:1; display:none;">
-                    <button type="button" class="small danger remove-param-btn">×</button>
-                </div>
-            </div>
-            <button type="button" id="addParamRowBtn" class="btn btn-sm">+ добавить параметр</button>
-
-            <div style="margin-top:15px; text-align:right;">
-                <button type="submit" class="btn btn-primary">Сохранить</button>
-                <button type="button" class="btn" onclick="closeModal()">Отмена</button>
-            </div>
-        `;
-
-        showModal('Добавить компонент системы', formHtml);
-        await loadManufacturersForSelect('#compManufacturer');
-
-        // Обработчик добавления строки параметра
-        document.getElementById('addParamRowBtn').addEventListener('click', () => {
-            const container = document.getElementById('modalParams');
-            const row = document.createElement('div');
+        document.getElementById('addParamRowBtn').addEventListener('click', function() {
+            var row = document.createElement('div');
             row.className = 'param-row';
-            row.style.display = 'flex';
-            row.style.gap = '10px';
-            row.style.marginBottom = '5px';
-            row.innerHTML = `
-                <select class="param-select" style="flex:1;">
-                    <option value="">-- новый параметр --</option>
-                    ${params.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}
-                </select>
-                <input type="text" class="param-value" placeholder="Значение" style="flex:1;">
-                <input type="text" class="param-name" placeholder="Новый параметр" style="flex:1; display:none;">
-                <button type="button" class="small danger remove-param-btn">×</button>
-            `;
-            container.appendChild(row);
-            const select = row.querySelector('.param-select');
-            const paramNameInput = row.querySelector('.param-name');
-            select.addEventListener('change', () => {
-                paramNameInput.style.display = select.value === '' ? '' : 'none';
-            });
-            row.querySelector('.remove-param-btn').addEventListener('click', () => row.remove());
+            row.style.cssText = 'display:flex; gap:10px; margin-bottom:5px;';
+            row.innerHTML = '<select class="param-select" style="flex:1;"><option value="">-- новый параметр --</option>' + allParams.map(function(p) { return '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>'; }).join('') + '</select><input type="text" class="param-value" placeholder="Значение" style="flex:1;"><input type="text" class="param-name" placeholder="Новый параметр" style="flex:1; display:none;"><button type="button" class="btn btn-sm btn-delete remove-param-btn">×</button>';
+            document.getElementById('modalParams').appendChild(row);
+            bindParamRow(row);
         });
 
-        // Показывать/скрывать поле "Новый параметр" для существующих строк
-        document.querySelectorAll('.param-select').forEach(select => {
-            const paramNameInput = select.closest('.param-row').querySelector('.param-name');
-            select.addEventListener('change', () => {
-                paramNameInput.style.display = select.value === '' ? '' : 'none';
-            });
-        });
-
-        // Удаление строк параметров
-        document.querySelectorAll('.remove-param-btn').forEach(btn => {
-            btn.addEventListener('click', () => btn.closest('.param-row').remove());
-        });
-
-        // Обработчик отправки формы
-        modalForm.onsubmit = async (e) => {
+        modalForm.onsubmit = function(e) {
             e.preventDefault();
-            const name = document.getElementById('compName').value.trim();
-            const type_id = document.getElementById('compType').value;
-            const manufacturer_id = document.getElementById('compManufacturer').value || null;
-            const article = document.getElementById('compArticle').value.trim();
-            const description = document.getElementById('compDescription').value.trim();
-
-            if (!name || !type_id) {
-                alert('Заполните обязательные поля');
-                return;
-            }
-
-            // Собираем параметры
-            const paramRows = document.querySelectorAll('#modalParams .param-row');
-            const params = [];
-            paramRows.forEach(row => {
-                const select = row.querySelector('.param-select');
-                const valueInput = row.querySelector('.param-value');
-                const paramId = select.value;
-                const value = valueInput.value.trim();
-                if (paramId) {
-                    params.push({ parameter_id: parseInt(paramId), value });
-                }
+            var name = document.getElementById('compName').value.trim();
+            var type_id = document.getElementById('compType').value;
+            var manufacturer_id = document.getElementById('compManufacturer').value || null;
+            var article = document.getElementById('compArticle').value.trim();
+            var description = document.getElementById('compDescription').value.trim();
+            if (!name || !type_id) { alert('Заполните обязательные поля'); return; }
+            var params = [];
+            document.querySelectorAll('#modalParams .param-row').forEach(function(row) {
+                var select = row.querySelector('.param-select');
+                var valueInput = row.querySelector('.param-value');
+                if (select.value) params.push({parameter_id: parseInt(select.value), value: valueInput.value.trim()});
             });
-
-            try {
-                const res = await fetch('/api/system-components', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, type_id, manufacturer_id, article, description, params })
-                });
-                if (!res.ok) throw new Error((await res.json()).message || 'Ошибка');
+            fetch('/api/system-components', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,type_id:type_id,manufacturer_id:manufacturer_id,article:article,description:description,params:params})}).then(function(res) {
+                if (!res.ok) return res.json().then(function(d) { throw new Error(d.message || 'Ошибка'); });
                 closeModal();
-                await loadComponents();
-            } catch (err) {
-                alert(err.message);
-            }
+                loadComponents();
+            }).catch(function(err) { alert(err.message); });
         };
     });
+});
 
-    // Редактирование компонента (глобальная функция)
-    window.editSystemComponent = async function(id) {
-        try {
-            const res = await fetch('/api/system-components/' + id);
-            if (!res.ok) throw new Error('Ошибка загрузки данных');
-            const comp = await res.json();
+window.editSystemComponent = function(id) {
+    Promise.all([fetch('/api/system-components/' + id), fetch('/api/system-component-types'), fetch('/api/system-parameters')]).then(function(responses) {
+        return Promise.all([responses[0].json(), responses[1].ok ? responses[1].json() : [], responses[2].ok ? responses[2].json() : []]);
+    }).then(function(result) {
+        var comp = result[0];
+        var types = result[1];
+        var allParams = result[2];
 
-            let types = [], params = [];
-            const tRes = await fetch('/api/system-component-types');
-            if (tRes.ok) types = await tRes.json();
-            const pRes = await fetch('/api/system-parameters');
-            if (pRes.ok) params = await pRes.json();
+        var paramsHtml = comp.params && comp.params.length ? comp.params.map(function(p) {
+            return '<div class="param-row" style="display:flex; gap:10px; margin-bottom:5px;"><select class="param-select" style="flex:1;"><option value="">-- новый параметр --</option>' + allParams.map(function(pr) { return '<option value="' + pr.id + '"' + (pr.id === p.id ? ' selected' : '') + '>' + escapeHtml(pr.name) + '</option>'; }).join('') + '</select><input type="text" class="param-value" value="' + escapeHtml(p.value || '') + '" placeholder="Значение" style="flex:1;"><input type="text" class="param-name" placeholder="Новый параметр" style="flex:1; display:none;"><button type="button" class="btn btn-sm btn-delete remove-param-btn">×</button></div>';
+        }).join('') : '<div class="param-row" style="display:flex; gap:10px; margin-bottom:5px;"><select class="param-select" style="flex:1;"><option value="">-- новый параметр --</option>' + allParams.map(function(pr) { return '<option value="' + pr.id + '">' + escapeHtml(pr.name) + '</option>'; }).join('') + '</select><input type="text" class="param-value" placeholder="Значение" style="flex:1;"><input type="text" class="param-name" placeholder="Новый параметр" style="flex:1; display:none;"><button type="button" class="btn btn-sm btn-delete remove-param-btn">×</button></div>';
 
-            const paramsHtml = comp.params && comp.params.length ?
-                comp.params.map(p => `
-                    <div class="param-row" style="display:flex; gap:10px; margin-bottom:5px;">
-                        <select class="param-select" style="flex:1;">
-                            <option value="">-- новый параметр --</option>
-                            ${params.map(pr => `<option value="${pr.id}" ${pr.id === p.id ? 'selected' : ''}>${escapeHtml(pr.name)}</option>`).join('')}
-                        </select>
-                        <input type="text" class="param-value" value="${escapeHtml(p.value || '')}" placeholder="Значение" style="flex:1;">
-                        <input type="text" class="param-name" placeholder="Новый параметр" style="flex:1; display:none;">
-                        <button type="button" class="small danger remove-param-btn">×</button>
-                    </div>
-                `).join('') : `
-                    <div class="param-row" style="display:flex; gap:10px; margin-bottom:5px;">
-                        <select class="param-select" style="flex:1;">
-                            <option value="">-- новый параметр --</option>
-                            ${params.map(pr => `<option value="${pr.id}">${escapeHtml(pr.name)}</option>`).join('')}
-                        </select>
-                        <input type="text" class="param-value" placeholder="Значение" style="flex:1;">
-                        <input type="text" class="param-name" placeholder="Новый параметр" style="flex:1; display:none;">
-                        <button type="button" class="small danger remove-param-btn">×</button>
-                    </div>
-                `;
+        var formHtml = '<div class="form-group"><label>Тип:</label><select id="compType" required>' + types.map(function(t) { return '<option value="' + t.id + '"' + (t.id === comp.type_id ? ' selected' : '') + '>' + escapeHtml(t.name) + '</option>'; }).join('') + '</select></div>';
+        formHtml += '<div class="form-group"><label>Название:</label><input type="text" id="compName" value="' + escapeHtml(comp.name) + '" required></div>';
+        formHtml += '<div class="form-group"><label>Производитель:</label><select id="compManufacturer"></select></div>';
+        formHtml += '<div class="form-group"><label>Артикул:</label><input type="text" id="compArticle" value="' + escapeHtml(comp.article || '') + '"></div>';
+        formHtml += '<div class="form-group"><label>Описание:</label><textarea id="compDescription" rows="3">' + escapeHtml(comp.description || '') + '</textarea></div>';
+        formHtml += '<div class="form-group"><label>Параметры:</label><div id="modalParams">' + paramsHtml + '</div><button type="button" id="addParamRowBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить параметр</button></div>';
+        formHtml += '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>';
 
-            const formHtml = `
-                <label>Тип: <span style="color:red;">*</span></label>
-                <select id="compType" required>
-                    <option value="">-- выберите --</option>
-                    ${types.map(t => `<option value="${t.id}" ${t.id === comp.type_id ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('')}
-                </select>
-                <label>Название: <span style="color:red;">*</span></label>
-                <input type="text" id="compName" value="${escapeHtml(comp.name)}" required>
-                <label>Производитель:</label>
-                <select id="compManufacturer"></select>
-                <label>Артикул:</label>
-                <input type="text" id="compArticle" value="${escapeHtml(comp.article || '')}">
-                <label>Описание:</label>
-                <textarea id="compDescription" rows="3">${escapeHtml(comp.description || '')}</textarea>
-                <label>Параметры:</label>
-                <div id="modalParams">${paramsHtml}</div>
-                <button type="button" id="addParamRowBtn" class="btn btn-sm">+ добавить параметр</button>
-                <div style="margin-top:15px; text-align:right;">
-                    <button type="submit" class="btn btn-primary">Сохранить</button>
-                    <button type="button" class="btn" onclick="closeModal()">Отмена</button>
-                </div>
-            `;
+        showModal('Редактировать компонент систем', formHtml);
+        loadManufacturersForSelect('#compManufacturer', comp.manufacturer_id);
 
-            showModal('Редактировать компонент системы', formHtml);
-            await loadManufacturersForSelect('#compManufacturer', comp.manufacturer_id);
+        document.getElementById('addParamRowBtn').addEventListener('click', function() {
+            var row = document.createElement('div');
+            row.className = 'param-row';
+            row.style.cssText = 'display:flex; gap:10px; margin-bottom:5px;';
+            row.innerHTML = '<select class="param-select" style="flex:1;"><option value="">-- новый параметр --</option>' + allParams.map(function(pr) { return '<option value="' + pr.id + '">' + escapeHtml(pr.name) + '</option>'; }).join('') + '</select><input type="text" class="param-value" placeholder="Значение" style="flex:1;"><input type="text" class="param-name" placeholder="Новый параметр" style="flex:1; display:none;"><button type="button" class="btn btn-sm btn-delete remove-param-btn">×</button>';
+            document.getElementById('modalParams').appendChild(row);
+            row.querySelector('.remove-param-btn').addEventListener('click', function() { row.remove(); });
+        });
 
-            document.getElementById('addParamRowBtn').addEventListener('click', () => {
-                const container = document.getElementById('modalParams');
-                const row = document.createElement('div');
-                row.className = 'param-row';
-                row.style.display = 'flex';
-                row.style.gap = '10px';
-                row.style.marginBottom = '5px';
-                row.innerHTML = `
-                    <select class="param-select" style="flex:1;">
-                        <option value="">-- новый параметр --</option>
-                        ${params.map(pr => `<option value="${pr.id}">${escapeHtml(pr.name)}</option>`).join('')}
-                    </select>
-                    <input type="text" class="param-value" placeholder="Значение" style="flex:1;">
-                    <input type="text" class="param-name" placeholder="Новый параметр" style="flex:1; display:none;">
-                    <button type="button" class="small danger remove-param-btn">×</button>
-                `;
-                container.appendChild(row);
-                const select = row.querySelector('.param-select');
-                const paramNameInput = row.querySelector('.param-name');
-                select.addEventListener('change', () => {
-                    paramNameInput.style.display = select.value === '' ? '' : 'none';
-                });
-                row.querySelector('.remove-param-btn').addEventListener('click', () => row.remove());
-            });
+        document.querySelectorAll('.remove-param-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() { btn.closest('.param-row').remove(); });
+        });
 
-            document.querySelectorAll('.remove-param-btn').forEach(btn => {
-                btn.addEventListener('click', () => btn.closest('.param-row').remove());
-            });
-
-            modalForm.onsubmit = async (e) => {
-                e.preventDefault();
-                const name = document.getElementById('compName').value.trim();
-                const type_id = document.getElementById('compType').value;
-                const manufacturer_id = document.getElementById('compManufacturer').value || null;
-                const article = document.getElementById('compArticle').value.trim();
-                const description = document.getElementById('compDescription').value.trim();
-
-                if (!name || !type_id) {
-                    alert('Заполните обязательные поля');
-                    return;
-                }
-
-                const paramRows = document.querySelectorAll('#modalParams .param-row');
-                const params = [];
-                paramRows.forEach(row => {
-                    const select = row.querySelector('.param-select');
-                    const valueInput = row.querySelector('.param-value');
-                    const paramId = select.value;
-                    const value = valueInput.value.trim();
-                    if (paramId) {
-                        params.push({ parameter_id: parseInt(paramId), value });
-                    }
-                });
-
-                try {
-                    const res = await fetch('/api/system-components/' + id, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, type_id, manufacturer_id, article, description, params })
-                    });
-                    if (!res.ok) throw new Error((await res.json()).message || 'Ошибка');
-                    closeModal();
-                    await loadComponents();
-                } catch (err) {
-                    alert(err.message);
-                }
-            };
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    // Удаление компонента
-    window.deleteSystemComponent = async function(id) {
-        if (!confirm('Удалить компонент?')) return;
-        try {
-            const res = await fetch('/api/system-components/' + id, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Ошибка удаления');
-            await loadComponents();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    // ================== ТИПЫ ==================
-    let typesLoaded = false;
-
-    async function loadTypes() {
-        try {
-            const res = await fetch('/api/system-component-types');
-            if (!res.ok) throw new Error('Ошибка загрузки');
-            const data = await res.json();
-            const tbody = document.getElementById('typesBody');
-            if (data.length === 0) {
-                document.getElementById('typesEmpty').style.display = '';
-                tbody.innerHTML = '';
-            } else {
-                document.getElementById('typesEmpty').style.display = 'none';
-                tbody.innerHTML = data.map(item => `
-                    <tr>
-                        <td>${item.id}</td>
-                        <td>${escapeHtml(item.name)}</td>
-                        <td>${escapeHtml(item.description || '')}</td>
-                        <td class="actions-col" style="display:${isAdmin ? '' : 'none'};">
-                            <button class="btn btn-sm" onclick="editSystemComponentType(${item.id})">✏️</button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteSystemComponentType(${item.id})">🗑️</button>
-                        </td>
-                    </tr>
-                `).join('');
-            }
-            typesLoaded = true;
-        } catch (err) {
-            console.error(err);
-            document.getElementById('typesBody').innerHTML = '<tr><td colspan="4">Ошибка загрузки</td></tr>';
-        }
-    }
-
-    document.getElementById('addTypeBtn').addEventListener('click', () => {
-        showModal('Добавить тип компонента систем', `
-            <label>Название: <span style="color:red;">*</span></label>
-            <input type="text" id="typeName" required>
-            <label>Описание:</label>
-            <textarea id="typeDescription" rows="3"></textarea>
-            <div style="margin-top:15px; text-align:right;">
-                <button type="submit" class="btn btn-primary">Сохранить</button>
-                <button type="button" class="btn" onclick="closeModal()">Отмена</button>
-            </div>
-        `);
-
-        modalForm.onsubmit = async (e) => {
+        modalForm.onsubmit = function(e) {
             e.preventDefault();
-            const name = document.getElementById('typeName').value.trim();
-            const description = document.getElementById('typeDescription').value.trim();
+            var name = document.getElementById('compName').value.trim();
+            var type_id = document.getElementById('compType').value;
+            var manufacturer_id = document.getElementById('compManufacturer').value || null;
+            var article = document.getElementById('compArticle').value.trim();
+            var description = document.getElementById('compDescription').value.trim();
+            if (!name || !type_id) { alert('Заполните обязательные поля'); return; }
+            var params = [];
+            document.querySelectorAll('#modalParams .param-row').forEach(function(row) {
+                var select = row.querySelector('.param-select');
+                var valueInput = row.querySelector('.param-value');
+                if (select.value) params.push({parameter_id: parseInt(select.value), value: valueInput.value.trim()});
+            });
+            fetch('/api/system-components/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,type_id:type_id,manufacturer_id:manufacturer_id,article:article,description:description,params:params})}).then(function(res) {
+                if (!res.ok) return res.json().then(function(d) { throw new Error(d.message || 'Ошибка'); });
+                closeModal();
+                loadComponents();
+            }).catch(function(err) { alert(err.message); });
+        };
+    });
+};
+
+window.deleteSystemComponent = function(id) {
+    if (!confirm('Удалить компонент?')) return;
+    fetch('/api/system-components/' + id, {method:'DELETE'}).then(function() { loadComponents(); }).catch(function(err) { alert(err.message); });
+};
+
+// ==================== ТИПЫ ====================
+var typesLoaded = false;
+
+function loadTypes() {
+    fetch('/api/system-component-types').then(function(res) {
+        if (!res.ok) throw new Error('Ошибка');
+        return res.json();
+    }).then(function(data) {
+        var tbody = document.getElementById('typesBody');
+        var empty = document.getElementById('typesEmpty');
+        if (!data.length) {
+            empty.style.display = '';
+            tbody.innerHTML = '';
+        } else {
+            empty.style.display = 'none';
+            tbody.innerHTML = data.map(function(item) {
+                return '<tr><td>' + item.id + '</td><td>' + escapeHtml(item.name) + '</td><td>' + escapeHtml(item.description || '') + '</td><td class="actions-col" style="display:' + (isAdmin ? '' : 'none') + '"><button class="btn btn-sm btn-edit" onclick="editSystemComponentType(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponentType(' + item.id + ')">🗑️</button></td></tr>';
+            }).join('');
+        }
+        typesLoaded = true;
+    }).catch(function() {
+        document.getElementById('typesBody').innerHTML = '<tr><td colspan="4" class="error">Ошибка загрузки</td></tr>';
+    });
+}
+
+document.getElementById('addTypeBtn').addEventListener('click', function() {
+    showModal('Добавить тип компонента систем', '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="typeName" required></div><div class="form-group"><label>Описание:</label><textarea id="typeDescription" rows="3"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>');
+    modalForm.onsubmit = function(e) {
+        e.preventDefault();
+        var name = document.getElementById('typeName').value.trim();
+        var description = document.getElementById('typeDescription').value.trim();
+        if (!name) { alert('Введите название'); return; }
+        fetch('/api/system-component-types', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,description:description})}).then(function(res) {
+            if (!res.ok) return res.json().then(function(d) { throw new Error(d.message || 'Ошибка'); });
+            closeModal();
+            loadTypes();
+        }).catch(function(err) { alert(err.message); });
+    };
+});
+
+window.editSystemComponentType = function(id) {
+    fetch('/api/system-component-types/' + id).then(function(res) { return res.json(); }).then(function(type) {
+        showModal('Редактировать тип', '<div class="form-group"><label>Название:</label><input type="text" id="typeName" value="' + escapeHtml(type.name) + '" required></div><div class="form-group"><label>Описание:</label><textarea id="typeDescription" rows="3">' + escapeHtml(type.description || '') + '</textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>');
+        modalForm.onsubmit = function(e) {
+            e.preventDefault();
+            var name = document.getElementById('typeName').value.trim();
+            var description = document.getElementById('typeDescription').value.trim();
             if (!name) { alert('Введите название'); return; }
-
-            try {
-                const res = await fetch('/api/system-component-types', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, description })
-                });
-                if (!res.ok) throw new Error((await res.json()).message || 'Ошибка');
+            fetch('/api/system-component-types/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,description:description})}).then(function() {
                 closeModal();
-                await loadTypes();
-            } catch (err) {
-                alert(err.message);
-            }
+                loadTypes();
+            }).catch(function(err) { alert(err.message); });
         };
     });
+};
 
-    window.editSystemComponentType = async function(id) {
-        try {
-            const res = await fetch('/api/system-component-types/' + id);
-            if (!res.ok) throw new Error('Ошибка загрузки');
-            const type = await res.json();
+window.deleteSystemComponentType = function(id) {
+    if (!confirm('Удалить тип?')) return;
+    fetch('/api/system-component-types/' + id, {method:'DELETE'}).then(function() { loadTypes(); }).catch(function(err) { alert(err.message); });
+};
 
-            showModal('Редактировать тип', `
-                <label>Название: <span style="color:red;">*</span></label>
-                <input type="text" id="typeName" value="${escapeHtml(type.name)}" required>
-                <label>Описание:</label>
-                <textarea id="typeDescription" rows="3">${escapeHtml(type.description || '')}</textarea>
-                <div style="margin-top:15px; text-align:right;">
-                    <button type="submit" class="btn btn-primary">Сохранить</button>
-                    <button type="button" class="btn" onclick="closeModal()">Отмена</button>
-                </div>
-            `);
+// ==================== ПАРАМЕТРЫ ====================
+var paramsLoaded = false;
 
-            modalForm.onsubmit = async (e) => {
-                e.preventDefault();
-                const name = document.getElementById('typeName').value.trim();
-                const description = document.getElementById('typeDescription').value.trim();
-                if (!name) { alert('Введите название'); return; }
-
-                try {
-                    const res = await fetch('/api/system-component-types/' + id, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, description })
-                    });
-                    if (!res.ok) throw new Error((await res.json()).message || 'Ошибка');
-                    closeModal();
-                    await loadTypes();
-                } catch (err) {
-                    alert(err.message);
-                }
-            };
-        } catch (err) {
-            alert(err.message);
+function loadParams() {
+    fetch('/api/system-parameters').then(function(res) {
+        if (!res.ok) throw new Error('Ошибка');
+        return res.json();
+    }).then(function(data) {
+        var tbody = document.getElementById('paramsBody');
+        var empty = document.getElementById('paramsEmpty');
+        if (!data.length) {
+            empty.style.display = '';
+            tbody.innerHTML = '';
+        } else {
+            empty.style.display = 'none';
+            tbody.innerHTML = data.map(function(item) {
+                return '<tr><td>' + item.id + '</td><td>' + escapeHtml(item.name) + '</td><td>' + escapeHtml(item.value || '') + '</td><td>' + escapeHtml(item.description || '') + '</td><td class="actions-col" style="display:' + (isAdmin ? '' : 'none') + '"><button class="btn btn-sm btn-edit" onclick="editSystemParameter(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemParameter(' + item.id + ')">🗑️</button></td></tr>';
+            }).join('');
         }
+        paramsLoaded = true;
+    }).catch(function() {
+        document.getElementById('paramsBody').innerHTML = '<tr><td colspan="5" class="error">Ошибка загрузки</td></tr>';
+    });
+}
+
+document.getElementById('addParamBtn').addEventListener('click', function() {
+    showModal('Добавить параметр компонента систем', '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="paramName" required></div><div class="form-group"><label>Значение:</label><input type="text" id="paramValue"></div><div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>');
+    modalForm.onsubmit = function(e) {
+        e.preventDefault();
+        var name = document.getElementById('paramName').value.trim();
+        var value = document.getElementById('paramValue').value.trim();
+        var description = document.getElementById('paramDescription').value.trim();
+        if (!name) { alert('Введите название'); return; }
+        fetch('/api/system-parameters', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,value:value,description:description})}).then(function(res) {
+            if (!res.ok) return res.json().then(function(d) { throw new Error(d.message || 'Ошибка'); });
+            closeModal();
+            loadParams();
+        }).catch(function(err) { alert(err.message); });
     };
+});
 
-    window.deleteSystemComponentType = async function(id) {
-        if (!confirm('Удалить тип?')) return;
-        try {
-            const res = await fetch('/api/system-component-types/' + id, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Ошибка удаления');
-            await loadTypes();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    // ================== ПАРАМЕТРЫ ==================
-    let paramsLoaded = false;
-
-    async function loadParams() {
-        try {
-            const res = await fetch('/api/system-parameters');
-            if (!res.ok) throw new Error('Ошибка загрузки');
-            const data = await res.json();
-            const tbody = document.getElementById('paramsBody');
-            if (data.length === 0) {
-                document.getElementById('paramsEmpty').style.display = '';
-                tbody.innerHTML = '';
-            } else {
-                document.getElementById('paramsEmpty').style.display = 'none';
-                tbody.innerHTML = data.map(item => `
-                    <tr>
-                        <td>${item.id}</td>
-                        <td>${escapeHtml(item.name)}</td>
-                        <td>${escapeHtml(item.value || '')}</td>
-                        <td>${escapeHtml(item.description || '')}</td>
-                        <td class="actions-col" style="display:${isAdmin ? '' : 'none'};">
-                            <button class="btn btn-sm" onclick="editSystemParameter(${item.id})">✏️</button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteSystemParameter(${item.id})">🗑️</button>
-                        </td>
-                    </tr>
-                `).join('');
-            }
-            paramsLoaded = true;
-        } catch (err) {
-            console.error(err);
-            document.getElementById('paramsBody').innerHTML = '<tr><td colspan="5">Ошибка загрузки</td></tr>';
-        }
-    }
-
-    document.getElementById('addParamBtn').addEventListener('click', () => {
-        showModal('Добавить параметр', `
-            <label>Название: <span style="color:red;">*</span></label>
-            <input type="text" id="paramName" required>
-            <label>Значение:</label>
-            <input type="text" id="paramValue">
-            <label>Описание:</label>
-            <textarea id="paramDescription" rows="3"></textarea>
-            <div style="margin-top:15px; text-align:right;">
-                <button type="submit" class="btn btn-primary">Сохранить</button>
-                <button type="button" class="btn" onclick="closeModal()">Отмена</button>
-            </div>
-        `);
-
-        modalForm.onsubmit = async (e) => {
+window.editSystemParameter = function(id) {
+    fetch('/api/system-parameters/' + id).then(function(res) { return res.json(); }).then(function(param) {
+        showModal('Редактировать параметр', '<div class="form-group"><label>Название:</label><input type="text" id="paramName" value="' + escapeHtml(param.name) + '" required></div><div class="form-group"><label>Значение:</label><input type="text" id="paramValue" value="' + escapeHtml(param.value || '') + '"></div><div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3">' + escapeHtml(param.description || '') + '</textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>');
+        modalForm.onsubmit = function(e) {
             e.preventDefault();
-            const name = document.getElementById('paramName').value.trim();
-            const value = document.getElementById('paramValue').value.trim();
-            const description = document.getElementById('paramDescription').value.trim();
+            var name = document.getElementById('paramName').value.trim();
+            var value = document.getElementById('paramValue').value.trim();
+            var description = document.getElementById('paramDescription').value.trim();
             if (!name) { alert('Введите название'); return; }
-
-            try {
-                const res = await fetch('/api/system-parameters', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, value, description })
-                });
-                if (!res.ok) throw new Error((await res.json()).message || 'Ошибка');
+            fetch('/api/system-parameters/' + id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,value:value,description:description})}).then(function() {
                 closeModal();
-                await loadParams();
-            } catch (err) {
-                alert(err.message);
-            }
+                loadParams();
+            }).catch(function(err) { alert(err.message); });
         };
     });
+};
 
-    window.editSystemParameter = async function(id) {
-        try {
-            const res = await fetch('/api/system-parameters/' + id);
-            if (!res.ok) throw new Error('Ошибка загрузки');
-            const param = await res.json();
+window.deleteSystemParameter = function(id) {
+    if (!confirm('Удалить параметр?')) return;
+    fetch('/api/system-parameters/' + id, {method:'DELETE'}).then(function() { loadParams(); }).catch(function(err) { alert(err.message); });
+};
 
-            showModal('Редактировать параметр', `
-                <label>Название: <span style="color:red;">*</span></label>
-                <input type="text" id="paramName" value="${escapeHtml(param.name)}" required>
-                <label>Значение:</label>
-                <input type="text" id="paramValue" value="${escapeHtml(param.value || '')}">
-                <label>Описание:</label>
-                <textarea id="paramDescription" rows="3">${escapeHtml(param.description || '')}</textarea>
-                <div style="margin-top:15px; text-align:right;">
-                    <button type="submit" class="btn btn-primary">Сохранить</button>
-                    <button type="button" class="btn" onclick="closeModal()">Отмена</button>
-                </div>
-            `);
-
-            modalForm.onsubmit = async (e) => {
-                e.preventDefault();
-                const name = document.getElementById('paramName').value.trim();
-                const value = document.getElementById('paramValue').value.trim();
-                const description = document.getElementById('paramDescription').value.trim();
-                if (!name) { alert('Введите название'); return; }
-
-                try {
-                    const res = await fetch('/api/system-parameters/' + id, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, value, description })
-                    });
-                    if (!res.ok) throw new Error((await res.json()).message || 'Ошибка');
-                    closeModal();
-                    await loadParams();
-                } catch (err) {
-                    alert(err.message);
-                }
-            };
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    window.deleteSystemParameter = async function(id) {
-        if (!confirm('Удалить параметр?')) return;
-        try {
-            const res = await fetch('/api/system-parameters/' + id, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Ошибка удаления');
-            await loadParams();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    // ---------- Инициализация страницы ----------
-    window.pageInit = function() {
-        applyPermissions();
-        initTabs();
-        loadComponents();
-    };
-})();
+// Инициализация
+window.pageInit = function() {
+    applyPermissions();
+    initTabs();
+    loadComponents();
+};
 </script>
