@@ -7,6 +7,21 @@ const { body, param } = require('express-validator');
 const validate = require('../middleware/validation');
 
 // Получение всех шкафов проекта
+router.get('/', auth, async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    let query = `SELECT c.*, p.name as project_name, u.username as owner_name
+       FROM cabinets c
+       JOIN projects p ON c.project_id = p.id
+       LEFT JOIN users u ON c.user_id = u.id`;
+    const params = [];
+    if (project_id) { query += ' WHERE c.project_id = $1'; params.push(project_id); }
+    query += ' ORDER BY c.id';
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 router.get('/project/:projectId', auth, async (req, res) => {
   try {
     const { projectId } = req.params;
@@ -69,9 +84,9 @@ router.post('/', auth, validate([
   body('name').trim().notEmpty().withMessage('Название шкафа обязательно'),
   body('project_id').isInt({ min: 1 }).withMessage('Укажите корректный ID проекта'),
   body('description').optional().trim(),
-  body('width').optional().isFloat({ min: 0 }).withMessage('Ширина должна быть положительным числом'),
-  body('height').optional().isFloat({ min: 0 }).withMessage('Высота должна быть положительным числом'),
-  body('depth').optional().isFloat({ min: 0 }).withMessage('Глубина должна быть положительным числом')
+  body('width').optional({ nullable: true }),
+  body('height').optional({ nullable: true }),
+  body('depth').optional({ nullable: true })
 ]), async (req, res) => {
   try {
     const { name, description, project_id, width, height, depth } = req.body;

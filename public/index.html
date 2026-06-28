@@ -7,70 +7,27 @@
 <style>
   * { box-sizing: border-box; }
   body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background: #f4f7fb; }
-  .header {
-    background: #1a5f7a; color: white;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 15px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-  }
+  .header { background: #1a5f7a; color: white; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; height: 50px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); position: fixed; top: 0; left: 0; right: 0; z-index: 1000; }
   .header-left { display: flex; align-items: center; gap: 12px; }
-  .burger-btn {
-    background: none; border: none; color: white; font-size: 24px;
-    cursor: pointer; padding: 5px; line-height: 1; display: flex; align-items: center;
-  }
+  .burger-btn { background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 5px; line-height: 1; display: flex; align-items: center; }
   .page-title { font-size: 16px; font-weight: 500; white-space: nowrap; }
   .header-right { display: flex; align-items: center; gap: 12px; font-size: 13px; }
-  .header-right button {
-    background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);
-    color: white; padding: 4px 10px; border-radius: 4px; cursor: pointer;
-    font-size: 12px;
-  }
-  .sidebar {
-    position: fixed; top: 50px; left: 0; width: 240px; height: calc(100% - 50px);
-    background: #fff; box-shadow: 2px 0 8px rgba(0,0,0,0.1);
-    transform: translateX(-100%); transition: transform 0.3s ease;
-    z-index: 999; overflow-y: auto; padding: 15px 0;
-  }
+  .header-right button { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: white; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .sidebar { position: fixed; top: 50px; left: 0; width: 240px; height: calc(100% - 50px); background: #fff; box-shadow: 2px 0 8px rgba(0,0,0,0.1); transform: translateX(-100%); transition: transform 0.3s ease; z-index: 999; overflow-y: auto; padding: 15px 0; }
   .sidebar.open { transform: translateX(0); }
-  .sidebar a {
-    display: block; padding: 10px 20px; color: #333; text-decoration: none;
-    font-size: 14px; transition: background 0.2s;
-  }
+  .sidebar a { display: block; padding: 10px 20px; color: #333; text-decoration: none; font-size: 14px; transition: background 0.2s; }
   .sidebar a:hover { background: #f0f4f8; }
   .sidebar a.active { background: #e0e7ef; font-weight: 600; }
-  .overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.3); z-index: 998;
-    display: none;
-  }
+  .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 998; display: none; }
   .overlay.show { display: block; }
   .content { margin-top: 50px; padding: 20px; }
   .hidden { display: none !important; }
-
-  .page-content { }
-  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-  .page-header h2 { margin: 0; font-size: 20px; }
-
   .table-container { overflow-x: auto; }
-  .data-table {
-    width: 100%; border-collapse: collapse; background: white;
-    border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  }
-  .data-table th,
-  .data-table td {
-    padding: 8px 12px; border: 1px solid #e0e0e0;
-    font-size: 13px; text-align: left; white-space: nowrap;
-  }
+  .data-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .data-table th, .data-table td { padding: 8px 12px; border: 1px solid #e0e0e0; font-size: 13px; text-align: left; white-space: nowrap; }
   .data-table th { background: #f5f7fa; font-weight: 600; color: #333; }
   .data-table tr:hover { background: #fafbfc; }
-  .data-table .loading { text-align: center; color: #888; }
-  .data-table .error { text-align: center; color: #d32f2f; }
-
-  .btn {
-    padding: 7px 16px; border: none; border-radius: 4px;
-    cursor: pointer; font-size: 14px; text-decoration: none;
-    display: inline-block; line-height: 1.4;
-  }
+  .btn { padding: 7px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-decoration: none; display: inline-block; line-height: 1.4; }
   .btn-primary { background: #1a5f7a; color: white; }
   .btn-primary:hover { background: #154f66; }
   .btn-secondary { background: #e0e0e0; color: #333; }
@@ -80,68 +37,22 @@
   .btn-edit:hover { background: #ffe0b2; }
   .btn-delete { background: #ffebee; color: #c62828; }
   .btn-delete:hover { background: #ffcdd2; }
-
   .form-group { margin-bottom: 12px; }
-  .form-group label {
-    display: block; margin-bottom: 4px;
-    font-size: 13px; font-weight: 500; color: #555;
-  }
-  .form-group input,
-  .form-group select,
-  .form-group textarea {
-    width: 100%; padding: 7px 10px; border: 1px solid #ccc;
-    border-radius: 4px; font-size: 14px; font-family: inherit;
-  }
-  .form-group input:focus,
-  .form-group select:focus,
-  .form-group textarea:focus {
-    outline: none; border-color: #1a5f7a; box-shadow: 0 0 0 2px rgba(26,95,122,0.2);
-  }
-  .form-row { display: flex; gap: 12px; }
-  .form-row .form-group { flex: 1; }
+  .form-group label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 500; color: #555; }
+  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 7px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; font-family: inherit; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #1a5f7a; box-shadow: 0 0 0 2px rgba(26,95,122,0.2); }
   .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; }
   .error-message { color: #d32f2f; font-size: 13px; margin-bottom: 8px; }
-  .empty-state { text-align: center; padding: 30px; color: #888; }
-
-  .modal {
-    display: none; position: fixed; top: 0; left: 0;
-    width: 100%; height: 100%; background: rgba(0,0,0,0.5);
-    z-index: 2000; justify-content: center; align-items: flex-start;
-    padding-top: 50px;
-  }
+  .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: flex-start; padding-top: 50px; }
   .modal.active { display: flex; }
-  .modal-content {
-    background: white; padding: 25px; border-radius: 8px;
-    min-width: 350px; max-width: 90vw; position: relative;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-  }
-  .modal-close {
-    position: absolute; top: 10px; right: 15px;
-    font-size: 22px; cursor: pointer; color: #888; line-height: 1;
-  }
+  .modal-content { background: white; padding: 25px; border-radius: 8px; min-width: 350px; max-width: 90vw; position: relative; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+  .modal-close { position: absolute; top: 10px; right: 15px; font-size: 22px; cursor: pointer; color: #888; line-height: 1; }
   .modal-close:hover { color: #333; }
-
   .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0; }
-  .tab-btn {
-    padding: 10px 20px; border: none; background: none;
-    cursor: pointer; font-size: 14px; color: #666;
-    border-bottom: 2px solid transparent; margin-bottom: -2px;
-  }
+  .tab-btn { padding: 10px 20px; border: none; background: none; cursor: pointer; font-size: 14px; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
   .tab-btn.active { color: #1a5f7a; border-bottom-color: #1a5f7a; font-weight: 600; }
   .tab-content { display: none; }
   .tab-content.active { display: block; }
-  .tab-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
-  .tab-header h3 { margin: 0; font-size: 16px; }
-  .tab-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-  @media (max-width: 600px) {
-    .page-title { font-size: 14px; }
-    .sidebar { width: 200px; }
-    .form-row { flex-direction: column; gap: 0; }
-    .modal-content { min-width: auto; width: 95vw; margin: 0 10px; padding: 15px; }
-    .tab-actions { width: 100%; }
-    .tab-actions .btn { flex: 1; text-align: center; }
-  }
 </style>
 </head>
 <body>
@@ -171,8 +82,6 @@
 <div class="content" id="contentContainer"></div>
 
 <script>
-var API_BASE = '/api';
-var AUTH = API_BASE + '/auth';
 var currentUser = null;
 
 var burgerBtn = document.getElementById('burgerBtn');
@@ -182,59 +91,28 @@ var pageTitle = document.getElementById('pageTitle');
 var usernameDisplay = document.getElementById('usernameDisplay');
 var authActionBtn = document.getElementById('authActionBtn');
 
-burgerBtn.addEventListener('click', function() {
-  sidebar.classList.toggle('open');
-  overlay.classList.toggle('show');
-});
-overlay.addEventListener('click', function() {
-  sidebar.classList.remove('open');
-  overlay.classList.remove('show');
-});
+burgerBtn.addEventListener('click', function() { sidebar.classList.toggle('open'); overlay.classList.toggle('show'); });
+overlay.addEventListener('click', function() { sidebar.classList.remove('open'); overlay.classList.remove('show'); });
 
 function updateUserUI() {
   var adminLink = document.getElementById('adminLink');
-  if (adminLink) {
-    adminLink.style.display = (currentUser && currentUser.role === 'admin') ? 'block' : 'none';
-  }
-  if (currentUser) {
-    usernameDisplay.textContent = currentUser.username;
-    authActionBtn.textContent = 'Выйти';
-  } else {
-    usernameDisplay.textContent = '';
-    authActionBtn.textContent = 'Войти';
-  }
+  if (adminLink) adminLink.style.display = (currentUser && currentUser.role === 'admin') ? 'block' : 'none';
+  if (currentUser) { usernameDisplay.textContent = currentUser.username; authActionBtn.textContent = 'Выйти'; }
+  else { usernameDisplay.textContent = ''; authActionBtn.textContent = 'Войти'; }
 }
 
 authActionBtn.addEventListener('click', function() {
-  if (currentUser) {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    currentUser = null;
-    updateUserUI();
-    window.location.href = '/login.html';
-    return;
-  }
+  if (currentUser) { localStorage.removeItem('token'); localStorage.removeItem('user'); currentUser = null; updateUserUI(); window.location.href = '/login.html'; return; }
   window.location.href = '/login.html';
 });
 
-// Глобальный перехват fetch для добавления токена
 var originalFetch = window.fetch;
 window.fetch = function(url, options) {
   options = options || {};
   var token = localStorage.getItem('token');
-  if (token) {
-    options.headers = options.headers || {};
-    if (!options.headers['Authorization']) {
-      options.headers['Authorization'] = 'Bearer ' + token;
-    }
-  }
+  if (token) { options.headers = options.headers || {}; if (!options.headers['Authorization']) options.headers['Authorization'] = 'Bearer ' + token; }
   return originalFetch(url, options).then(function(response) {
-    if (response.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      currentUser = null;
-      window.location.href = '/login.html';
-    }
+    if (response.status === 401) { localStorage.removeItem('token'); localStorage.removeItem('user'); currentUser = null; window.location.href = '/login.html'; }
     return response;
   });
 };
@@ -244,21 +122,12 @@ window.loadPage = loadPage;
 async function loadPage(url) {
   var container = document.getElementById('contentContainer');
   container.innerHTML = '<p>Загрузка...</p>';
-  var titles = {
-    '/': 'Проекты',
-    '/automation': 'Системы автоматизации',
-    '/components-systems': 'Компоненты систем',
-    '/components-cabinets': 'Компоненты шкафов',
-    '/manufacturers': 'Производители',
-    '/admin': 'Администрирование'
-  };
-  if (url.startsWith('/project/')) {
-    pageTitle.textContent = 'Проект';
-  } else if (url.startsWith('/cabinet/')) {
-    pageTitle.textContent = 'Шкаф';
-  } else {
-    pageTitle.textContent = titles[url] || 'Конфигуратор вентиляции';
-  }
+  var titles = { '/': 'Проекты', '/automation': 'Системы автоматизации', '/components-systems': 'Компоненты систем', '/components-cabinets': 'Компоненты шкафов', '/manufacturers': 'Производители', '/admin': 'Администрирование' };
+  
+  if (url.startsWith('/project/')) pageTitle.textContent = 'Проект';
+  else if (url.startsWith('/cabinet/')) pageTitle.textContent = 'Шкаф';
+  else pageTitle.textContent = titles[url] || 'Конфигуратор вентиляции';
+  
   try {
     var file = '';
     if (url === '/') file = 'pages/home.html';
@@ -266,60 +135,35 @@ async function loadPage(url) {
     else if (url === '/components-systems') file = 'pages/components-systems.html';
     else if (url === '/components-cabinets') file = 'pages/components-cabinets.html';
     else if (url === '/manufacturers') file = 'pages/manufacturers.html';
-    else if (url === '/admin') {
-      if (!currentUser || currentUser.role !== 'admin') {
-        container.innerHTML = '<p>Доступ запрещён</p>';
-        return;
-      }
-      file = 'pages/admin.html';
-    }
-    else if (url.startsWith('/project/')) file = 'pages/project.html';
-    else if (url.startsWith('/cabinet/')) file = 'pages/cabinet.html';
+    else if (url === '/admin') { if (!currentUser || currentUser.role !== 'admin') { container.innerHTML = '<p>Доступ запрещён</p>'; return; } file = 'pages/admin.html'; }
+    else if (url.startsWith('/project/')) { file = 'pages/project.html'; window.pageParam = url.split('/')[2]; }
+    else if (url.startsWith('/cabinet/')) { file = 'pages/cabinet.html'; window.pageParam = url.split('/')[2]; }
     else file = 'pages/home.html';
 
-    var res = await fetch(file + '?_=' + Date.now());
+    var res = await fetch('/' + file + '?_=' + Date.now());
     if (!res.ok) throw new Error('Страница не найдена');
     var html = await res.text();
     container.innerHTML = html;
     container.querySelectorAll('script').forEach(function(oldScript) {
       var newScript = document.createElement('script');
-      if (oldScript.src) {
-        newScript.src = oldScript.src; newScript.async = false;
-      } else {
-        newScript.textContent = oldScript.textContent;
-      }
+      if (oldScript.src) { newScript.src = oldScript.src; newScript.async = false; }
+      else { newScript.textContent = oldScript.textContent; }
       oldScript.parentNode.replaceChild(newScript, oldScript);
     });
-    setTimeout(function() {
-      if (typeof window.pageInit === 'function') {
-        window.pageInit();
-      }
-    }, 100);
-  } catch (e) {
-    container.innerHTML = '<p>Ошибка загрузки страницы</p>';
-  }
+    setTimeout(function() { if (typeof window.pageInit === 'function') window.pageInit(); }, 100);
+  } catch (e) { container.innerHTML = '<p>Ошибка загрузки страницы</p>'; }
 }
 
 sidebar.querySelectorAll('a').forEach(function(link) {
-  link.addEventListener('click', function(e) {
-    e.preventDefault();
-    sidebar.classList.remove('open');
-    overlay.classList.remove('show');
-    navigateTo(this.getAttribute('href'));
-  });
+  link.addEventListener('click', function(e) { e.preventDefault(); sidebar.classList.remove('open'); overlay.classList.remove('show'); navigateTo(this.getAttribute('href')); });
 });
 
 window.addEventListener('popstate', function() { loadPage(location.pathname || '/'); });
 window.addEventListener('load', function() {
   var token = localStorage.getItem('token');
   var user = JSON.parse(localStorage.getItem('user') || 'null');
-  if (token && user) {
-    currentUser = user;
-    updateUserUI();
-    loadPage(location.pathname || '/');
-  } else {
-    window.location.href = '/login.html';
-  }
+  if (token && user) { currentUser = user; updateUserUI(); loadPage(location.pathname || '/'); }
+  else { window.location.href = '/login.html'; }
 });
 </script>
 </body>

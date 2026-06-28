@@ -6,11 +6,8 @@
 
 <script>
 (function() {
-    var token = localStorage.getItem('token');
-    var parts = location.pathname.split('/');
-    var cabinetId = parts[2];
-
-    if (!cabinetId || !token) {
+    var cabinetId = window.pageParam;
+    if (!cabinetId) {
         document.getElementById('cabinetContent').innerHTML = '<p>Шкаф не найден</p>';
         return;
     }
@@ -21,74 +18,44 @@
         return div.innerHTML;
     }
 
-    function navigate(url) {
-        history.pushState(null, '', url);
-        window.dispatchEvent(new PopStateEvent('popstate'));
-    }
+    fetch('/api/cabinets/' + cabinetId).then(function(res) {
+        if (!res.ok) throw new Error('Ошибка');
+        return res.json();
+    }).then(function(cabinet) {
+        var html = '<h2>' + esc(cabinet.name) + '</h2>';
+        html += '<p>' + esc(cabinet.description || '') + '</p>';
+        html += '<p><em>Проект: ' + esc(cabinet.project_name || '') + '</em></p>';
+        html += '<hr><h3>Компоненты шкафа</h3>';
+        html += '<div id="cabinetBlocks">Загрузка...</div>';
+        html += '<hr><h3>Системы шкафа</h3>';
+        html += '<div id="cabinetSystems">Загрузка...</div>';
+        document.getElementById('cabinetContent').innerHTML = html;
+        loadBlocks(cabinetId);
+    }).catch(function() {
+        document.getElementById('cabinetContent').innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
+    });
 
-    async function loadCabinet() {
-        var container = document.getElementById('cabinetContent');
-        try {
-            var res = await fetch(API_BASE + '/cabinets/' + cabinetId, {
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
-            if (!res.ok) throw new Error('Шкаф не найден');
-            var cabinet = await res.json();
-
-            var html = '';
-            html += '<div class="page-header">';
-            html += '<h2>' + esc(cabinet.name) + '</h2>';
-            html += '<div style="display:flex; gap:8px;">';
-            html += '<button class="btn btn-secondary" id="backToProjectBtn">← К проекту</button>';
-            html += '<button class="btn btn-secondary" id="backToAdminBtn">← Администрирование</button>';
-            html += '</div></div>';
-            html += '<div style="background:white; padding:20px; border-radius:8px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">';
-            html += '<table class="data-table">';
-            html += '<tr><td><strong>Проект:</strong></td><td><a href="/project/' + cabinet.project_id + '" class="spa-link">' + esc(cabinet.project_name || '—') + '</a></td></tr>';
-            html += '<tr><td><strong>Владелец:</strong></td><td>' + esc(cabinet.owner || '—') + '</td></tr>';
-            html += '<tr><td><strong>Создан:</strong></td><td>' + (cabinet.created_at ? new Date(cabinet.created_at).toLocaleString('ru-RU') : '—') + '</td></tr>';
-            html += '</table></div>';
-            html += '<h3>Блоки шкафа</h3>';
-
-            if (!cabinet.blocks || cabinet.blocks.length === 0) {
-                html += '<p>Нет блоков</p>';
-            } else {
-                html += '<div class="table-container"><table class="data-table"><thead><tr><th>#</th><th>Название блока</th><th>Тип</th><th>Компонент</th><th>Производитель</th><th>Артикул</th><th>Кол-во</th></tr></thead><tbody>';
-                cabinet.blocks.forEach(function(b) {
-                    html += '<tr>';
-                    html += '<td>' + (b.order_index || 0) + '</td>';
-                    html += '<td>' + esc(b.block_name) + '</td>';
-                    html += '<td>' + esc(b.type_name || '—') + '</td>';
-                    html += '<td>' + esc(b.template_name || '—') + '</td>';
-                    html += '<td>' + esc(b.manufacturer_name || '—') + '</td>';
-                    html += '<td>' + esc(b.article || '—') + '</td>';
-                    html += '<td>' + (b.quantity || 1) + '</td>';
-                    html += '</tr>';
-                });
-                html += '</tbody></table></div>';
+    function loadBlocks(cabinetId) {
+        fetch('/api/cabinets/' + cabinetId + '/blocks').then(function(res) {
+            if (!res.ok) throw new Error('Ошибка');
+            return res.json();
+        }).then(function(blocks) {
+            var container = document.getElementById('cabinetBlocks');
+            if (!blocks.length) {
+                container.innerHTML = '<p>Нет компонентов</p>';
+                return;
             }
-
-            container.innerHTML = html;
-
-            document.getElementById('backToProjectBtn').addEventListener('click', function() {
-                navigate('/project/' + cabinet.project_id);
+            var h = '<table class="data-table"><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Производитель</th><th>Кол-во</th></tr>';
+            blocks.forEach(function(b) {
+                h += '<tr><td>' + esc(b.type_name || '') + '</td><td>' + esc(b.name) + '</td><td>' + esc(b.article || '') + '</td><td>' + esc(b.manufacturer_name || '') + '</td><td>' + b.quantity + '</td></tr>';
             });
-            document.getElementById('backToAdminBtn').addEventListener('click', function() {
-                navigate('/admin');
-            });
-
-            container.querySelectorAll('.spa-link').forEach(function(link) {
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    navigate(this.getAttribute('href'));
-                });
-            });
-
-        } catch(e) {
-            container.innerHTML = '<p style="color:red;">Ошибка загрузки шкафа</p>';
-        }
+            h += '</table>';
+            container.innerHTML = h;
+        }).catch(function() {
+            document.getElementById('cabinetBlocks').innerHTML = '<p style="color:red;">Ошибка</p>';
+        });
     }
 
-    loadCabinet();
+    window.pageInit = function() {};
 })();
 </script>
