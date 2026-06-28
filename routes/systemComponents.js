@@ -153,3 +153,40 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 });
 
 module.exports = router;
+
+// ==================== СВЯЗИ С КОМПОНЕНТАМИ ШКАФОВ ====================
+// Получить связи для компонента
+router.get('/:id/blocks', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT sbl.*, bt.name, bt.article, ct.name as type_name, m.name as manufacturer_name
+      FROM system_block_links sbl
+      JOIN block_templates bt ON sbl.block_template_id = bt.id
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
+      WHERE sbl.system_component_id = $1
+      ORDER BY bt.name
+    `, [req.params.id]);
+    res.json(result.rows);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+// Добавить связь
+router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
+  try {
+    const { block_template_id, quantity } = req.body;
+    const result = await pool.query(
+      'INSERT INTO system_block_links (system_component_id, block_template_id, quantity) VALUES ($1, $2, $3) ON CONFLICT (system_component_id, block_template_id) DO UPDATE SET quantity=$3 RETURNING *',
+      [req.params.id, block_template_id, quantity || 1]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+// Удалить связь
+router.delete('/:id/blocks/:linkId', auth, isAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM system_block_links WHERE id = $1', [req.params.linkId]);
+    res.json({ message: 'Связь удалена' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});

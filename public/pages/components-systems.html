@@ -171,6 +171,50 @@ document.getElementById('addComponentBtn').addEventListener('click', function() 
     });
 });
 
+
+// ==================== СВЯЗИ С КОМПОНЕНТАМИ ШКАФА ====================
+var allBlocks = [];
+function loadAllBlocks() {
+    return fetch('/api/block-templates').then(function(r){return r.json();}).then(function(d){allBlocks = d;});
+}
+
+function loadLinkedBlocks(compId, container) {
+    container.innerHTML = '<p>Загрузка...</p>';
+    fetch('/api/system-components/'+compId+'/blocks').then(function(r){return r.json();}).then(function(data){
+        if (!data.length) { container.innerHTML = '<p>Нет связанных компонентов</p>'; return; }
+        var h = '<table class="data-table"><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Производитель</th><th>Кол-во</th><th></th></tr>';
+        data.forEach(function(l){
+            h += '<tr><td>'+escapeHtml(l.type_name||'')+'</td><td>'+escapeHtml(l.name)+'</td><td>'+escapeHtml(l.article||'')+'</td><td>'+escapeHtml(l.manufacturer_name||'')+'</td><td>'+l.quantity+'</td><td><button class="btn btn-sm btn-delete" onclick="deleteBlockLink('+compId+','+l.id+',this)">×</button></td></tr>';
+        });
+        h += '</table>';
+        container.innerHTML = h;
+    });
+}
+
+function addBlockLinkRow(compId, container) {
+    if (!allBlocks.length) { alert('Нет компонентов шкафов'); return; }
+    var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px;margin-bottom:5px;';
+    var s = document.createElement('select'); s.style.flex='2';
+    s.innerHTML = '<option value="">-- выберите --</option>'+allBlocks.map(function(b){return '<option value="'+b.id+'">'+escapeHtml(b.type_name||'')+' '+escapeHtml(b.name)+' ('+escapeHtml(b.article||'')+')</option>';}).join('');
+    var q = document.createElement('input'); q.type='number'; q.value='1'; q.min='1'; q.style.flex='0.5'; q.placeholder='Кол-во';
+    var sv = document.createElement('button'); sv.type='button'; sv.textContent='✓'; sv.className='btn btn-sm btn-primary';
+    var dl = document.createElement('button'); dl.type='button'; dl.textContent='×'; dl.className='btn btn-sm btn-delete';
+    sv.addEventListener('click', function(){
+        if (!s.value) { alert('Выберите компонент'); return; }
+        fetch('/api/system-components/'+compId+'/blocks', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({block_template_id:parseInt(s.value),quantity:parseInt(q.value)||1})})
+        .then(function(){ loadLinkedBlocks(compId, container); });
+    });
+    dl.addEventListener('click', function(){ row.remove(); });
+    row.appendChild(s); row.appendChild(q); row.appendChild(sv); row.appendChild(dl);
+    container.appendChild(row);
+}
+
+window.deleteBlockLink = function(compId, linkId, btn) {
+    fetch('/api/system-components/'+compId+'/blocks/'+linkId, {method:'DELETE'}).then(function(){
+        var container = document.getElementById('linkedBlocks');
+        loadLinkedBlocks(compId, container);
+    });
+};
 function openComponentForm(comp) {
     var isEdit = !!comp;
     var formHtml = '<div class="form-group"><label>Тип: <span style="color:red;">*</span></label><select id="compType" required></select>' +
@@ -182,6 +226,7 @@ function openComponentForm(comp) {
     formHtml += '<div class="form-group"><label>Артикул:</label><input type="text" id="compArticle" value="'+(comp?escapeHtml(comp.article||''):'')+'"></div>';
     formHtml += '<div class="form-group"><label>Описание:</label><textarea id="compDescription" rows="3">'+(comp?escapeHtml(comp.description||''):'')+'</textarea></div>';
     formHtml += '<div class="form-group"><label>Параметры:</label><div id="modalParams"></div><button type="button" id="addParamRowBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить параметр</button></div>';
+    formHtml += '<div class="form-group"><label>Компоненты шкафа:</label><div id="linkedBlocks"><p>Загрузка...</p></div><button type="button" id="addBlockLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить компонент шкафа</button></div>';
     formHtml += '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>';
 
     showModal(isEdit?'Редактировать компонент систем':'Добавить компонент систем', formHtml);
@@ -262,6 +307,16 @@ function openComponentForm(comp) {
     }
 
     document.getElementById('addParamRowBtn').addEventListener('click', function() { addParamRowToContainer(null, null, null); });
+
+    // Инициализация связанных компонентов шкафа
+    var linkedContainer = document.getElementById('linkedBlocks');
+    if (isEdit) {
+        loadLinkedBlocks(comp.id, linkedContainer);
+    }
+    loadAllBlocks();
+    document.getElementById('addBlockLinkBtn').addEventListener('click', function() {
+        addBlockLinkRow(isEdit ? comp.id : null, linkedContainer);
+    });
 
     modalForm.onsubmit = function(e) {
         e.preventDefault();
