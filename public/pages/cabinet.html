@@ -12,12 +12,12 @@
             <input type="hidden" id="systemLinkId">
             <div class="form-group">
                 <label for="systemSelect">Система *</label>
-                <select id="systemSelect" required></select>
+                <select id="systemSelect" required><option value="">-- выберите --</option></select>
+                <div class="new-system-row" style="display:none;margin-top:5px;display:flex;gap:5px;">
+                    <input type="text" class="new-system-name" placeholder="Название новой системы" style="flex:1;">
+                    <button type="button" class="btn btn-sm btn-primary save-new-system-btn">✓</button>
+                </div>
                 <button type="button" id="newSystemBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ новая система</button>
-            </div>
-            <div class="form-group">
-                <label for="systemInstName">Название установки</label>
-                <input type="text" id="systemInstName" maxlength="255" placeholder="Например: П-1">
             </div>
             <div id="systemError" class="error-message" style="display:none;"></div>
             <div class="form-actions">
@@ -28,11 +28,22 @@
     </div>
 </div>
 
+<div id="blockModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:500px;">
+        <span class="modal-close" onclick="document.getElementById('blockModal').style.display='none'">&times;</span>
+        <h3>Добавить компонент</h3>
+        <form id="blockForm">
+            <div class="form-group"><label for="blockTemplate">Компонент *</label><select id="blockTemplate" required></select></div>
+            <div class="form-group"><label for="blockQuantity">Количество</label><input type="number" id="blockQuantity" value="1" min="1"></div>
+            <div class="form-actions"><button type="button" class="btn btn-secondary" onclick="document.getElementById('blockModal').style.display='none'">Отмена</button><button type="submit" class="btn btn-primary">Добавить</button></div>
+        </form>
+    </div>
+</div>
+
 <script>
 (function() {
     var cabinetId = window.pageParam;
     if (!cabinetId) { document.getElementById('cabinetContent').innerHTML = '<p>Шкаф не найден</p>'; return; }
-
     function esc(str) { var d=document.createElement('div'); d.textContent=str||''; return d.innerHTML; }
 
     fetch('/api/cabinets/' + cabinetId).then(function(res) { return res.json(); }).then(function(cabinet) {
@@ -51,10 +62,8 @@
         fetch('/api/cabinets/' + cabinetId + '/systems').then(function(r){return r.json();}).then(function(data){
             var c = document.getElementById('cabinetSystems');
             if (!data.length) { c.innerHTML = '<p>Нет систем</p>'; return; }
-            var h = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th>Установка</th><th></th></tr>';
-            data.forEach(function(s){
-                h += '<tr><td>' + esc(s.name || '') + '</td><td>' + esc(s.inst_name || '') + '</td><td><button class="btn btn-sm btn-delete" onclick="deleteSystem('+s.id+')">🗑️</button></td></tr>';
-            });
+            var h = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th></th></tr>';
+            data.forEach(function(s){h += '<tr><td>'+esc(s.system_name||'')+'</td><td><button class="btn btn-sm btn-delete" onclick="deleteSystem('+s.id+')">🗑️</button></td></tr>';});
             h += '</table></div>'; c.innerHTML = h;
         });
     }
@@ -63,31 +72,45 @@
         fetch('/api/systems').then(function(r){return r.json();}).then(function(data){
             window._allSystems = data;
             var sel = document.getElementById('systemSelect');
-            sel.innerHTML = '<option value="">-- выберите --</option>' + data.map(function(s){return '<option value="'+s.id+'">'+esc(s.name)+'</option>';}).join('');
-            document.getElementById('systemInstName').value = '';
+            sel.innerHTML = '<option value="">-- выберите --</option>';
+            if (data.length) {
+                sel.innerHTML += '<optgroup label="Существующие">';
+                data.forEach(function(s){ sel.innerHTML += '<option value="'+s.id+'">'+esc(s.name)+'</option>'; });
+                sel.innerHTML += '</optgroup>';
+            }
+            sel.innerHTML += '<optgroup label="Добавить"><option value="__new__">+ новая система</option></optgroup>';
             document.getElementById('systemModal').style.display = 'block';
+
+            var newRow = document.querySelector('.new-system-row');
+            var newName = document.querySelector('.new-system-name');
+            var saveBtn = document.querySelector('.save-new-system-btn');
+            newRow.style.display = 'none';
+
+            sel.onchange = function() {
+                if (sel.value === '__new__') newRow.style.display = 'flex';
+                else newRow.style.display = 'none';
+            };
+
+            saveBtn.onclick = function() {
+                var name = newName.value.trim();
+                if (!name) { alert('Введите название'); return; }
+                fetch('/api/systems', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+                .then(function(r){return r.json();}).then(function(ns){
+                    sel.innerHTML += '<option value="'+ns.id+'" selected>'+esc(ns.name)+'</option>';
+                    sel.value = ns.id;
+                    newRow.style.display = 'none';
+                });
+            };
         });
     }
 
-    document.getElementById('newSystemBtn').addEventListener('click', function() {
-        var name = prompt('Название системы (П, В, ПВ, ХЦ...):');
-        if (!name) return;
-        var desc = prompt('Описание:');
-        fetch('/api/systems', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,description:desc})})
-        .then(function(r){return r.json();}).then(function(ns){
-            var sel = document.getElementById('systemSelect');
-            var o = document.createElement('option'); o.value=ns.id; o.textContent=ns.name; sel.appendChild(o); sel.value=ns.id;
-        });
-    });
-
     document.getElementById('systemForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        var system_id = parseInt(document.getElementById('systemSelect').value);
-        var name = document.getElementById('systemInstName').value.trim();
-        if (!system_id) { alert('Выберите систему'); return; }
+        var system_id = document.getElementById('systemSelect').value;
+        if (!system_id || system_id === '__new__') { alert('Выберите или создайте систему'); return; }
         fetch('/api/cabinets/' + cabinetId + '/systems', {
             method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({system_id:system_id, name:name})
+            body:JSON.stringify({system_id: parseInt(system_id)})
         }).then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});document.getElementById('systemModal').style.display='none';loadSystems();})
         .catch(function(e){alert(e.message);});
     });
@@ -109,12 +132,29 @@
 
     function openBlockModal() {
         fetch('/api/block-templates').then(function(r){return r.json();}).then(function(data){
-            var sel = document.getElementById('blockTemplate'); if(!sel) return;
+            var sel = document.getElementById('blockTemplate');
             sel.innerHTML = '<option value="">-- выберите --</option>'+data.map(function(b){return '<option value="'+b.id+'">'+esc(b.type_name||'')+' '+esc(b.name)+'</option>';}).join('');
             document.getElementById('blockQuantity').value = 1;
             document.getElementById('blockModal').style.display = 'block';
         });
     }
+
+    document.getElementById('blockForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var template_id = parseInt(document.getElementById('blockTemplate').value);
+        var quantity = parseInt(document.getElementById('blockQuantity').value) || 1;
+        if (!template_id) { alert('Выберите компонент'); return; }
+        fetch('/api/projects/blocks', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({cabinet_id: parseInt(cabinetId), template_id: template_id, quantity: quantity})
+        }).then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});document.getElementById('blockModal').style.display='none';loadBlocks();})
+        .catch(function(e){alert(e.message);});
+    });
+
+    window.deleteBlock = function(id) {
+        if (!confirm('Удалить?')) return;
+        fetch('/api/project-blocks/' + id, {method:'DELETE'}).then(loadBlocks);
+    };
 
     window.pageInit = function() {};
 })();

@@ -1,0 +1,94 @@
+<div class="page-content">
+    <div style="margin-bottom:10px;">
+        <button id="addCabinetBtn" class="btn btn-primary" style="display:none;">Добавить шкаф</button>
+        <button id="exportBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
+        <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls">
+        <button id="importBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
+    </div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead><tr><th>ID</th><th>Название шкафа</th><th>Проект</th><th>Создатель</th><th>Дата создания</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
+            <tbody id="cabinetsBody"><tr><td colspan="6" class="loading">Загрузка...</td></tr></tbody>
+        </table>
+    </div>
+
+    <div id="modal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:500px;">
+            <span class="close-modal">&times;</span>
+            <h3 id="modalTitle">Добавить шкаф</h3>
+            <form id="modalForm">
+                <input type="hidden" id="cabinetId">
+                <div class="form-group"><label for="cabinetName">Название *</label><input type="text" id="cabinetName" required></div>
+                <div class="form-group"><label for="cabinetProject">Проект *</label><select id="cabinetProject" required></select></div>
+                <div class="form-group"><label for="cabinetDesc">Описание</label><textarea id="cabinetDesc" rows="2"></textarea></div>
+                <div id="cabinetError" class="error-message" style="display:none;"></div>
+                <div class="form-actions"><button type="button" class="btn btn-secondary" onclick="document.getElementById('modal').style.display='none'">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var user = JSON.parse(localStorage.getItem('user') || 'null');
+    var isAdmin = user && user.role === 'admin';
+    if (isAdmin) {
+        ['addCabinetBtn','exportBtn','importBtn','actionsCol'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='';});
+    }
+    function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+    function formatDate(d){if(!d)return'';return new Date(d).toLocaleDateString('ru-RU');}
+    var modal=document.getElementById('modal'),modalTitle=document.getElementById('modalTitle'),modalForm=document.getElementById('modalForm');
+    document.querySelector('.close-modal').addEventListener('click',function(){modal.style.display='none';});
+    window.addEventListener('click',function(e){if(e.target===modal)modal.style.display='none';});
+
+    function loadCabinets() {
+        fetch('/api/cabinets').then(function(r){return r.json();}).then(function(data){
+            var t=document.getElementById('cabinetsBody');
+            if(!data.length){t.innerHTML='<tr><td colspan="6">Нет шкафов</td></tr>';return;}
+            t.innerHTML=data.map(function(c){return'<tr><td>'+c.id+'</td><td><a href="/cabinet/'+c.id+'" onclick="event.preventDefault();navigateTo(\'/cabinet/'+c.id+'\')">'+esc(c.name)+'</a></td><td>'+esc(c.project_name||'')+'</td><td>'+esc(c.owner_name||'')+'</td><td>'+formatDate(c.created_at)+'</td>'+(isAdmin?'<td><button class="btn btn-sm btn-edit" onclick="editCabinet('+c.id+')">✏️</button> <button class="btn btn-sm btn-primary" onclick="cloneCabinet('+c.id+')">📋</button> <button class="btn btn-sm btn-delete" onclick="deleteCabinet('+c.id+')">🗑️</button></td>':'')+'</tr>';}).join('');
+        });
+    }
+
+    document.getElementById('addCabinetBtn').addEventListener('click',function(){openForm();});
+
+    function openForm(cabinet) {
+        fetch('/api/projects').then(function(r){return r.json();}).then(function(projects){
+            var sel=document.getElementById('cabinetProject');
+            sel.innerHTML='<option value="">-- выберите --</option>'+projects.map(function(p){return'<option value="'+p.id+'"'+(cabinet&&cabinet.project_id===p.id?' selected':'')+'>'+esc(p.name)+'</option>';}).join('');
+            document.getElementById('cabinetId').value=cabinet?cabinet.id:'';
+            document.getElementById('cabinetName').value=cabinet?cabinet.name:'';
+            document.getElementById('cabinetDesc').value=cabinet?cabinet.description||'':'';
+            document.getElementById('cabinetError').style.display='none';
+            modalTitle.textContent=cabinet?'Редактировать шкаф':'Добавить шкаф';
+            modal.style.display='block';
+        });
+    }
+
+    modalForm.addEventListener('submit',function(e){
+        e.preventDefault();
+        var id=document.getElementById('cabinetId').value;
+        var body={name:document.getElementById('cabinetName').value.trim(),project_id:parseInt(document.getElementById('cabinetProject').value),description:document.getElementById('cabinetDesc').value.trim()};
+        if(!body.name||!body.project_id){document.getElementById('cabinetError').textContent='Заполните поля';document.getElementById('cabinetError').style.display='block';return;}
+        var url=id?'/api/cabinets/'+id:'/api/cabinets';
+        fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});modal.style.display='none';loadCabinets();})
+        .catch(function(e){document.getElementById('cabinetError').textContent=e.message;document.getElementById('cabinetError').style.display='block';});
+    });
+
+    window.editCabinet=function(id){fetch('/api/cabinets/'+id).then(function(r){return r.json();}).then(function(c){openForm(c);});};
+    window.deleteCabinet=function(id){if(!confirm('Удалить?'))return;fetch('/api/cabinets/'+id,{method:'DELETE'}).then(loadCabinets);};
+    window.cloneCabinet=function(id){
+        var name=prompt('Название нового шкафа:');
+        if(!name)return;
+        fetch('/api/cabinets/'+id).then(function(r){return r.json();}).then(function(c){
+            fetch('/api/cabinets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,project_id:c.project_id,description:c.description})})
+            .then(function(){loadCabinets();});
+        });
+    };
+
+    document.getElementById('exportBtn').addEventListener('click',async function(){var r=await fetch('/api/cabinets/export');var b=await r.blob();var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='cabinets.xlsx';a.click();});
+    document.getElementById('importBtn').addEventListener('click',function(){document.getElementById('importFile').click();});
+    document.getElementById('importFile').addEventListener('change',async function(){var fd=new FormData();fd.append('file',this.files[0]);await fetch('/api/cabinets/import',{method:'POST',body:fd});loadCabinets();this.value='';});
+
+    window.pageInit=function(){loadCabinets();};
+})();
+</script>

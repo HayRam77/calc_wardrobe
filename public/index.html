@@ -75,6 +75,7 @@
   <a href="/automation" data-title="Системы автоматизации">Системы автоматизации</a>
   <a href="/components-systems" data-title="Компоненты систем">Компоненты систем</a>
   <a href="/components-cabinets" data-title="Компоненты шкафов">Компоненты шкафов</a>
+  <a href="/cabinets-list" data-title="Все шкафы">Все шкафы</a>
   <a href="/manufacturers" data-title="Производители">Производители</a>
   <a href="/admin" data-title="Администрирование" id="adminLink" style="display:none;">Администрирование</a>
 </nav>
@@ -134,6 +135,7 @@ async function loadPage(url) {
     else if (url === '/automation') file = 'pages/automation.html';
     else if (url === '/components-systems') file = 'pages/components-systems.html';
     else if (url === '/components-cabinets') file = 'pages/components-cabinets.html';
+    else if (url === '/cabinets-list') file = 'pages/cabinets-list.html';
     else if (url === '/manufacturers') file = 'pages/manufacturers.html';
     else if (url === '/admin') { if (!currentUser || currentUser.role !== 'admin') { container.innerHTML = '<p>Доступ запрещён</p>'; return; } file = 'pages/admin.html'; }
     else if (url.startsWith('/project/')) { file = 'pages/project.html'; window.pageParam = url.split('/')[2]; }

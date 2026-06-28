@@ -3,6 +3,9 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const isAdmin = require('../middleware/isAdmin');
+const XLSX = require('xlsx');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 const { body, param } = require('express-validator');
 const validate = require('../middleware/validation');
 
@@ -213,12 +216,11 @@ router.get('/:id/blocks', auth, async (req, res) => {
 router.get('/:id/systems', auth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT cs.*, sc.name as component_name, sc.article, sct.name as type_name
+      SELECT cs.*, s.name as system_name, s.description as system_description
       FROM cabinet_systems cs
-      JOIN system_components sc ON cs.system_id = sc.id
-      LEFT JOIN system_component_types sct ON sc.type_id = sct.id
+      JOIN systems s ON cs.system_id = s.id
       WHERE cs.cabinet_id = $1
-      ORDER BY sc.name
+      ORDER BY s.name
     `, [req.params.id]);
     res.json(result.rows);
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
@@ -242,6 +244,32 @@ router.delete('/:id/systems/:systemId', auth, isAdmin, async (req, res) => {
     await pool.query('DELETE FROM cabinet_systems WHERE id = $1', [req.params.systemId]);
     res.json({ message: 'Система удалена' });
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+router.get('/export', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT c.id as ID, c.name as Название, p.name as Проект, u.username as Создатель, c.created_at as Дата_создания, c.description as Описание FROM cabinets c JOIN projects p ON c.project_id = p.id LEFT JOIN users u ON c.user_id = u.id ORDER BY c.id`);
+    const ws = XLSX.utils.json_to_sheet(result.rows);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Шкафы');
+    res.setHeader('Content-Disposition', 'attachment; filename=cabinets.xlsx');
+    res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка экспорта' }); }
+});
+
+router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    let imported = 0;
+    for (const row of data) {
+      try {
+        const proj = await pool.query('SELECT id FROM projects WHERE name=$1', [row['Проект']]);
+        await pool.query('INSERT INTO cabinets (name, project_id, description, user_id) VALUES ($1, $2, $3, $4)', [row['Название'], proj.rows[0]?.id || null, row['Описание'] || null, 1]);
+        imported++;
+      } catch (e) {}
+    }
+    res.json({ message: 'Импортировано ' + imported + ' записей' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
 });
 
 module.exports = router;
