@@ -163,6 +163,42 @@
     }
 
     function loadBlocks() {
+        // Загружаем компоненты шкафа, привязанные к системам шкафа
+        fetch('/api/cabinets/' + cabinetId + '/systems').then(function(r){return r.json();}).then(function(systems){
+            var container = document.getElementById('cabinetBlocks');
+            if (!systems.length) { container.innerHTML = '<p>Нет систем</p>'; return; }
+            var html = '';
+            var done = 0;
+            systems.forEach(function(sys){
+                // Для каждой системы загружаем её системный компонент, затем его связи с блоками
+                fetch('/api/systems/' + sys.system_id).then(function(r){return r.json();}).then(function(sysData){
+                    if (sysData.components && sysData.components.length) {
+                        var compPromises = sysData.components.map(function(comp){
+                            return fetch('/api/system-components/' + comp.component_id + '/blocks').then(function(r){return r.json();}).then(function(blocks){
+                                if (blocks.length) {
+                                    html += '<h4>'+esc(sys.system_name||'Система')+' → '+esc(comp.name)+'</h4>';
+                                    html += '<div class="table-container"><table class="data-table"><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Кол-во</th></tr>';
+                                    blocks.forEach(function(b){
+                                        html += '<tr><td>'+esc(b.type_name||'')+'</td><td>'+esc(b.name)+'</td><td>'+esc(b.article||'')+'</td><td>'+b.quantity+'</td></tr>';
+                                    });
+                                    html += '</table></div><br>';
+                                }
+                            });
+                        });
+                        Promise.all(compPromises).then(function(){
+                            done++;
+                            if (done === systems.length) container.innerHTML = html || '<p>Нет компонентов</p>';
+                        });
+                    } else {
+                        done++;
+                        if (done === systems.length) container.innerHTML = html || '<p>Нет компонентов</p>';
+                    }
+                });
+            });
+        });
+    }
+    
+    function loadBlocksOld() {
         fetch('/api/cabinets/' + cabinetId + '/blocks').then(function(r){return r.json();}).then(function(data){
             var c = document.getElementById('cabinetBlocks');
             if (!data.length) { c.innerHTML = '<p>Нет компонентов</p>'; return; }
@@ -172,7 +208,7 @@
         });
     }
 
-    function openBlockModal() {
+    function openBlockModalOld() {
         fetch('/api/block-templates').then(function(r){return r.json();}).then(function(data){
             document.getElementById('blockTemplate').innerHTML = '<option value="">-- выберите --</option>'+data.map(function(b){return '<option value="'+b.id+'">'+esc(b.type_name||'')+' '+esc(b.name)+'</option>';}).join('');
             document.getElementById('blockQuantity').value = 1;
