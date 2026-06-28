@@ -1,208 +1,15 @@
-// routes/blockTemplates.js
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const isAdmin = require('../middleware/isAdmin');
-
-// Получить все шаблоны блоков с параметрами
-router.get('/', auth, async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT bt.*, 
-        ct.name as type_name, 
-        m.name as manufacturer_name,
-        COALESCE(
-          (SELECT json_agg(json_build_object(
-            'id', cpv.id,
-            'parameter_id', cpv.param_id,
-            'param_name', p.name,
-            'param_value', cpv.value
-          )) FROM component_param_values cpv
-          LEFT JOIN parameters p ON cpv.param_id = p.id
-          WHERE cpv.component_id = bt.id),
-          '[]'::json
-        ) as parameters
-      FROM block_templates bt
-      LEFT JOIN component_types ct ON bt.type_id = ct.id
-      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
-      ORDER BY bt.id
-    `);
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Ошибка получения шаблонов блоков' });
-  }
-});
-
-// Получить один шаблон
-router.get('/:id', auth, async (req, res) => {
-  const { id } = req.params;
-  try {
-    const result = await pool.query(`
-      SELECT bt.*, 
-        ct.name as type_name, 
-        m.name as manufacturer_name,
-        COALESCE(
-          (SELECT json_agg(json_build_object(
-            'id', cpv.id,
-            'parameter_id', cpv.param_id,
-            'param_name', p.name,
-            'param_value', cpv.value
-          )) FROM component_param_values cpv
-          LEFT JOIN parameters p ON cpv.param_id = p.id
-          WHERE cpv.component_id = bt.id),
-          '[]'::json
-        ) as parameters
-      FROM block_templates bt
-      LEFT JOIN component_types ct ON bt.type_id = ct.id
-      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
-      WHERE bt.id = $1
-    `, [id]);
-    if (result.rows.length === 0) return res.status(404).json({ message: 'Шаблон не найден' });
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Ошибка получения шаблона' });
-  }
-});
-
-// Создать шаблон с параметрами
-router.post('/', auth, isAdmin, async (req, res) => {
-  const { 
-    name, type_id, manufacturer_id, article, 
-    price, labor, weight_grams, power_watts, 
-    ln, url, description, parameters 
-  } = req.body;
-  
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    
-    const result = await client.query(
-      `INSERT INTO block_templates 
-       (name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, ln, url, description) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [name, type_id || null, manufacturer_id || null, article || null, 
-       price || null, labor || null, weight_grams || null, power_watts || null, 
-       ln || null, url || null, description || null]
-    );
-    
-    const template = result.rows[0];
-    
-    // Сохраняем параметры
-    if (parameters && Array.isArray(parameters)) {
-      for (const param of parameters) {
-        if (param.parameter_id) {
-          await client.query(
-            'INSERT INTO component_param_values (component_id, param_id, value) VALUES ($1, $2, $3)',
-            [template.id, param.parameter_id, param.param_value || param.value || '']
-          );
-        }
-      }
-    }
-    
-    await client.query('COMMIT');
-    res.status(201).json(template);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ message: 'Ошибка создания шаблона' });
-  } finally {
-    client.release();
-  }
-});
-
-// Обновить шаблон с параметрами
-router.put('/:id', auth, isAdmin, async (req, res) => {
-  const { id } = req.params;
-  const { parameters, ...bodyFields } = req.body;
-  
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    
-    const allowedFields = [
-      'name', 'type_id', 'manufacturer_id', 'article', 
-      'price', 'labor', 'weight_grams', 'power_watts', 
-      'ln', 'url', 'description'
-    ];
-    
-    const fields = [];
-    const values = [];
-    let counter = 1;
-    
-    for (const field of allowedFields) {
-      if (bodyFields[field] !== undefined) {
-        fields.push(`${field} = $${counter++}`);
-        values.push(bodyFields[field]);
-      }
-    }
-    
-    let result;
-    if (fields.length > 0) {
-      values.push(id);
-      result = await client.query(
-        `UPDATE block_templates SET ${fields.join(', ')} WHERE id = $${counter} RETURNING *`,
-        values
-      );
-    } else {
-      result = await client.query('SELECT * FROM block_templates WHERE id = $1', [id]);
-    }
-    
-    if (result.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Шаблон не найден' });
-    }
-    
-    // Обновляем параметры: удаляем старые, вставляем new
-    await client.query('DELETE FROM component_param_values WHERE component_id = $1', [id]);
-    
-    if (parameters && Array.isArray(parameters)) {
-      for (const param of parameters) {
-        if (param.parameter_id) {
-          await client.query(
-            'INSERT INTO component_param_values (component_id, param_id, value) VALUES ($1, $2, $3)',
-            [id, param.parameter_id, param.param_value || param.value || '']
-          );
-        }
-      }
-    }
-    
-    await client.query('COMMIT');
-    res.json(result.rows[0]);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ message: 'Ошибка обновления шаблона' });
-  } finally {
-    client.release();
-  }
-});
-
-// Удалить шаблон
-router.delete('/:id', auth, isAdmin, async (req, res) => {
-  const { id } = req.params;
-  try {
-    await pool.query('DELETE FROM component_param_values WHERE component_id = $1', [id]);
-    await pool.query('DELETE FROM block_templates WHERE id = $1', [id]);
-    res.json({ message: 'Шаблон удалён' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Ошибка удаления шаблона' });
-  }
-});
-
-module.exports = router;
-
-// ==================== ЭКСПОРТ / ИМПОРТ ====================
 const XLSX = require('xlsx');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.get('/export', auth, async (req, res) => {
   try {
-    const result = await pool.query(`
+    const templates = await pool.query(`
       SELECT bt.id, bt.name, bt.article, bt.price, bt.weight_grams, bt.power_watts, bt.ln, bt.url, bt.description,
              ct.name AS type_name, m.name AS manufacturer_name
       FROM block_templates bt
@@ -210,39 +17,128 @@ router.get('/export', auth, async (req, res) => {
       LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
       ORDER BY bt.id
     `);
-    const ws = XLSX.utils.json_to_sheet(result.rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Компоненты шкафов');
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const allParams = await pool.query('SELECT id, name FROM parameters ORDER BY id');
+    const paramNames = allParams.rows.map(p => p.name);
+    
+    const result = await Promise.all(templates.rows.map(async (t) => {
+      const params = await pool.query(
+        `SELECT p.name, cpv.value FROM component_param_values cpv 
+         JOIN parameters p ON cpv.param_id = p.id 
+         WHERE cpv.component_id = $1`, [t.id]
+      );
+      const row = {
+        Тип: t.type_name || '',
+        Название: t.name,
+        Производитель: t.manufacturer_name || '',
+        Артикул: t.article || '',
+        Описание: t.description || ''
+      };
+      paramNames.forEach(pn => { row[pn] = ''; });
+      params.rows.forEach(p => { row[p.name] = p.value || ''; });
+      row['Цена'] = t.price || '';
+      row['Вес'] = t.weight_grams || '';
+      row['Q'] = t.power_watts || '';
+      row['LN'] = t.ln || '';
+      row['Ссылка'] = t.url || '';
+      return row;
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(result);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Компоненты шкафов');
     res.setHeader('Content-Disposition', 'attachment; filename=block_templates.xlsx');
-    res.send(buf);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Ошибка экспорта' });
-  }
+    res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка экспорта' }); }
 });
 
 router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
   try {
     const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(ws);
+    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    const allParams = await pool.query('SELECT id, name FROM parameters');
+    const paramMap = {};
+    allParams.rows.forEach(p => { paramMap[p.name] = p.id; });
+    
+    const fixedCols = ['Тип', 'Название', 'Производитель', 'Артикул', 'Описание', 'Цена', 'Вес', 'Q', 'LN', 'Ссылка'];
+    
     let imported = 0;
     for (const row of data) {
       try {
-        const typeRes = await pool.query('SELECT id FROM component_types WHERE name = $1', [row.type_name]);
-        const manRes = await pool.query('SELECT id FROM manufacturers WHERE name = $1', [row.manufacturer_name]);
-        await pool.query(
-          `INSERT INTO block_templates (name, type_id, manufacturer_id, article, price, weight_grams, power_watts, ln, url, description) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (article) DO UPDATE SET name=$1, type_id=$2, manufacturer_id=$3, price=$5, weight_grams=$6, power_watts=$7, ln=$8, url=$9, description=$10`,
-          [row.name, typeRes.rows[0]?.id || null, manRes.rows[0]?.id || null, row.article || null, row.price || null, row.weight_grams || null, row.power_watts || null, row.ln || null, row.url || null, row.description || null]
+        const typeRes = await pool.query('SELECT id FROM component_types WHERE name = $1', [row['Тип']]);
+        const manRes = await pool.query('SELECT id FROM manufacturers WHERE name = $1', [row['Производитель']]);
+        
+        const compResult = await pool.query(
+          `INSERT INTO block_templates (name, type_id, manufacturer_id, article, description, price, weight_grams, power_watts, ln, url) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (article) DO UPDATE SET name=$1, type_id=$2, manufacturer_id=$3, description=$5, price=$6, weight_grams=$7, power_watts=$8, ln=$9, url=$10 RETURNING id`,
+          [row['Название'] || '', typeRes.rows[0]?.id || null, manRes.rows[0]?.id || null, row['Артикул'] || null, row['Описание'] || null, row['Цена'] || null, row['Вес'] || null, row['Q'] || null, row['LN'] || null, row['Ссылка'] || null]
         );
+        const compId = compResult.rows[0].id;
+        
+        await pool.query('DELETE FROM component_param_values WHERE component_id = $1', [compId]);
+        
+        for (const key of Object.keys(row)) {
+          if (!fixedCols.includes(key) && paramMap[key] && row[key]) {
+            await pool.query(
+              'INSERT INTO component_param_values (component_id, param_id, value) VALUES ($1, $2, $3)',
+              [compId, paramMap[key], String(row[key])]
+            );
+          }
+        }
         imported++;
       } catch (e) { console.error('Ошибка импорта строки:', e); }
     }
-    res.json({ message: `Импортировано ${imported} записей` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Ошибка импорта' });
-  }
+    res.json({ message: 'Импортировано ' + imported + ' записей' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
 });
+
+router.get('/', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT bt.*, ct.name as type_name, m.name as manufacturer_name, COALESCE((SELECT json_agg(json_build_object('id', cpv.id, 'parameter_id', cpv.param_id, 'param_name', p.name, 'param_value', cpv.value)) FROM component_param_values cpv LEFT JOIN parameters p ON cpv.param_id = p.id WHERE cpv.component_id = bt.id), '[]'::json) as parameters FROM block_templates bt LEFT JOIN component_types ct ON bt.type_id = ct.id LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id ORDER BY bt.id`);
+    res.json(result.rows);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT bt.*, ct.name as type_name, m.name as manufacturer_name, COALESCE((SELECT json_agg(json_build_object('id', cpv.id, 'parameter_id', cpv.param_id, 'param_name', p.name, 'param_value', cpv.value)) FROM component_param_values cpv LEFT JOIN parameters p ON cpv.param_id = p.id WHERE cpv.component_id = bt.id), '[]'::json) as parameters FROM block_templates bt LEFT JOIN component_types ct ON bt.type_id = ct.id LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id WHERE bt.id = $1`, [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Не найден' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+router.post('/', auth, isAdmin, async (req, res) => {
+  const { name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, ln, url, description, parameters } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(`INSERT INTO block_templates (name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, ln, url, description) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`, [name, type_id || null, manufacturer_id || null, article || null, price || null, labor || null, weight_grams || null, power_watts || null, ln || null, url || null, description || null]);
+    if (parameters && Array.isArray(parameters)) for (const p of parameters) if (p.parameter_id) await client.query('INSERT INTO component_param_values (component_id, param_id, value) VALUES ($1, $2, $3)', [result.rows[0].id, p.parameter_id, p.param_value || p.value || '']);
+    await client.query('COMMIT');
+    res.status(201).json(result.rows[0]);
+  } catch (err) { await client.query('ROLLBACK'); console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+  finally { client.release(); }
+});
+
+router.put('/:id', auth, isAdmin, async (req, res) => {
+  const { id } = req.params; const { parameters, ...bodyFields } = req.body; const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const allowed = ['name', 'type_id', 'manufacturer_id', 'article', 'price', 'labor', 'weight_grams', 'power_watts', 'ln', 'url', 'description'];
+    const fields = []; const values = []; let c = 1;
+    for (const f of allowed) if (bodyFields[f] !== undefined) { fields.push(`${f} = $${c++}`); values.push(bodyFields[f]); }
+    let result;
+    if (fields.length > 0) { values.push(id); result = await client.query(`UPDATE block_templates SET ${fields.join(', ')} WHERE id = $${c} RETURNING *`, values); }
+    else { result = await client.query('SELECT * FROM block_templates WHERE id = $1', [id]); }
+    await client.query('DELETE FROM component_param_values WHERE component_id = $1', [id]);
+    if (parameters && Array.isArray(parameters)) for (const p of parameters) if (p.parameter_id) await client.query('INSERT INTO component_param_values (component_id, param_id, value) VALUES ($1, $2, $3)', [id, p.parameter_id, p.param_value || p.value || '']);
+    await client.query('COMMIT');
+    res.json(result.rows[0]);
+  } catch (err) { await client.query('ROLLBACK'); console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+  finally { client.release(); }
+});
+
+router.delete('/:id', auth, isAdmin, async (req, res) => {
+  try { await pool.query('DELETE FROM component_param_values WHERE component_id = $1', [req.params.id]); await pool.query('DELETE FROM block_templates WHERE id = $1', [req.params.id]); res.json({ message: 'Удалён' }); }
+  catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+module.exports = router;

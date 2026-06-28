@@ -7,56 +7,11 @@ const XLSX = require('xlsx');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
-router.get('/', auth, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM parameters ORDER BY name');
-    res.json(result.rows);
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
-});
-
-router.get('/:id', auth, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM parameters WHERE id = $1', [req.params.id]);
-    if (result.rows.length === 0) return res.status(404).json({ message: 'Не найден' });
-    res.json(result.rows[0]);
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
-});
-
-router.post('/', auth, isAdmin, async (req, res) => {
-  try {
-    const { name, unit, type, description } = req.body;
-    const result = await pool.query(
-      'INSERT INTO parameters (name, unit, type, description) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET unit=$2, type=$3, description=$4 RETURNING *',
-      [name, unit || null, type || null, description || null]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
-});
-
-router.put('/:id', auth, isAdmin, async (req, res) => {
-  try {
-    const { name, unit, type, description } = req.body;
-    const result = await pool.query(
-      'UPDATE parameters SET name=$1, unit=$2, type=$3, description=$4 WHERE id=$5 RETURNING *',
-      [name, unit || null, type || null, description || null, req.params.id]
-    );
-    res.json(result.rows[0]);
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
-});
-
-router.delete('/:id', auth, isAdmin, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM parameters WHERE id = $1', [req.params.id]);
-    res.json({ message: 'Удалён' });
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
-});
-
 router.get('/export', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, name, unit, type, description FROM parameters ORDER BY id');
+    const result = await pool.query('SELECT id as ID, name as Название, description as Описание FROM parameters ORDER BY id');
     const ws = XLSX.utils.json_to_sheet(result.rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Параметры');
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Параметры');
     res.setHeader('Content-Disposition', 'attachment; filename=parameters.xlsx');
     res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка экспорта' }); }
@@ -68,13 +23,16 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
     const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
     let imported = 0;
     for (const row of data) {
-      try {
-        await pool.query('INSERT INTO parameters (name, unit, type, description) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET unit=$2, type=$3, description=$4', [row.name, row.unit || null, row.type || null, row.description || null]);
-        imported++;
-      } catch (e) {}
+      try { await pool.query('INSERT INTO parameters (name, description) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET description=$2', [row['Название'], row['Описание'] || null]); imported++; } catch (e) {}
     }
-    res.json({ message: `Импортировано ${imported} записей` });
+    res.json({ message: 'Импортировано ' + imported + ' записей' });
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
 });
+
+router.get('/', auth, async (req, res) => { try { const r = await pool.query('SELECT * FROM parameters ORDER BY name'); res.json(r.rows); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
+router.get('/:id', auth, async (req, res) => { try { const r = await pool.query('SELECT * FROM parameters WHERE id = $1', [req.params.id]); if (r.rows.length === 0) return res.status(404).json({ message: 'Не найден' }); res.json(r.rows[0]); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
+router.post('/', auth, isAdmin, async (req, res) => { try { const r = await pool.query('INSERT INTO parameters (name, description) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET description=$2 RETURNING *', [req.body.name, req.body.description || null]); res.status(201).json(r.rows[0]); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
+router.put('/:id', auth, isAdmin, async (req, res) => { try { const r = await pool.query('UPDATE parameters SET name=$1, description=$2 WHERE id=$3 RETURNING *', [req.body.name, req.body.description || null, req.params.id]); res.json(r.rows[0]); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
+router.delete('/:id', auth, isAdmin, async (req, res) => { try { await pool.query('DELETE FROM parameters WHERE id = $1', [req.params.id]); res.json({ message: 'Удалён' }); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
 
 module.exports = router;
