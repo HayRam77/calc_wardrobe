@@ -1,0 +1,42 @@
+<script>
+window.SystemParamSelect = {
+    render: function(container, selectedId, value, typeVal, onChange) {
+        fetch('/api/system-parameters').then(function(r){return r.json();}).then(function(params){
+            var h = '<select class="system-param-select" style="flex:1;"><option value="">-- параметр --</option>';
+            if (params.length) {
+                h += '<optgroup label="Существующие">';
+                params.forEach(function(p){ h += '<option value="'+p.id+'"'+(selectedId==p.id?' selected':'')+'>'+p.name+'</option>'; });
+                h += '</optgroup>';
+            }
+            h += '<optgroup label="Добавить"><option value="__new__">+ новый параметр</option></optgroup></select>';
+            h += '<input type="text" class="system-param-value" placeholder="Значение" style="flex:1;" value="'+(value||'')+'">';
+            h += '<input type="text" class="system-param-type" placeholder="Тип" style="flex:0.7;" value="'+(typeVal||'')+'">';
+            h += '<input type="text" class="system-param-new-name" placeholder="Название" style="flex:1;display:none;">';
+            h += '<button type="button" class="btn btn-sm btn-primary system-param-save-btn" style="display:none;">✓</button>';
+            container.innerHTML = h;
+            var sel = container.querySelector('.system-param-select');
+            var vi = container.querySelector('.system-param-value');
+            var ti = container.querySelector('.system-param-type');
+            var ni = container.querySelector('.system-param-new-name');
+            var sv = container.querySelector('.system-param-save-btn');
+            if (sel.value === '__new__') { ni.style.display=''; sv.style.display=''; }
+            sel.addEventListener('change', function(){ ni.style.display = sv.style.display = sel.value === '__new__' ? '' : 'none'; if(onChange)onChange(sel.value, vi.value, ti.value); });
+            sv.addEventListener('click', function(){
+                var n = ni.value.trim(); if (!n) { alert('Введите название'); return; }
+                fetch('/api/system-parameters', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,type:ti.value.trim()})})
+                .then(function(r){return r.json();}).then(function(np){
+                    var opt = document.createElement('option'); opt.value = np.id; opt.textContent = np.name;
+                    sel.querySelector('optgroup:first-child').appendChild(opt); sel.value = np.id; ni.style.display='none'; sv.style.display='none';
+                    if(onChange)onChange(np.id, vi.value, ti.value);
+                });
+            });
+        });
+    },
+    getValue: function(container) {
+        var sel = container.querySelector('.system-param-select');
+        var vi = container.querySelector('.system-param-value');
+        var ti = container.querySelector('.system-param-type');
+        return sel && sel.value !== '__new__' ? {parameter_id: parseInt(sel.value), value: vi.value, type: ti.value} : null;
+    }
+};
+</script>

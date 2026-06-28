@@ -174,6 +174,11 @@ document.getElementById('addComponentBtn').addEventListener('click', function() 
 
 // ==================== СВЯЗИ С КОМПОНЕНТАМИ ШКАФА ====================
 var allBlocks = [];
+function createNewBlock(name, type_id, manufacturer_id, article, cb) {
+    fetch('/api/block-templates', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,type_id:type_id,manufacturer_id:manufacturer_id,article:article||null})})
+    .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});return r.json();})
+    .then(function(nb){if(cb)cb(nb);}).catch(function(e){alert(e.message);});
+}
 function loadAllBlocks() {
     return fetch('/api/block-templates').then(function(r){return r.json();}).then(function(d){allBlocks = d;});
 }
@@ -192,20 +197,56 @@ function loadLinkedBlocks(compId, container) {
 }
 
 function addBlockLinkRow(compId, container) {
-    if (!allBlocks.length) { alert('Нет компонентов шкафов'); return; }
+    loadAllBlocks();
+    fetch('/api/component-types').then(function(r){return r.json();}).then(function(types){
+        var sel = document.querySelector('.new-type-select');
+        if (sel) { sel.innerHTML = '<option value="">-- тип --</option>'+types.map(function(t){return '<option value="'+t.id+'">'+escapeHtml(t.name)+'</option>';}).join('')+'<option value="__new__">+ новый тип</option>'; }
+    });
+    var isNew = !compId;
     var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px;margin-bottom:5px;';
     var s = document.createElement('select'); s.style.flex='2';
-    s.innerHTML = '<option value="">-- выберите --</option>'+allBlocks.map(function(b){return '<option value="'+b.id+'">'+escapeHtml(b.type_name||'')+' '+escapeHtml(b.name)+' ('+escapeHtml(b.article||'')+')</option>';}).join('');
+    s.innerHTML = '<option value="">-- выберите --</option>'+allBlocks.map(function(b){return '<option value="'+b.id+'">'+escapeHtml(b.type_name||'')+' '+escapeHtml(b.name)+' ('+escapeHtml(b.article||'')+')</option>';}).join('')+'<optgroup label="Добавить"><option value="__new__">+ новый компонент шкафа</option></optgroup>';
     var q = document.createElement('input'); q.type='number'; q.value='1'; q.min='1'; q.style.flex='0.5'; q.placeholder='Кол-во';
+    var newName = document.createElement('input'); newName.type='text'; newName.placeholder='Название'; newName.style.cssText = 'flex:1;display:none;';
+    var newType = document.createElement('select'); newType.style.cssText = 'flex:1;display:none;'; newType.className = 'new-type-select';
+    newType.innerHTML = '<option value="">-- тип --</option>';
+    var newArt = document.createElement('input'); newArt.type='text'; newArt.placeholder='Артикул'; newArt.style.cssText = 'flex:1;display:none;';
     var sv = document.createElement('button'); sv.type='button'; sv.textContent='✓'; sv.className='btn btn-sm btn-primary';
     var dl = document.createElement('button'); dl.type='button'; dl.textContent='×'; dl.className='btn btn-sm btn-delete';
+    s.addEventListener('change', function(){
+        if (s.value === '__new__') { newName.style.display = ''; newType.style.display = ''; newArt.style.display = ''; newType.style.flex = '1'; }
+        else { newName.style.display = 'none'; newType.style.display = 'none'; newArt.style.display = 'none'; }
+    });
+    newType.addEventListener('change', function(){
+        if (newType.value === '__new__') {
+            var tn = prompt('Название нового типа:');
+            if (!tn) return;
+            fetch('/api/component-types', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:tn})})
+            .then(function(r){return r.json();}).then(function(nt){
+                var opt = document.createElement('option'); opt.value = nt.id; opt.textContent = nt.name;
+                newType.appendChild(opt); newType.value = nt.id;
+            });
+        }
+    });
     sv.addEventListener('click', function(){
+        if (s.value === '__new__') {
+            var n = newName.value.trim(); if (!n) { alert('Введите название'); return; }
+            createNewBlock(n, newType.value && newType.value !== '__new__' ? newType.value : null, null, newArt.value.trim(), function(nb){
+                allBlocks.push(nb);
+                document.querySelectorAll('#linkedBlocks select').forEach(function(sel){
+                    sel.innerHTML += '<option value="'+nb.id+'">'+escapeHtml(nb.name)+'</option>';
+                });
+                s.innerHTML = '<option value="'+nb.id+'" selected>'+escapeHtml(nb.name)+'</option>';
+                s.value = nb.id; newName.style.display = 'none'; newType.style.display = 'none'; newArt.style.display = 'none';
+            });
+            return;
+        }
         if (!s.value) { alert('Выберите компонент'); return; }
         fetch('/api/system-components/'+compId+'/blocks', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({block_template_id:parseInt(s.value),quantity:parseInt(q.value)||1})})
         .then(function(){ loadLinkedBlocks(compId, container); });
     });
     dl.addEventListener('click', function(){ row.remove(); });
-    row.appendChild(s); row.appendChild(q); row.appendChild(sv); row.appendChild(dl);
+    row.appendChild(s); row.appendChild(q); row.appendChild(newName); row.appendChild(newType); row.appendChild(newArt); row.appendChild(sv); row.appendChild(dl);
     container.appendChild(row);
 }
 

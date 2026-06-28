@@ -1,0 +1,43 @@
+<script>
+// Компонент: выбор типа с inline-добавлением (шкафы)
+// Использование: CabinetTypeSelect.render(container, selectedId, onChange)
+window.CabinetTypeSelect = {
+    render: function(container, selectedId, onChange) {
+        fetch('/api/component-types').then(function(r){return r.json();}).then(function(types){
+            var html = '<select class="cabinet-type-select" style="width:100%;"><option value="">-- тип --</option>';
+            if (types.length) {
+                html += '<optgroup label="Существующие">';
+                types.forEach(function(t){ html += '<option value="'+t.id+'"'+(selectedId==t.id?' selected':'')+'>'+t.name+'</option>'; });
+                html += '</optgroup>';
+            }
+            html += '<optgroup label="Добавить"><option value="__new__">+ новый тип</option></optgroup></select>';
+            html += '<div class="new-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;">';
+            html += '<input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;">';
+            html += '<button type="button" class="btn btn-sm btn-primary save-type-btn">✓</button></div>';
+            container.innerHTML = html;
+
+            var sel = container.querySelector('.cabinet-type-select');
+            var newRow = container.querySelector('.new-type-row');
+            var newName = container.querySelector('.new-type-name');
+            var saveBtn = container.querySelector('.save-type-btn');
+
+            if (sel.value === '__new__') newRow.style.display = 'flex';
+            sel.addEventListener('change', function(){
+                newRow.style.display = sel.value === '__new__' ? 'flex' : 'none';
+                if (onChange) onChange(sel.value);
+            });
+            saveBtn.addEventListener('click', function(){
+                var name = newName.value.trim();
+                if (!name) { alert('Введите название'); return; }
+                fetch('/api/component-types', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+                .then(function(r){return r.json();}).then(function(nt){
+                    var opt = document.createElement('option'); opt.value = nt.id; opt.textContent = nt.name;
+                    sel.querySelector('optgroup:first-child').appendChild(opt);
+                    sel.value = nt.id; newRow.style.display = 'none';
+                    if (onChange) onChange(nt.id);
+                });
+            });
+        });
+    }
+};
+</script>

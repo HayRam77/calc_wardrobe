@@ -7,7 +7,6 @@ const XLSX = require('xlsx');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Получить все системы
 router.get('/', auth, async (req, res) => {
   try {
     const systems = await pool.query('SELECT * FROM systems ORDER BY name');
@@ -18,8 +17,7 @@ router.get('/', auth, async (req, res) => {
         FROM system_components_link scl
         JOIN system_components sc ON scl.component_id = sc.id
         LEFT JOIN system_component_types sct ON sc.type_id = sct.id
-        WHERE scl.system_id = $1
-        ORDER BY sc.name
+        WHERE scl.system_id = $1 ORDER BY sc.name
       `, [sys.id]);
       result.push({ ...sys, components: comps.rows });
     }
@@ -73,12 +71,28 @@ router.post('/', auth, isAdmin, async (req, res) => {
 });
 
 router.put('/:id', auth, isAdmin, async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { name, description } = req.body;
-    await pool.query('UPDATE systems SET name=$1, description=$2 WHERE id=$3', [name, description || null, req.params.id]);
+    await client.query('BEGIN');
+    const { name, description, components } = req.body;
+    if (name) await client.query('UPDATE systems SET name=$1, description=$2 WHERE id=$3', [name, description || null, req.params.id]);
+    if (components && Array.isArray(components)) {
+      for (const c of components) {
+        await client.query('INSERT INTO system_components_link (system_id, component_id, quantity) VALUES ($1, $2, $3) ON CONFLICT (system_id, component_id) DO UPDATE SET quantity=$3', [req.params.id, c.component_id, c.quantity || 1]);
+      }
+    }
+    await client.query('COMMIT');
     const sys = await pool.query('SELECT * FROM systems WHERE id=$1', [req.params.id]);
-    res.json(sys.rows[0]);
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+    const comps = await pool.query(`
+      SELECT scl.*, sc.name, sc.article, sct.name as type_name
+      FROM system_components_link scl
+      JOIN system_components sc ON scl.component_id = sc.id
+      LEFT JOIN system_component_types sct ON sc.type_id = sct.id
+      WHERE scl.system_id = $1
+    `, [req.params.id]);
+    res.json({ ...sys.rows[0], components: comps.rows });
+  } catch (err) { await client.query('ROLLBACK'); console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+  finally { client.release(); }
 });
 
 router.delete('/:id', auth, isAdmin, async (req, res) => {

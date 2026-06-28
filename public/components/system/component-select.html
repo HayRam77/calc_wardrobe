@@ -1,0 +1,47 @@
+<script>
+window.SystemComponentSelect = {
+    render: function(container, selectedId, onChange) {
+        fetch('/api/system-components').then(function(r){return r.json();}).then(function(comps){
+            window._systemComps = comps;
+            var h = '<select class="system-comp-select" style="flex:2;"><option value="">-- компонент --</option>';
+            comps.forEach(function(c){ h += '<option value="'+c.id+'"'+(selectedId==c.id?' selected':'')+'>'+(c.type_name||'')+' '+c.name+'</option>'; });
+            h += '<optgroup label="Добавить"><option value="__new__">+ новый компонент</option></optgroup></select>';
+            h += '<input type="number" class="system-comp-qty" value="1" min="1" style="flex:0.5;" placeholder="Кол-во">';
+            h += '<input type="text" class="system-comp-new-name" placeholder="Название" style="flex:1;display:none;">';
+            h += '<div class="system-comp-new-type" style="flex:1;display:none;"></div>';
+            h += '<input type="text" class="system-comp-new-art" placeholder="Артикул" style="flex:1;display:none;">';
+            h += '<button type="button" class="btn btn-sm btn-primary system-comp-save-btn" style="display:none;">✓</button>';
+            container.innerHTML = h;
+            var sel = container.querySelector('.system-comp-select');
+            var qty = container.querySelector('.system-comp-qty');
+            var newName = container.querySelector('.system-comp-new-name');
+            var newTypeDiv = container.querySelector('.system-comp-new-type');
+            var newArt = container.querySelector('.system-comp-new-art');
+            var sv = container.querySelector('.system-comp-save-btn');
+            sel.addEventListener('change', function(){
+                if (sel.value === '__new__') { newName.style.display=''; newTypeDiv.style.display=''; newArt.style.display=''; sv.style.display=''; SystemTypeSelect.render(newTypeDiv, null); }
+                else { newName.style.display='none'; newTypeDiv.style.display='none'; newArt.style.display='none'; sv.style.display='none'; }
+                if(onChange)onChange(sel.value, qty.value);
+            });
+            sv.addEventListener('click', function(){
+                var n = newName.value.trim(); if (!n) { alert('Введите название'); return; }
+                var typeSel = newTypeDiv.querySelector('.system-type-select');
+                var typeId = typeSel && typeSel.value !== '__new__' ? typeSel.value : null;
+                fetch('/api/system-components', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,type_id:typeId||null,article:newArt.value.trim()})})
+                .then(function(r){return r.json();}).then(function(nc){
+                    window._systemComps.push(nc);
+                    var opt = document.createElement('option'); opt.value = nc.id; opt.textContent = nc.name;
+                    sel.querySelector('optgroup:first-child').appendChild(opt); sel.value = nc.id;
+                    newName.style.display='none'; newTypeDiv.style.display='none'; newArt.style.display='none'; sv.style.display='none';
+                    if(onChange)onChange(nc.id, qty.value);
+                });
+            });
+        });
+    },
+    getValue: function(container) {
+        var sel = container.querySelector('.system-comp-select');
+        var qty = container.querySelector('.system-comp-qty');
+        return sel && sel.value !== '__new__' ? {component_id: parseInt(sel.value), quantity: parseInt(qty.value)||1} : null;
+    }
+};
+</script>

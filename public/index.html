@@ -45,7 +45,7 @@
   .error-message { color: #d32f2f; font-size: 13px; margin-bottom: 8px; }
   .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: flex-start; padding-top: 50px; }
   .modal.active { display: flex; }
-  .modal-content { background: white; padding: 25px; border-radius: 8px; min-width: 350px; max-width: 90vw; position: relative; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+  .modal-content { background: white; padding: 25px; border-radius: 8px; min-width: 350px; max-width: 90vw; max-height: 85vh; overflow-y: auto; position: relative; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
   .modal-close { position: absolute; top: 10px; right: 15px; font-size: 22px; cursor: pointer; color: #888; line-height: 1; }
   .modal-close:hover { color: #333; }
   .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0; }
@@ -152,6 +152,8 @@ async function loadPage(url) {
       else { newScript.textContent = oldScript.textContent; }
       oldScript.parentNode.replaceChild(newScript, oldScript);
     });
+    // Загружаем модульные компоненты, если они нужны
+    loadModuleComponents();
     setTimeout(function() { if (typeof window.pageInit === 'function') window.pageInit(); }, 100);
   } catch (e) { container.innerHTML = '<p>Ошибка загрузки страницы</p>'; }
 }
@@ -159,6 +161,22 @@ async function loadPage(url) {
 sidebar.querySelectorAll('a').forEach(function(link) {
   link.addEventListener('click', function(e) { e.preventDefault(); sidebar.classList.remove('open'); overlay.classList.remove('show'); navigateTo(this.getAttribute('href')); });
 });
+
+function loadModuleComponents() {
+    var page = window.location.pathname;
+    var scripts = [];
+    if (page.startsWith('/components-cabinets') || page.startsWith('/cabinet/')) {
+        scripts = ['/components/cabinet/type-select.html','/components/cabinet/param-select.html','/components/cabinet/block-select.html'];
+    }
+    if (page.startsWith('/components-systems') || page.startsWith('/automation')) {
+        scripts = ['/components/system/type-select.html','/components/system/param-select.html','/components/system/component-select.html'];
+    }
+    scripts.forEach(function(src) {
+        var s = document.createElement('script');
+        s.src = src; s.async = false;
+        document.head.appendChild(s);
+    });
+}
 
 window.addEventListener('popstate', function() { loadPage(location.pathname || '/'); });
 window.addEventListener('load', function() {
