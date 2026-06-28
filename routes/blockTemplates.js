@@ -194,3 +194,55 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 });
 
 module.exports = router;
+
+// ==================== ЭКСПОРТ / ИМПОРТ ====================
+const XLSX = require('xlsx');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
+
+router.get('/export', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT bt.id, bt.name, bt.article, bt.price, bt.weight_grams, bt.power_watts, bt.ln, bt.url, bt.description,
+             ct.name AS type_name, m.name AS manufacturer_name
+      FROM block_templates bt
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
+      ORDER BY bt.id
+    `);
+    const ws = XLSX.utils.json_to_sheet(result.rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Компоненты шкафов');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', 'attachment; filename=block_templates.xlsx');
+    res.send(buf);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка экспорта' });
+  }
+});
+
+router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws);
+    let imported = 0;
+    for (const row of data) {
+      try {
+        const typeRes = await pool.query('SELECT id FROM component_types WHERE name = $1', [row.type_name]);
+        const manRes = await pool.query('SELECT id FROM manufacturers WHERE name = $1', [row.manufacturer_name]);
+        await pool.query(
+          `INSERT INTO block_templates (name, type_id, manufacturer_id, article, price, weight_grams, power_watts, ln, url, description) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (article) DO UPDATE SET name=$1, type_id=$2, manufacturer_id=$3, price=$5, weight_grams=$6, power_watts=$7, ln=$8, url=$9, description=$10`,
+          [row.name, typeRes.rows[0]?.id || null, manRes.rows[0]?.id || null, row.article || null, row.price || null, row.weight_grams || null, row.power_watts || null, row.ln || null, row.url || null, row.description || null]
+        );
+        imported++;
+      } catch (e) { console.error('Ошибка импорта строки:', e); }
+    }
+    res.json({ message: `Импортировано ${imported} записей` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка импорта' });
+  }
+});

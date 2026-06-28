@@ -93,3 +93,44 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 });
 
 module.exports = router;
+// ==================== ЭКСПОРТ / ИМПОРТ ====================
+const XLSX = require('xlsx');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
+
+router.get('/export', auth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, name, description FROM system_component_types ORDER BY id');
+    const ws = XLSX.utils.json_to_sheet(result.rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Типы компонентов систем');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Disposition', 'attachment; filename=system_component_types.xlsx');
+    res.send(buf);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка экспорта' });
+  }
+});
+
+router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws);
+    let imported = 0;
+    for (const row of data) {
+      try {
+        await pool.query(
+          'INSERT INTO system_component_types (name, description) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET description=$2',
+          [row.name, row.description || null]
+        );
+        imported++;
+      } catch (e) { console.error('Ошибка импорта строки:', e); }
+    }
+    res.json({ message: `Импортировано ${imported} записей` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка импорта' });
+  }
+});
