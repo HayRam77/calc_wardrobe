@@ -12,6 +12,7 @@ const adminRouter = require('./routes/admin');
 const systemComponentsRouter = require('./routes/systemComponents');
 const systemComponentTypesRouter = require('./routes/systemComponentTypes');
 const systemParametersRouter = require('./routes/systemParameters');
+const systemsRouter = require('./routes/systems');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -37,6 +38,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/system-components', systemComponentsRouter);
 app.use('/api/system-component-types', systemComponentTypesRouter);
 app.use('/api/system-parameters', systemParametersRouter);
+app.use('/api/systems', systemsRouter);
 
 // SPA fallback
 app.get('*', (req, res) => {

@@ -209,4 +209,39 @@ router.get('/:id/blocks', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+// Получить системы шкафа
+router.get('/:id/systems', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT cs.*, sc.name as component_name, sc.article, sct.name as type_name
+      FROM cabinet_systems cs
+      JOIN system_components sc ON cs.system_id = sc.id
+      LEFT JOIN system_component_types sct ON sc.type_id = sct.id
+      WHERE cs.cabinet_id = $1
+      ORDER BY sc.name
+    `, [req.params.id]);
+    res.json(result.rows);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+// Добавить систему в шкаф
+router.post('/:id/systems', auth, isAdmin, async (req, res) => {
+  try {
+    const { system_id, name, description } = req.body;
+    const result = await pool.query(
+      'INSERT INTO cabinet_systems (cabinet_id, system_id, name, description) VALUES ($1, $2, $3, $4) ON CONFLICT (cabinet_id, system_id) DO UPDATE SET name=$3, description=$4 RETURNING *',
+      [req.params.id, system_id, name || null, description || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+// Удалить систему из шкафа
+router.delete('/:id/systems/:systemId', auth, isAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM cabinet_systems WHERE id = $1', [req.params.systemId]);
+    res.json({ message: 'Система удалена' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 module.exports = router;

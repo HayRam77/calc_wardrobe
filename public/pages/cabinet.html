@@ -1,57 +1,118 @@
 <div class="page-content">
-    <div id="cabinetContent" style="max-width:800px;">
+    <div id="cabinetContent" style="max-width:900px;">
         <p>Загрузка шкафа...</p>
+    </div>
+</div>
+
+<div id="systemModal" class="modal" style="display:none;">
+    <div class="modal-content" style="max-width:500px;">
+        <span class="modal-close" onclick="document.getElementById('systemModal').style.display='none'">&times;</span>
+        <h3>Добавить систему</h3>
+        <form id="systemForm">
+            <input type="hidden" id="systemLinkId">
+            <div class="form-group">
+                <label for="systemSelect">Система *</label>
+                <select id="systemSelect" required></select>
+                <button type="button" id="newSystemBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ новая система</button>
+            </div>
+            <div class="form-group">
+                <label for="systemInstName">Название установки</label>
+                <input type="text" id="systemInstName" maxlength="255" placeholder="Например: П-1">
+            </div>
+            <div id="systemError" class="error-message" style="display:none;"></div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('systemModal').style.display='none'">Отмена</button>
+                <button type="submit" class="btn btn-primary">Добавить</button>
+            </div>
+        </form>
     </div>
 </div>
 
 <script>
 (function() {
     var cabinetId = window.pageParam;
-    if (!cabinetId) {
-        document.getElementById('cabinetContent').innerHTML = '<p>Шкаф не найден</p>';
-        return;
-    }
+    if (!cabinetId) { document.getElementById('cabinetContent').innerHTML = '<p>Шкаф не найден</p>'; return; }
 
-    function esc(str) {
-        var div = document.createElement('div');
-        div.textContent = str || '';
-        return div.innerHTML;
-    }
+    function esc(str) { var d=document.createElement('div'); d.textContent=str||''; return d.innerHTML; }
 
-    fetch('/api/cabinets/' + cabinetId).then(function(res) {
-        if (!res.ok) throw new Error('Ошибка');
-        return res.json();
-    }).then(function(cabinet) {
+    fetch('/api/cabinets/' + cabinetId).then(function(res) { return res.json(); }).then(function(cabinet) {
         document.querySelector('.page-title').textContent = 'Шкаф: ' + cabinet.name;
-        var html = '';
-        html += '<h3>Компоненты шкафа</h3>';
-        html += '<div id="cabinetBlocks">Загрузка...</div>';
-        html += '<hr><h3>Системы шкафа</h3>';
-        html += '<div id="cabinetSystems">Загрузка...</div>';
+        var html = '<h3>Системы шкафа</h3><div id="cabinetSystems">Загрузка...</div>';
+        html += '<button id="addSystemBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить систему</button>';
+        html += '<hr><h3>Компоненты шкафа</h3><div id="cabinetBlocks">Загрузка...</div>';
+        html += '<button id="addBlockBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить компонент</button>';
         document.getElementById('cabinetContent').innerHTML = html;
-        loadBlocks(cabinetId);
-    }).catch(function() {
-        document.getElementById('cabinetContent').innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
+        loadSystems(); loadBlocks();
+        document.getElementById('addSystemBtn').addEventListener('click', openSystemModal);
+        document.getElementById('addBlockBtn').addEventListener('click', openBlockModal);
     });
 
-    function loadBlocks(cabinetId) {
-        fetch('/api/cabinets/' + cabinetId + '/blocks').then(function(res) {
-            if (!res.ok) throw new Error('Ошибка');
-            return res.json();
-        }).then(function(blocks) {
-            var container = document.getElementById('cabinetBlocks');
-            if (!blocks.length) {
-                container.innerHTML = '<p>Нет компонентов</p>';
-                return;
-            }
-            var h = '<table class="data-table"><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Производитель</th><th>Кол-во</th></tr>';
-            blocks.forEach(function(b) {
-                h += '<tr><td>' + esc(b.type_name || '') + '</td><td>' + esc(b.name) + '</td><td>' + esc(b.article || '') + '</td><td>' + esc(b.manufacturer_name || '') + '</td><td>' + b.quantity + '</td></tr>';
+    function loadSystems() {
+        fetch('/api/cabinets/' + cabinetId + '/systems').then(function(r){return r.json();}).then(function(data){
+            var c = document.getElementById('cabinetSystems');
+            if (!data.length) { c.innerHTML = '<p>Нет систем</p>'; return; }
+            var h = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th>Установка</th><th></th></tr>';
+            data.forEach(function(s){
+                h += '<tr><td>' + esc(s.name || '') + '</td><td>' + esc(s.inst_name || '') + '</td><td><button class="btn btn-sm btn-delete" onclick="deleteSystem('+s.id+')">🗑️</button></td></tr>';
             });
-            h += '</table>';
-            container.innerHTML = h;
-        }).catch(function() {
-            document.getElementById('cabinetBlocks').innerHTML = '<p style="color:red;">Ошибка</p>';
+            h += '</table></div>'; c.innerHTML = h;
+        });
+    }
+
+    function openSystemModal() {
+        fetch('/api/systems').then(function(r){return r.json();}).then(function(data){
+            window._allSystems = data;
+            var sel = document.getElementById('systemSelect');
+            sel.innerHTML = '<option value="">-- выберите --</option>' + data.map(function(s){return '<option value="'+s.id+'">'+esc(s.name)+'</option>';}).join('');
+            document.getElementById('systemInstName').value = '';
+            document.getElementById('systemModal').style.display = 'block';
+        });
+    }
+
+    document.getElementById('newSystemBtn').addEventListener('click', function() {
+        var name = prompt('Название системы (П, В, ПВ, ХЦ...):');
+        if (!name) return;
+        var desc = prompt('Описание:');
+        fetch('/api/systems', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,description:desc})})
+        .then(function(r){return r.json();}).then(function(ns){
+            var sel = document.getElementById('systemSelect');
+            var o = document.createElement('option'); o.value=ns.id; o.textContent=ns.name; sel.appendChild(o); sel.value=ns.id;
+        });
+    });
+
+    document.getElementById('systemForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var system_id = parseInt(document.getElementById('systemSelect').value);
+        var name = document.getElementById('systemInstName').value.trim();
+        if (!system_id) { alert('Выберите систему'); return; }
+        fetch('/api/cabinets/' + cabinetId + '/systems', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({system_id:system_id, name:name})
+        }).then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});document.getElementById('systemModal').style.display='none';loadSystems();})
+        .catch(function(e){alert(e.message);});
+    });
+
+    window.deleteSystem = function(id) {
+        if (!confirm('Удалить?')) return;
+        fetch('/api/cabinets/' + cabinetId + '/systems/' + id, {method:'DELETE'}).then(loadSystems);
+    };
+
+    function loadBlocks() {
+        fetch('/api/cabinets/' + cabinetId + '/blocks').then(function(r){return r.json();}).then(function(data){
+            var c = document.getElementById('cabinetBlocks');
+            if (!data.length) { c.innerHTML = '<p>Нет компонентов</p>'; return; }
+            var h = '<div class="table-container"><table class="data-table"><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Кол-во</th><th></th></tr>';
+            data.forEach(function(b){h+='<tr><td>'+esc(b.type_name||'')+'</td><td>'+esc(b.name)+'</td><td>'+esc(b.article||'')+'</td><td>'+b.quantity+'</td><td><button class="btn btn-sm btn-delete" onclick="deleteBlock('+b.id+')">🗑️</button></td></tr>';});
+            h += '</table></div>'; c.innerHTML = h;
+        });
+    }
+
+    function openBlockModal() {
+        fetch('/api/block-templates').then(function(r){return r.json();}).then(function(data){
+            var sel = document.getElementById('blockTemplate'); if(!sel) return;
+            sel.innerHTML = '<option value="">-- выберите --</option>'+data.map(function(b){return '<option value="'+b.id+'">'+esc(b.type_name||'')+' '+esc(b.name)+'</option>';}).join('');
+            document.getElementById('blockQuantity').value = 1;
+            document.getElementById('blockModal').style.display = 'block';
         });
     }
 

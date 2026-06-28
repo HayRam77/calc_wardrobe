@@ -1,1 +1,79 @@
-<p>Здесь будет конфигурация систем автоматизации.</p>
+<div class="page-content">
+    <div style="margin-bottom:10px;">
+        <button id="addSystemBtn" class="btn btn-primary" style="display:none;">Добавить систему</button>
+        <button id="exportBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
+        <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls">
+        <button id="importBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
+    </div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead><tr><th>ID</th><th>Название</th><th>Описание</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
+            <tbody id="systemsBody"><tr><td colspan="4" class="loading">Загрузка...</td></tr></tbody>
+        </table>
+    </div>
+    <div id="modal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:600px;">
+            <span class="close-modal">&times;</span>
+            <h3 id="modalTitle"></h3>
+            <form id="modalForm"></form>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var user = JSON.parse(localStorage.getItem('user') || 'null');
+    var isAdmin = user && user.role === 'admin';
+    if (isAdmin) {
+        document.getElementById('addSystemBtn').style.display = '';
+        document.getElementById('exportBtn').style.display = '';
+        document.getElementById('importBtn').style.display = '';
+        document.getElementById('actionsCol').style.display = '';
+    }
+    function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+    var modal = document.getElementById('modal'), modalTitle = document.getElementById('modalTitle'), modalForm = document.getElementById('modalForm');
+    document.querySelector('.close-modal').addEventListener('click', function() { modal.style.display = 'none'; });
+    window.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
+
+    function loadSystems() {
+        fetch('/api/systems').then(function(r) { return r.json(); }).then(function(data) {
+            var t = document.getElementById('systemsBody');
+            if (!data.length) { t.innerHTML = '<tr><td colspan="4">Нет систем</td></tr>'; return; }
+            t.innerHTML = data.map(function(s) {
+                return '<tr><td>' + s.id + '</td><td>' + esc(s.name) + '</td><td>' + esc(s.description || '') + '</td>' +
+                    (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')">🗑️</button></td>' : '') + '</tr>';
+            }).join('');
+        });
+    }
+
+    document.getElementById('addSystemBtn').addEventListener('click', function() { openSystemForm(); });
+
+    function openSystemForm(sys) {
+        var isEdit = !!sys;
+        var h = '<input type="hidden" id="sysId" value="' + (sys ? sys.id : '') + '">';
+        h += '<div class="form-group"><label>Название *</label><input type="text" id="sysName" value="' + esc(sys ? sys.name : '') + '" required></div>';
+        h += '<div class="form-group"><label>Описание</label><textarea id="sysDesc" rows="2">' + esc(sys ? sys.description || '' : '') + '</textarea></div>';
+        modalTitle.textContent = isEdit ? 'Редактировать систему' : 'Добавить систему';
+        modalForm.innerHTML = h + '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>';
+        modal.style.display = 'block';
+        modalForm.onsubmit = function(e) {
+            e.preventDefault();
+            var name = document.getElementById('sysName').value.trim();
+            if (!name) { alert('Введите название'); return; }
+            var body = { name: name, description: document.getElementById('sysDesc').value.trim() };
+            var url = sys ? '/api/systems/' + sys.id : '/api/systems';
+            fetch(url, { method: sys ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+                .then(function(r) { if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); }); modal.style.display = 'none'; loadSystems(); })
+                .catch(function(e) { alert(e.message); });
+        };
+    }
+
+    window.editSystem = function(id) { fetch('/api/systems/' + id).then(function(r) { return r.json(); }).then(function(s) { openSystemForm(s); }); };
+    window.deleteSystem = function(id) { if (!confirm('Удалить?')) return; fetch('/api/systems/' + id, { method: 'DELETE' }).then(loadSystems); };
+
+    document.getElementById('exportBtn').addEventListener('click', async function() { var r = await fetch('/api/systems/export'); var b = await r.blob(); var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'systems.xlsx'; a.click(); });
+    document.getElementById('importBtn').addEventListener('click', function() { document.getElementById('importFile').click(); });
+    document.getElementById('importFile').addEventListener('change', async function() { var fd = new FormData(); fd.append('file', this.files[0]); await fetch('/api/systems/import', { method: 'POST', body: fd }); loadSystems(); this.value = ''; });
+
+    window.pageInit = function() { loadSystems(); };
+})();
+</script>
