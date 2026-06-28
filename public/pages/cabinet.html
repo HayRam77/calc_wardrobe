@@ -17,12 +17,11 @@
                     <input type="text" class="new-system-name" placeholder="Название новой системы" style="flex:1;">
                     <button type="button" class="btn btn-sm btn-primary save-new-system-btn">✓</button>
                 </div>
-                <button type="button" id="newSystemBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ новая система</button>
             </div>
             <div id="systemError" class="error-message" style="display:none;"></div>
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="document.getElementById('systemModal').style.display='none'">Отмена</button>
-                <button type="submit" class="btn btn-primary">Добавить</button>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
             </div>
         </form>
     </div>
@@ -54,7 +53,7 @@
         html += '<button id="addBlockBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить компонент</button>';
         document.getElementById('cabinetContent').innerHTML = html;
         loadSystems(); loadBlocks();
-        document.getElementById('addSystemBtn').addEventListener('click', openSystemModal);
+        document.getElementById('addSystemBtn').addEventListener('click', function(){ openSystemModal(); });
         document.getElementById('addBlockBtn').addEventListener('click', openBlockModal);
     });
 
@@ -62,15 +61,14 @@
         fetch('/api/cabinets/' + cabinetId + '/systems').then(function(r){return r.json();}).then(function(data){
             var c = document.getElementById('cabinetSystems');
             if (!data.length) { c.innerHTML = '<p>Нет систем</p>'; return; }
-            var h = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th></th></tr>';
-            data.forEach(function(s){h += '<tr><td>'+esc(s.system_name||'')+'</td><td><button class="btn btn-sm btn-delete" onclick="deleteSystem('+s.id+')">🗑️</button></td></tr>';});
+            var h = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th>Действия</th></tr>';
+            data.forEach(function(s){h += '<tr><td>'+esc(s.system_name||'')+'</td><td><button class="btn btn-sm btn-edit" onclick="editSystem('+s.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem('+s.id+')">🗑️</button></td></tr>';});
             h += '</table></div>'; c.innerHTML = h;
         });
     }
 
-    function openSystemModal() {
+    function openSystemModal(sysId) {
         fetch('/api/systems').then(function(r){return r.json();}).then(function(data){
-            window._allSystems = data;
             var sel = document.getElementById('systemSelect');
             sel.innerHTML = '<option value="">-- выберите --</option>';
             if (data.length) {
@@ -79,26 +77,32 @@
                 sel.innerHTML += '</optgroup>';
             }
             sel.innerHTML += '<optgroup label="Добавить"><option value="__new__">+ новая система</option></optgroup>';
+            
+            document.getElementById('systemForm').dataset.editId = '';
+            document.querySelector('.new-system-row').style.display = 'none';
+            
+            if (sysId) {
+                fetch('/api/cabinets/' + cabinetId + '/systems').then(function(r){return r.json();}).then(function(sysData){
+                    var sys = sysData.find(function(s){return s.id === sysId;});
+                    if (sys) sel.value = sys.system_id;
+                    document.getElementById('systemForm').dataset.editId = sysId;
+                });
+            }
+            
             document.getElementById('systemModal').style.display = 'block';
-
-            var newRow = document.querySelector('.new-system-row');
-            var newName = document.querySelector('.new-system-name');
-            var saveBtn = document.querySelector('.save-new-system-btn');
-            newRow.style.display = 'none';
-
+            
             sel.onchange = function() {
-                if (sel.value === '__new__') newRow.style.display = 'flex';
-                else newRow.style.display = 'none';
+                document.querySelector('.new-system-row').style.display = sel.value === '__new__' ? 'flex' : 'none';
             };
-
-            saveBtn.onclick = function() {
-                var name = newName.value.trim();
+            
+            document.querySelector('.save-new-system-btn').onclick = function() {
+                var name = document.querySelector('.new-system-name').value.trim();
                 if (!name) { alert('Введите название'); return; }
                 fetch('/api/systems', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
                 .then(function(r){return r.json();}).then(function(ns){
                     sel.innerHTML += '<option value="'+ns.id+'" selected>'+esc(ns.name)+'</option>';
                     sel.value = ns.id;
-                    newRow.style.display = 'none';
+                    document.querySelector('.new-system-row').style.display = 'none';
                 });
             };
         });
@@ -108,17 +112,16 @@
         e.preventDefault();
         var system_id = document.getElementById('systemSelect').value;
         if (!system_id || system_id === '__new__') { alert('Выберите или создайте систему'); return; }
-        fetch('/api/cabinets/' + cabinetId + '/systems', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({system_id: parseInt(system_id)})
-        }).then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});document.getElementById('systemModal').style.display='none';loadSystems();})
+        var editId = document.getElementById('systemForm').dataset.editId;
+        var url = editId ? '/api/cabinets/' + cabinetId + '/systems/' + editId : '/api/cabinets/' + cabinetId + '/systems';
+        var method = editId ? 'PUT' : 'POST';
+        fetch(url, {method:method, headers:{'Content-Type':'application/json'}, body:JSON.stringify({system_id: parseInt(system_id)})})
+        .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});document.getElementById('systemModal').style.display='none';loadSystems();})
         .catch(function(e){alert(e.message);});
     });
 
-    window.deleteSystem = function(id) {
-        if (!confirm('Удалить?')) return;
-        fetch('/api/cabinets/' + cabinetId + '/systems/' + id, {method:'DELETE'}).then(loadSystems);
-    };
+    window.editSystem = function(id) { openSystemModal(id); };
+    window.deleteSystem = function(id) { fetch('/api/cabinets/' + cabinetId + '/systems/' + id, {method:'DELETE'}).then(loadSystems); };
 
     function loadBlocks() {
         fetch('/api/cabinets/' + cabinetId + '/blocks').then(function(r){return r.json();}).then(function(data){
@@ -144,18 +147,12 @@
         var template_id = parseInt(document.getElementById('blockTemplate').value);
         var quantity = parseInt(document.getElementById('blockQuantity').value) || 1;
         if (!template_id) { alert('Выберите компонент'); return; }
-        fetch('/api/projects/blocks', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({cabinet_id: parseInt(cabinetId), template_id: template_id, quantity: quantity})
-        }).then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});document.getElementById('blockModal').style.display='none';loadBlocks();})
+        fetch('/api/projects/blocks', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cabinet_id: parseInt(cabinetId), template_id: template_id, quantity: quantity})})
+        .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});document.getElementById('blockModal').style.display='none';loadBlocks();})
         .catch(function(e){alert(e.message);});
     });
 
-    window.deleteBlock = function(id) {
-        if (!confirm('Удалить?')) return;
-        fetch('/api/project-blocks/' + id, {method:'DELETE'}).then(loadBlocks);
-    };
-
+    window.deleteBlock = function(id) { fetch('/api/project-blocks/' + id, {method:'DELETE'}).then(loadBlocks); };
     window.pageInit = function() {};
 })();
 </script>

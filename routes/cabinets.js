@@ -239,6 +239,15 @@ router.post('/:id/systems', auth, isAdmin, async (req, res) => {
 });
 
 // Удалить систему из шкафа
+// Обновить систему в шкафу
+router.put('/:id/systems/:systemId', auth, isAdmin, async (req, res) => {
+  try {
+    const { name } = req.body;
+    await pool.query('UPDATE cabinet_systems SET name=$1 WHERE id=$2', [name, req.params.systemId]);
+    res.json({ message: 'Обновлено' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 router.delete('/:id/systems/:systemId', auth, isAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM cabinet_systems WHERE id = $1', [req.params.systemId]);
