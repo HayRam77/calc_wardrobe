@@ -153,7 +153,7 @@ function loadComponents() {
         else {
             empty.style.display = 'none';
             tbody.innerHTML = data.map(function(item) {
-                var paramsHtml = item.params && item.params.length ? item.params.map(function(p) { return escapeHtml(p.name)+': '+escapeHtml(p.value); }).join('<br>') : '-';
+                var paramsHtml = item.params && item.params.length ? item.params.map(function(p) { return escapeHtml(p.name) + (p.type ? ' ('+escapeHtml(p.type)+')' : '') + ': ' + escapeHtml(p.value); }).join('<br>') : '-';
                 return '<tr><td>'+item.id+'</td><td>'+escapeHtml(item.type_name||'')+'</td><td>'+escapeHtml(item.name)+'</td><td>'+escapeHtml(item.manufacturer_name||'')+'</td><td>'+escapeHtml(item.article||'')+'</td><td>'+escapeHtml(item.description||'')+'</td><td>'+paramsHtml+'</td><td class="actions-col" style="display:'+(isAdmin?'':'none')+'"><button class="btn btn-sm btn-edit" onclick="editSystemComponent('+item.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent('+item.id+')">🗑️</button></td></tr>';
             }).join('');
         }
@@ -275,7 +275,7 @@ function openComponentForm(comp) {
         document.querySelectorAll('#modalParams .param-row').forEach(function(row) {
             var s = row.querySelector('.param-select');
             var vi = row.querySelector('.param-value');
-            if (s.value && s.value !== '__new__') params.push({parameter_id: parseInt(s.value), value: vi.value.trim()});
+            var ti2 = row.querySelector('.param-type'); if (s.value && s.value !== '__new__') params.push({parameter_id: parseInt(s.value), value: vi.value.trim(), type: ti2 ? ti2.value.trim() : ''});
         });
         var url = isEdit ? '/api/system-components/'+comp.id : '/api/system-components';
         var method = isEdit ? 'PUT' : 'POST';

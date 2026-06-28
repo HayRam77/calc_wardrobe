@@ -134,7 +134,10 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
     if (fields.length > 0) { values.push(id); await client.query(`UPDATE system_components SET ${fields.join(', ')} WHERE id = $${counter}`, values); }
     if (req.body.params) {
       await client.query('DELETE FROM system_component_params WHERE component_id = $1', [id]);
-      for (const p of req.body.params) await client.query(`INSERT INTO system_component_params (component_id, parameter_id, value) VALUES ($1, $2, $3)`, [id, p.parameter_id, p.value]);
+      for (const p of req.body.params) {
+        if (p.type) await client.query('UPDATE system_parameters SET type=$1 WHERE id=$2', [p.type, p.parameter_id]);
+        await client.query(`INSERT INTO system_component_params (component_id, parameter_id, value) VALUES ($1, $2, $3)`, [id, p.parameter_id, p.value]);
+      }
     }
     await client.query('COMMIT');
     const comp = await pool.query(`SELECT sc.*, sct.name AS type_name, sct.id AS type_id, m.name AS manufacturer_name, m.id AS manufacturer_id FROM system_components sc LEFT JOIN system_component_types sct ON sc.type_id = sct.id LEFT JOIN manufacturers m ON sc.manufacturer_id = m.id WHERE sc.id = $1`, [id]);
