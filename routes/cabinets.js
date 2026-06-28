@@ -193,4 +193,20 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
+// Получить компоненты шкафа
+router.get('/:id/blocks', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT pb.*, bt.name, bt.article, ct.name as type_name, m.name as manufacturer_name
+      FROM project_blocks pb
+      JOIN block_templates bt ON pb.template_id = bt.id
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
+      WHERE pb.cabinet_id = $1
+      ORDER BY bt.name
+    `, [req.params.id]);
+    res.json(result.rows);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 module.exports = router;

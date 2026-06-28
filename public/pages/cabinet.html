@@ -22,10 +22,9 @@
         if (!res.ok) throw new Error('Ошибка');
         return res.json();
     }).then(function(cabinet) {
-        var html = '<h2>' + esc(cabinet.name) + '</h2>';
-        html += '<p>' + esc(cabinet.description || '') + '</p>';
-        html += '<p><em>Проект: ' + esc(cabinet.project_name || '') + '</em></p>';
-        html += '<hr><h3>Компоненты шкафа</h3>';
+        document.querySelector('.page-title').textContent = 'Шкаф: ' + cabinet.name;
+        var html = '';
+        html += '<h3>Компоненты шкафа</h3>';
         html += '<div id="cabinetBlocks">Загрузка...</div>';
         html += '<hr><h3>Системы шкафа</h3>';
         html += '<div id="cabinetSystems">Загрузка...</div>';
