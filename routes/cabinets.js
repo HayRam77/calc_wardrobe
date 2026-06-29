@@ -197,6 +197,18 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // Получить компоненты шкафа
+// Добавить компонент в шкаф
+router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
+  try {
+    const { template_id, quantity } = req.body;
+    const result = await pool.query(
+      'INSERT INTO project_blocks (cabinet_id, template_id, quantity) VALUES ($1, $2, $3) ON CONFLICT (cabinet_id, template_id) DO UPDATE SET quantity = project_blocks.quantity + $3 RETURNING *',
+      [req.params.id, template_id, quantity || 1]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 router.get('/:id/blocks', auth, async (req, res) => {
   try {
     const result = await pool.query(`

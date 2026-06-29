@@ -165,6 +165,9 @@ sidebar.querySelectorAll('a').forEach(function(link) {
 });
 
 function loadModuleComponents() {
+    if (window._modulesLoaded) return;
+    window._modulesLoaded = true;
+    
     // Загружаем модальное окно компонента шкафа
     fetch('/components/block-template-modal.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
         var div = document.createElement('div'); div.innerHTML = html;

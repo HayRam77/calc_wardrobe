@@ -163,35 +163,49 @@
     }
 
     function loadBlocks() {
-        // Загружаем компоненты шкафа, привязанные к системам шкафа
+        var container = document.getElementById('cabinetBlocks');
         fetch('/api/cabinets/' + cabinetId + '/systems').then(function(r){return r.json();}).then(function(systems){
-            var container = document.getElementById('cabinetBlocks');
             if (!systems.length) { container.innerHTML = '<p>Нет систем</p>'; return; }
-            var html = '';
+            var html = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th>Тип комп. системы</th><th>Тип комп. шкафа</th><th>Название</th><th>Артикул</th><th>Кол-во</th><th>LN</th></tr>';
+            var allRows = [];
             var done = 0;
             systems.forEach(function(sys){
-                // Для каждой системы загружаем её системный компонент, затем его связи с блоками
                 fetch('/api/systems/' + sys.system_id).then(function(r){return r.json();}).then(function(sysData){
                     if (sysData.components && sysData.components.length) {
                         var compPromises = sysData.components.map(function(comp){
                             return fetch('/api/system-components/' + comp.component_id + '/blocks').then(function(r){return r.json();}).then(function(blocks){
-                                if (blocks.length) {
-                                    html += '<h4>'+esc(sys.system_name||'Система')+' → '+esc(comp.name)+'</h4>';
-                                    html += '<div class="table-container"><table class="data-table"><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Кол-во</th></tr>';
-                                    blocks.forEach(function(b){
-                                        html += '<tr><td>'+esc(b.type_name||'')+'</td><td>'+esc(b.name)+'</td><td>'+esc(b.article||'')+'</td><td>'+b.quantity+'</td></tr>';
+                                blocks.forEach(function(b){
+                                    allRows.push({
+                                        system: esc(sys.system_name||''),
+                                        sysCompType: esc(comp.type_name||''),
+                                        blockType: esc(b.type_name||''),
+                                        blockName: esc(b.name),
+                                        article: esc(b.article||''),
+                                        quantity: b.quantity,
+                                        ln: esc(b.ln||'')
                                     });
-                                    html += '</table></div><br>';
-                                }
+                                });
                             });
                         });
                         Promise.all(compPromises).then(function(){
                             done++;
-                            if (done === systems.length) container.innerHTML = html || '<p>Нет компонентов</p>';
+                            if (done === systems.length) {
+                                allRows.forEach(function(r){
+                                    html += '<tr><td>'+r.system+'</td><td>'+r.sysCompType+'</td><td>'+r.blockType+'</td><td>'+r.blockName+'</td><td>'+r.article+'</td><td>'+r.quantity+'</td><td>'+r.ln+'</td></tr>';
+                                });
+                                html += '</table></div>';
+                                container.innerHTML = html || '<p>Нет компонентов</p>';
+                            }
                         });
                     } else {
                         done++;
-                        if (done === systems.length) container.innerHTML = html || '<p>Нет компонентов</p>';
+                        if (done === systems.length) {
+                            allRows.forEach(function(r){
+                                html += '<tr><td>'+r.system+'</td><td>'+r.sysCompType+'</td><td>'+r.blockType+'</td><td>'+r.blockName+'</td><td>'+r.article+'</td><td>'+r.quantity+'</td><td>'+r.ln+'</td></tr>';
+                            });
+                            html += '</table></div>';
+                            container.innerHTML = html || '<p>Нет компонентов</p>';
+                        }
                     }
                 });
             });
@@ -209,22 +223,18 @@
     }
 
     function openBlockModal() {
-        fetch('/api/block-templates').then(function(r){return r.json();}).then(function(data){
-            document.getElementById('blockTemplate').innerHTML = '<option value="">-- выберите --</option>'+data.map(function(b){return '<option value="'+b.id+'">'+esc(b.type_name||'')+' '+esc(b.name)+'</option>';}).join('');
-            document.getElementById('blockQuantity').value = 1;
-            document.getElementById('blockModal').style.display = 'block';
-        });
+        if (typeof BlockTemplateModal !== 'undefined') {
+            BlockTemplateModal.open(function(blockId){
+                if (blockId) {
+                    fetch('/api/projects/blocks', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cabinet_id:parseInt(cabinetId),template_id:blockId,quantity:1})})
+                    .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});loadBlocks();})
+                    .catch(function(e){alert(e.message);});
+                }
+            });
+        } else { setTimeout(function(){ openBlockModal(); }, 200); }
     }
 
-    document.getElementById('blockForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        var template_id = parseInt(document.getElementById('blockTemplate').value);
-        var quantity = parseInt(document.getElementById('blockQuantity').value) || 1;
-        if (!template_id) { alert('Выберите компонент'); return; }
-        fetch('/api/projects/blocks', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cabinet_id:parseInt(cabinetId),template_id:template_id,quantity:quantity})})
-        .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});document.getElementById('blockModal').style.display='none';loadBlocks();})
-        .catch(function(e){alert(e.message);});
-    });
+    // blockForm больше не используется
 
     window.delBlock = function(id) { fetch('/api/project-blocks/'+id,{method:'DELETE'}).then(loadBlocks); };
     window.editSysComp = function(linkId) {
