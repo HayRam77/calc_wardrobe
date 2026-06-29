@@ -1,0 +1,43 @@
+<script>
+window.openSystemCompEdit = function(compId, onSaved) {
+    var m = document.createElement('div'); m.className = 'modal'; m.style.cssText = 'display:flex;z-index:3000;';
+    m.innerHTML = '<div class="modal-content" style="max-width:600px;"><span class="modal-close">&times;</span><h3>Редактировать компонент системы</h3><form id="sysCompEditForm"><input type="hidden" id="editCompId"><div class="form-group"><label>Тип:</label><select id="editCompType"></select></div><div class="form-group"><label>Название *</label><input type="text" id="editCompName" required></div><div class="form-group"><label>Производитель:</label><select id="editCompManufacturer"></select></div><div class="form-group"><label>Артикул:</label><input type="text" id="editCompArticle"></div><div class="form-group"><label>Описание:</label><textarea id="editCompDescription" rows="3"></textarea></div><div class="form-actions"><button type="button" class="btn btn-secondary cancel-edit-btn">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div></form></div>';
+    document.body.appendChild(m);
+    m.querySelector('.modal-close').addEventListener('click', function(){m.remove();});
+    m.querySelector('.cancel-edit-btn').addEventListener('click', function(){m.remove();});
+    m.addEventListener('click', function(e){if(e.target===m)m.remove();});
+    
+    Promise.all([
+        fetch('/api/system-components/'+compId).then(function(r){return r.json();}),
+        fetch('/api/system-component-types').then(function(r){return r.json();}),
+        fetch('/api/manufacturers').then(function(r){return r.json();})
+    ]).then(function(results){
+        var comp = results[0], types = results[1], manufacturers = results[2];
+        
+        document.getElementById('editCompId').value = comp.id;
+        document.getElementById('editCompName').value = comp.name||'';
+        document.getElementById('editCompArticle').value = comp.article||'';
+        document.getElementById('editCompDescription').value = comp.description||'';
+        
+        var typeSel = document.getElementById('editCompType');
+        typeSel.innerHTML = '<option value="">-- тип --</option>'+types.map(function(t){return '<option value="'+t.id+'"'+(comp.type_id===t.id?' selected':'')+'>'+t.name+'</option>';}).join('');
+        
+        var manSel = document.getElementById('editCompManufacturer');
+        manSel.innerHTML = '<option value="">-- производитель --</option>'+manufacturers.map(function(m){return '<option value="'+m.id+'"'+(comp.manufacturer_id===m.id?' selected':'')+'>'+m.name+'</option>';}).join('');
+        
+        document.getElementById('sysCompEditForm').addEventListener('submit', function(e){
+            e.preventDefault();
+            var body = {
+                name: document.getElementById('editCompName').value.trim(),
+                type_id: document.getElementById('editCompType').value || null,
+                manufacturer_id: document.getElementById('editCompManufacturer').value || null,
+                article: document.getElementById('editCompArticle').value.trim()||null,
+                description: document.getElementById('editCompDescription').value.trim()||null
+            };
+            fetch('/api/system-components/'+compId, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+            .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});m.remove();if(onSaved)onSaved();})
+            .catch(function(err){alert(err.message);});
+        });
+    });
+};
+</script>

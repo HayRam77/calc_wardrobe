@@ -100,4 +100,30 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
   catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+// Получить связь по ID
+router.get('/link/:id', auth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM system_components_link WHERE id=$1', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Не найдено' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+// Обновить связь компонента с системой
+router.put('/link/:id', auth, isAdmin, async (req, res) => {
+  try {
+    const { quantity } = req.body;
+    await pool.query('UPDATE system_components_link SET quantity=$1 WHERE id=$2', [quantity, req.params.id]);
+    res.json({ message: 'Обновлено' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+// Удалить связь компонента с системой
+router.delete('/link/:id', auth, isAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM system_components_link WHERE id=$1', [req.params.id]);
+    res.json({ message: 'Удалено' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 module.exports = router;

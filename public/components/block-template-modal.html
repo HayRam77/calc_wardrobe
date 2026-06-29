@@ -22,7 +22,8 @@ window.BlockTemplateModal = {
         var f = document.getElementById('blockTemplateForm');
         
         fetch('/api/manufacturers').then(function(r){return r.json();}).then(function(manufacturers){
-            var h = '<div class="form-row"><div class="form-group"><label>Тип</label><div id="blockTypeContainer"></div></div>';
+            var h = '<div class="form-group"><label>Существующий компонент</label><select id="existingBlockSelect" style="width:100%;"><option value="">-- выберите или создайте новый --</option></select></div>';
+            h += '<div class="form-row"><div class="form-group"><label>Тип</label><div id="blockTypeContainer"></div></div>';
             h += '<div class="form-group"><label>Производитель</label><select id="blockManufacturer"><option value="">-- Производитель --</option>'+manufacturers.map(function(m){return'<option value="'+m.id+'">'+m.name+'</option>';}).join('')+'</select></div></div>';
             h += '<div class="form-row"><div class="form-group"><label>Название *</label><input type="text" id="blockName" required></div><div class="form-group"><label>Артикул</label><input type="text" id="blockArticle"></div></div>';
             h += '<div class="form-row"><div class="form-group"><label>Цена, руб.</label><input type="number" id="blockPrice" step="0.01"></div><div class="form-group"><label>Вес, гр.</label><input type="number" id="blockWeight" step="0.01"></div></div>';
@@ -32,6 +33,38 @@ window.BlockTemplateModal = {
             h += '<h4>Параметры</h4><div id="blockParamsContainer"></div><button type="button" id="addBlockParamBtn" class="btn btn-sm btn-secondary">+ Добавить параметр</button>';
             h += '<div class="form-actions"><button type="button" class="btn btn-secondary cancel-block-btn">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';
             f.innerHTML = h;
+            
+            // Загружаем существующие компоненты
+            fetch('/api/block-templates').then(function(r){return r.json();}).then(function(blocks){
+                var sel = document.getElementById('existingBlockSelect');
+                blocks.forEach(function(b){
+                    sel.innerHTML += '<option value="'+b.id+'">'+(b.type_name||'')+' '+b.name+' ('+(b.article||'')+')</option>';
+                });
+                sel.addEventListener('change', function(){
+                    if (sel.value) {
+                        var b = blocks.find(function(x){return x.id===parseInt(sel.value);});
+                        if (b) {
+                            document.getElementById('blockName').value = b.name||'';
+                            document.getElementById('blockArticle').value = b.article||'';
+                            document.getElementById('blockPrice').value = b.price||'';
+                            document.getElementById('blockWeight').value = b.weight_grams||'';
+                            document.getElementById('blockPower').value = b.power_watts||'';
+                            document.getElementById('blockLn').value = b.ln||'';
+                            document.getElementById('blockUrl').value = b.url||'';
+                            document.getElementById('blockDescription').value = b.description||'';
+                            // Устанавливаем тип
+                            if (b.type_id) {
+                                var typeSel = bt.querySelector('.cabinet-type-select');
+                                if (typeSel) typeSel.value = b.type_id;
+                            }
+                            // Устанавливаем производителя
+                            if (b.manufacturer_id) {
+                                document.getElementById('blockManufacturer').value = b.manufacturer_id;
+                            }
+                        }
+                    }
+                });
+            });
             
             document.querySelector('.cancel-block-btn').addEventListener('click', function(){ self._modal.style.display = 'none'; });
             
@@ -78,6 +111,8 @@ window.BlockTemplateModal = {
             f.onsubmit = function(e) {
                 e.preventDefault();
                 var name = document.getElementById('blockName').value.trim();
+                var existingId = document.getElementById('existingBlockSelect').value;
+                if (existingId) { self._modal.style.display = 'none'; if (self._cb) self._cb(parseInt(existingId)); return; }
                 if (!name) { alert('Введите название'); return; }
                 var typeSel = bt.querySelector('.cabinet-type-select');
                 var params = [];

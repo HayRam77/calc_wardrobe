@@ -53,6 +53,8 @@
   .tab-btn.active { color: #1a5f7a; border-bottom-color: #1a5f7a; font-weight: 600; }
   .tab-content { display: none; }
   .tab-content.active { display: block; }
+  .module-box { background: white; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .module-box h3 { margin-top: 0; font-size: 16px; }
 </style>
 </head>
 <body>
@@ -125,9 +127,9 @@ async function loadPage(url) {
   container.innerHTML = '<p>Загрузка...</p>';
   var titles = { '/': 'Проекты', '/automation': 'Системы автоматизации', '/components-systems': 'Компоненты систем', '/components-cabinets': 'Компоненты шкафов', '/manufacturers': 'Производители', '/admin': 'Администрирование' };
   
-  if (url.startsWith('/project/')) pageTitle.textContent = 'Проект';
-  else if (url.startsWith('/cabinet/')) pageTitle.textContent = 'Шкаф';
-  else pageTitle.textContent = titles[url] || 'Конфигуратор вентиляции';
+  if (url.startsWith('/project/')) { pageTitle.textContent = 'Проект'; document.title = 'Проект - Конфигуратор вентиляции'; }
+  else if (url.startsWith('/cabinet/')) { pageTitle.textContent = 'Шкаф'; document.title = 'Шкаф - Конфигуратор вентиляции'; }
+  else { pageTitle.textContent = titles[url] || 'Конфигуратор вентиляции'; document.title = (titles[url] || 'Конфигуратор вентиляции') + ' - Конфигуратор вентиляции'; }
   
   try {
     var file = '';
@@ -145,7 +147,7 @@ async function loadPage(url) {
     var res = await fetch('/' + file + '?_=' + Date.now());
     if (!res.ok) throw new Error('Страница не найдена');
     var html = await res.text();
-    container.innerHTML = html;
+    window._pageInitDone = false; container.innerHTML = html;
     container.querySelectorAll('script').forEach(function(oldScript) {
       var newScript = document.createElement('script');
       if (oldScript.src) { newScript.src = oldScript.src; newScript.async = false; }
@@ -154,7 +156,7 @@ async function loadPage(url) {
     });
     // Загружаем модульные компоненты, если они нужны
     loadModuleComponents();
-    setTimeout(function() { if (typeof window.pageInit === 'function') window.pageInit(); }, 100);
+    setTimeout(function() { if (typeof window.pageInit === 'function' && !window._pageInitDone) { window._pageInitDone = true; window.pageInit(); } }, 100);
   } catch (e) { container.innerHTML = '<p>Ошибка загрузки страницы</p>'; }
 }
 
@@ -165,6 +167,33 @@ sidebar.querySelectorAll('a').forEach(function(link) {
 function loadModuleComponents() {
     // Загружаем модальное окно компонента шкафа
     fetch('/components/block-template-modal.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
+        var div = document.createElement('div'); div.innerHTML = html;
+        div.querySelectorAll('script').forEach(function(s){
+            var ns = document.createElement('script');
+            ns.textContent = s.textContent; document.body.appendChild(ns);
+        });
+    });
+    
+    // Загружаем форму редактирования компонента системы
+    fetch('/components/system-comp-edit.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
+        var div = document.createElement('div'); div.innerHTML = html;
+        div.querySelectorAll('script').forEach(function(s){
+            var ns = document.createElement('script');
+            ns.textContent = s.textContent; document.body.appendChild(ns);
+        });
+    });
+    
+    // Загружаем форму редактирования компонента системы
+    fetch('/components/system-comp-form.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
+        var div = document.createElement('div'); div.innerHTML = html;
+        div.querySelectorAll('script').forEach(function(s){
+            var ns = document.createElement('script');
+            ns.textContent = s.textContent; document.body.appendChild(ns);
+        });
+    });
+    
+    // Загружаем модальное окно компонента системы
+    fetch('/components/system-comp-modal.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
         var div = document.createElement('div'); div.innerHTML = html;
         div.querySelectorAll('script').forEach(function(s){
             var ns = document.createElement('script');

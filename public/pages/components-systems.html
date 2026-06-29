@@ -394,6 +394,7 @@ function openComponentForm(comp) {
 }
 
 window.editSystemComponent = function(id) {
+    if (typeof SystemCompModal !== 'undefined') { SystemCompModal.open(id, function(){ loadComponents(); }); return; }
     Promise.all([
         fetch('/api/system-parameters').then(function(r){return r.json();}),
         fetch('/api/system-component-types').then(function(r){return r.ok?r.json():[];}),

@@ -46,12 +46,12 @@
 
     fetch('/api/cabinets/' + cabinetId).then(function(res) { return res.json(); }).then(function(cabinet) {
         document.querySelector('.page-title').textContent = 'Шкаф: ' + cabinet.name;
-        var html = '<h3>Системы шкафа</h3><div id="cabinetSystems">Загрузка...</div>';
-        html += '<button id="addSystemBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить систему</button>';
-        html += '<hr><h3>Компоненты систем</h3><div id="cabinetSystemComponents">Загрузка...</div>';
-        html += '<button id="addSystemCompBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить компонент системы</button>';
-        html += '<hr><h3>Компоненты шкафа</h3><div id="cabinetBlocks">Загрузка...</div>';
-        html += '<button id="addBlockBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить компонент шкафа</button>';
+        var html = '<div class="module-box"><h3>Системы шкафа</h3><div id="cabinetSystems">Загрузка...</div><button id="addSystemBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить систему</button></div>';
+        
+        html += '<div class="module-box"><h3>Компоненты систем</h3><div id="cabinetSystemComponents">Загрузка...</div><button id="addSystemCompBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить компонент системы</button></div>';
+        
+        html += '<div class="module-box"><h3>Компоненты шкафа</h3><div id="cabinetBlocks">Загрузка...</div><button id="addBlockBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить компонент шкафа</button></div>';
+        
         document.getElementById('cabinetContent').innerHTML = html;
         loadSystems(); loadSystemComponents(); loadBlocks();
         document.getElementById('addSystemBtn').addEventListener('click', function(){ openSystemModal(); });
@@ -128,8 +128,8 @@
                 fetch('/api/systems/' + sys.system_id).then(function(r){return r.json();}).then(function(sysData){
                     html += '<h4>'+esc(sys.system_name||'Система')+'</h4>';
                     if (sysData.components && sysData.components.length) {
-                        html += '<div class="table-container"><table class="data-table"><tr><th>Компонент</th><th>Тип</th><th>Артикул</th><th>Кол-во</th></tr>';
-                        sysData.components.forEach(function(c){ html += '<tr><td>'+esc(c.name)+'</td><td>'+esc(c.type_name||'')+'</td><td>'+esc(c.article||'')+'</td><td>'+c.quantity+'</td></tr>'; });
+                        html += '<div class="table-container"><table class="data-table"><tr><th>Компонент</th><th>Тип</th><th>Артикул</th><th>Кол-во</th><th>Действия</th></tr>';
+                        sysData.components.forEach(function(c){ html += '<tr><td>'+esc(c.name)+'</td><td>'+esc(c.type_name||'')+'</td><td>'+esc(c.article||'')+'</td><td>'+c.quantity+'</td><td><button class="btn btn-sm btn-edit" onclick="editSysComp('+c.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="delSysComp('+c.id+')">🗑️</button></td></tr>'; });
                         html += '</table></div>';
                     } else { html += '<p>Нет компонентов</p>'; }
                     html += '<br>';
@@ -208,7 +208,7 @@
         });
     }
 
-    function openBlockModalOld() {
+    function openBlockModal() {
         fetch('/api/block-templates').then(function(r){return r.json();}).then(function(data){
             document.getElementById('blockTemplate').innerHTML = '<option value="">-- выберите --</option>'+data.map(function(b){return '<option value="'+b.id+'">'+esc(b.type_name||'')+' '+esc(b.name)+'</option>';}).join('');
             document.getElementById('blockQuantity').value = 1;
@@ -227,6 +227,18 @@
     });
 
     window.delBlock = function(id) { fetch('/api/project-blocks/'+id,{method:'DELETE'}).then(loadBlocks); };
+    window.editSysComp = function(linkId) {
+        fetch('/api/systems/link/'+linkId).then(function(r){return r.json();}).then(function(link){
+            if (link && link.component_id) {
+                SystemCompModal.open(link.component_id, function(){ loadSystemComponents(); });
+            }
+        });
+    };
+    window.delSysComp = function(linkId) {
+        if (!confirm('Удалить компонент из системы?')) return;
+        fetch('/api/systems/link/'+linkId, {method:'DELETE'}).then(function(){loadSystemComponents();});
+    };
+    
     window.pageInit = function() {};
 })();
 </script>

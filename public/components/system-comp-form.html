@@ -1,0 +1,137 @@
+<script>
+// Модуль формы редактирования компонента системы
+window.SystemCompForm = {
+    _allParams: [],
+    _allTypes: [],
+    
+    open: function(compId, onSaved) {
+        var self = this;
+        Promise.all([
+            fetch('/api/system-components/'+compId).then(function(r){return r.json();}),
+            fetch('/api/system-parameters').then(function(r){return r.json();}),
+            fetch('/api/system-component-types').then(function(r){return r.json();})
+        ]).then(function(results){
+            var comp = results[0];
+            self._allParams = results[1] || [];
+            self._allTypes = results[2] || [];
+            
+            var m = document.createElement('div'); m.className = 'modal'; m.style.cssText = 'display:flex;z-index:3000;';
+            m.innerHTML = '<div class="modal-content" style="max-width:700px;max-height:90vh;overflow-y:auto;"><span class="modal-close">&times;</span><h3>Редактировать компонент систем</h3><form id="sysCompForm"></form></div>';
+            document.body.appendChild(m);
+            m.querySelector('.modal-close').addEventListener('click', function(){m.remove();});
+            m.addEventListener('click', function(e){if(e.target===m)m.remove();});
+            
+            self._buildForm(m, comp, function(){
+                m.remove();
+                if (onSaved) onSaved();
+            });
+        });
+    },
+    
+    _buildForm: function(m, comp, onSaved) {
+        var self = this;
+        var h = '<div class="form-group"><label>Тип: <span style="color:red;">*</span></label><select id="compType" required>';
+        h += '<option value="">-- выберите --</option>';
+        if (this._allTypes.length) {
+            h += '<optgroup label="Существующие типы">';
+            this._allTypes.forEach(function(t){ h += '<option value="'+t.id+'"'+(comp.type_id==t.id?' selected':'')+'>'+t.name+'</option>'; });
+            h += '</optgroup>';
+        }
+        h += '<optgroup label="Добавить"><option value="__new__">+ новый тип</option></optgroup></select>';
+        h += '<div class="new-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;"><input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;"><button type="button" class="btn btn-sm btn-primary save-type-btn">✓</button></div></div>';
+        h += '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="compName" value="'+this._esc(comp.name)+'" required></div>';
+        h += '<div class="form-group"><label>Производитель:</label><select id="compManufacturer"></select></div>';
+        h += '<div class="form-group"><label>Артикул:</label><input type="text" id="compArticle" value="'+this._esc(comp.article||'')+'"></div>';
+        h += '<div class="form-group"><label>Описание:</label><textarea id="compDescription" rows="3">'+this._esc(comp.description||'')+'</textarea></div>';
+        h += '<div class="form-group"><label>Параметры:</label><div id="modalParams"></div><button type="button" id="addParamRowBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить параметр</button></div>';
+        h += '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="this.closest(\'.modal\').remove()">Отмена</button></div>';
+        
+        m.querySelector('#sysCompForm').innerHTML = h;
+        
+        // Производители
+        fetch('/api/manufacturers').then(function(r){return r.json();}).then(function(mans){
+            var sel = document.getElementById('compManufacturer');
+            sel.innerHTML = '<option value="">-- выберите --</option>';
+            mans.forEach(function(m){ sel.innerHTML += '<option value="'+m.id+'"'+(comp.manufacturer_id==m.id?' selected':'')+'>'+m.name+'</option>'; });
+        });
+        
+        // Обработчик типа
+        var ts = document.getElementById('compType');
+        var newTypeRow = m.querySelector('.new-type-row');
+        if (ts.value === '__new__') newTypeRow.style.display = 'flex';
+        ts.addEventListener('change', function(){ newTypeRow.style.display = ts.value === '__new__' ? 'flex' : 'none'; });
+        m.querySelector('.save-type-btn').addEventListener('click', function(){
+            var n = m.querySelector('.new-type-name').value.trim();
+            if (!n) { alert('Введите название'); return; }
+            fetch('/api/system-component-types', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})})
+            .then(function(r){return r.json();}).then(function(nt){
+                self._allTypes.push(nt);
+                ts.innerHTML += '<option value="'+nt.id+'" selected>'+nt.name+'</option>';
+                ts.value = nt.id; newTypeRow.style.display = 'none';
+            });
+        });
+        
+        // Параметры
+        var pc = document.getElementById('modalParams');
+        function addParamRow(pId, val, typeVal) {
+            var row = document.createElement('div'); row.className = 'param-row'; row.style.cssText = 'display:flex;gap:10px;margin-bottom:5px;';
+            var s = document.createElement('select'); s.className = 'param-select'; s.style.flex = '1';
+            s.innerHTML = '<option value="">-- параметр --</option>';
+            if (self._allParams.length) {
+                s.innerHTML += '<optgroup label="Существующие параметры">';
+                self._allParams.forEach(function(p){ s.innerHTML += '<option value="'+p.id+'"'+(pId==p.id?' selected':'')+'>'+p.name+'</option>'; });
+                s.innerHTML += '</optgroup>';
+            }
+            s.innerHTML += '<optgroup label="Добавить"><option value="__new__">+ новый параметр</option></optgroup>';
+            var vi = document.createElement('input'); vi.type='text'; vi.className='param-value'; vi.placeholder='Значение'; vi.style.flex='1'; if(val) vi.value=val;
+            var ti = document.createElement('input'); ti.type='text'; ti.className='param-type'; ti.placeholder='Тип'; ti.style.flex='0.7'; if(typeVal) ti.value=typeVal;
+            var ni = document.createElement('input'); ni.type='text'; ni.className='new-param-name'; ni.placeholder='Название'; ni.style.cssText='flex:1;display:none;';
+            var sv = document.createElement('button'); sv.type='button'; sv.textContent='✓'; sv.className='btn btn-sm btn-primary'; sv.style.display='none';
+            var dl = document.createElement('button'); dl.type='button'; dl.textContent='×'; dl.className='btn btn-sm btn-delete';
+            if (s.value === '__new__' || !pId) { ni.style.display=''; sv.style.display=''; }
+            s.addEventListener('change', function(){ ni.style.display = sv.style.display = s.value === '__new__' ? '' : 'none'; });
+            sv.addEventListener('click', function(){
+                var n = ni.value.trim(); if (!n) { alert('Введите название'); return; }
+                fetch('/api/system-parameters', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,type:ti.value.trim()})})
+                .then(function(r){return r.json();}).then(function(np){
+                    self._allParams.push(np);
+                    s.innerHTML += '<option value="'+np.id+'" selected>'+np.name+'</option>';
+                    s.value = np.id; ni.style.display='none'; sv.style.display='none';
+                });
+            });
+            dl.addEventListener('click', function(){row.remove();});
+            row.appendChild(s); row.appendChild(vi); row.appendChild(ti); row.appendChild(ni); row.appendChild(sv); row.appendChild(dl);
+            pc.appendChild(row);
+        }
+        if (comp.params && comp.params.length) {
+            comp.params.forEach(function(p){ addParamRow(p.parameter_id||p.id, p.value, p.type); });
+        } else { addParamRow(null, null, null); }
+        document.getElementById('addParamRowBtn').addEventListener('click', function(){ addParamRow(null, null, null); });
+        
+        // Сохранение
+        m.querySelector('#sysCompForm').addEventListener('submit', function(e){
+            e.preventDefault();
+            var name = document.getElementById('compName').value.trim();
+            var type_id = document.getElementById('compType').value;
+            if (!name || !type_id || type_id === '__new__') { alert('Заполните поля'); return; }
+            var params = [];
+            pc.querySelectorAll('.param-row').forEach(function(row){
+                var s = row.querySelector('.param-select'), v = row.querySelector('.param-value'), t = row.querySelector('.param-type');
+                if (s.value && s.value !== '__new__') params.push({parameter_id:parseInt(s.value), value:v.value, type:t.value});
+            });
+            var body = {
+                name: name, type_id: type_id,
+                manufacturer_id: document.getElementById('compManufacturer').value || null,
+                article: document.getElementById('compArticle').value.trim()||null,
+                description: document.getElementById('compDescription').value.trim()||null,
+                params: params
+            };
+            fetch('/api/system-components/'+comp.id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+            .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});onSaved();})
+            .catch(function(err){alert(err.message);});
+        });
+    },
+    
+    _esc: function(s) { var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+};
+</script>
