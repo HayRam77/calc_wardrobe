@@ -163,19 +163,17 @@ sidebar.querySelectorAll('a').forEach(function(link) {
 });
 
 function loadModuleComponents() {
-    var page = window.location.pathname;
-    var scripts = [];
-    if (page.startsWith('/components-cabinets') || page.startsWith('/cabinet/')) {
-        scripts = ['/components/cabinet/type-select.html','/components/cabinet/param-select.html','/components/cabinet/block-select.html'];
-    }
-    if (page.startsWith('/components-systems') || page.startsWith('/automation')) {
-        scripts = ['/components/system/type-select.html','/components/system/param-select.html','/components/system/component-select.html'];
-    }
-    scripts.forEach(function(src) {
-        var s = document.createElement('script');
-        s.src = src; s.async = false;
-        document.head.appendChild(s);
+    // Загружаем модальное окно компонента шкафа
+    fetch('/components/block-template-modal.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
+        var div = document.createElement('div'); div.innerHTML = html;
+        div.querySelectorAll('script').forEach(function(s){
+            var ns = document.createElement('script');
+            ns.textContent = s.textContent; document.body.appendChild(ns);
+        });
     });
+    
+    
+var page = window.location.pathname;
 }
 
 window.addEventListener('popstate', function() { loadPage(location.pathname || '/'); });

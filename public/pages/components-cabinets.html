@@ -60,8 +60,12 @@
     document.querySelector('#templateModal .modal-close').addEventListener('click',function(){tModal.classList.remove('active');});
 
     async function openTemplateModal(id){
-        tModal.classList.add('active');
-        var manufacturers=await(await fetch('/api/manufacturers')).json();
+        if (typeof BlockTemplateModal !== 'undefined') {
+            BlockTemplateModal.open(function(newId){ if(newId){ tModal.classList.remove('active'); loadTemplates(); } });
+        } else {
+            setTimeout(function(){ openTemplateModal(id); }, 300);
+        }
+        return;
         var tData={};
         if(id){var r=await fetch('/api/block-templates');var d=await r.json();tData=d.find(function(x){return x.id==id;})||{};}
         var h = '<input type="hidden" id="templateId" value="'+(tData.id||'')+'">';
@@ -82,7 +86,29 @@
 
         function addParamRow(pId, val) {
             var row = document.createElement('div'); row.className = 'param-row'; row.style.cssText = 'display:flex;gap:8px;margin-bottom:5px;';
-            CabinetParamSelect.render(row, pId, val);
+            if (typeof CabinetParamSelect !== 'undefined') { CabinetParamSelect.render(row, pId, val); } else {
+            fetch('/api/parameters').then(function(r){return r.json();}).then(function(params){
+                var h = '<select class="cabinet-param-select" style="flex:1;"><option value="">-- параметр --</option>';
+                if (params.length) { h += '<optgroup label="Существующие">'; params.forEach(function(p){ h += '<option value="'+p.id+'"'+(pId==p.id?' selected':'')+'>'+p.name+'</option>'; }); h += '</optgroup>'; }
+                h += '<optgroup label="Добавить"><option value="__new__">+ новый параметр</option></optgroup></select>';
+                h += '<input type="text" class="cabinet-param-value" placeholder="Значение" style="flex:1;" value="'+(val||'')+'">';
+                h += '<input type="text" class="cabinet-param-new-name" placeholder="Название" style="flex:2;display:none;">';
+                h += '<button type="button" class="btn btn-sm btn-primary cabinet-param-save-btn" style="display:none;">✓</button>';
+                row.innerHTML = h;
+                var sel = row.querySelector('.cabinet-param-select');
+                var ni = row.querySelector('.cabinet-param-new-name');
+                var sv = row.querySelector('.cabinet-param-save-btn');
+                sel.addEventListener('change', function(){ ni.style.display = sv.style.display = sel.value === '__new__' ? '' : 'none'; });
+                sv.addEventListener('click', function(){
+                    var n = ni.value.trim(); if (!n) { alert('Введите название'); return; }
+                    fetch('/api/parameters', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})})
+                    .then(function(r){return r.json();}).then(function(np){
+                        var opt = document.createElement('option'); opt.value = np.id; opt.textContent = np.name;
+                        sel.querySelector('optgroup:first-child').appendChild(opt); sel.value = np.id; ni.style.display='none'; sv.style.display='none';
+                    });
+                });
+            });
+        }
             var del = document.createElement('button'); del.type='button'; del.textContent='✕'; del.className='btn btn-sm btn-delete';
             del.addEventListener('click', function(){row.remove();});
             row.appendChild(del);

@@ -94,7 +94,7 @@ var modalForm = document.getElementById('modalForm');
 document.querySelector('.close-modal').addEventListener('click', function() { modal.style.display = 'none'; });
 window.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
 function closeModal() { modal.style.display = 'none'; modalForm.innerHTML = ''; }
-function showModal(title, html) { modalTitle.textContent = title; modalForm.innerHTML = html; modal.style.display = 'block'; }
+function showModal(title, html) { modalTitle.textContent = title; modalForm.innerHTML = html; document.querySelector('#modal .close-modal').style.display = title === 'Добавить компонент систем' ? 'none' : ''; modal.style.display = 'block'; }
 function escapeHtml(text) { return String(text).replace(/[&<>"]/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]; }); }
 
 function loadManufacturersForSelect(selector, selectedId, callback) {
@@ -356,7 +356,19 @@ function openComponentForm(comp) {
     }
     loadAllBlocks();
     document.getElementById('addBlockLinkBtn').addEventListener('click', function() {
-        addBlockLinkRow(isEdit ? comp.id : null, linkedContainer);
+        function tryOpenBlockModal() {
+            if (typeof BlockTemplateModal !== 'undefined') {
+                BlockTemplateModal.open(function(blockId) {
+                    if (blockId && isEdit) {
+                        fetch('/api/system-components/'+comp.id+'/blocks', {
+                            method:'POST',headers:{'Content-Type':'application/json'},
+                            body:JSON.stringify({block_template_id:blockId,quantity:1})
+                        }).then(function(){ loadLinkedBlocks(comp.id, linkedContainer); });
+                    }
+                });
+            } else { setTimeout(tryOpenBlockModal, 200); }
+        }
+        tryOpenBlockModal();
     });
 
     modalForm.onsubmit = function(e) {
