@@ -212,7 +212,7 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
 router.get('/:id/blocks', auth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT pb.*, bt.name, bt.article, ct.name as type_name, m.name as manufacturer_name
+      SELECT pb.*, bt.name, bt.article, bt.ln, ct.name as type_name, m.name as manufacturer_name
       FROM project_blocks pb
       JOIN block_templates bt ON pb.template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
@@ -291,6 +291,14 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
     }
     res.json({ message: 'Импортировано ' + imported + ' записей' });
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
+});
+
+// Удалить компонент из шкафа
+router.delete('/:id/blocks/:blockId', auth, isAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM project_blocks WHERE id=$1 AND cabinet_id=$2', [req.params.blockId, req.params.id]);
+    res.json({ message: 'Удалён' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
 module.exports = router;

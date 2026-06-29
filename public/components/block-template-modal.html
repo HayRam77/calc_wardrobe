@@ -6,6 +6,7 @@ window.BlockTemplateModal = {
     
     open: function(callback) {
         this._cb = callback;
+        var cb = callback;
         var self = this;
         
         // Создаём модальное окно если его нет
@@ -112,7 +113,7 @@ window.BlockTemplateModal = {
                 e.preventDefault();
                 var name = document.getElementById('blockName').value.trim();
                 var existingId = document.getElementById('existingBlockSelect').value;
-                if (existingId) { self._modal.style.display = 'none'; if (self._cb) self._cb(parseInt(existingId)); return; }
+                if (existingId) { self._modal.style.display = 'none'; if (cb) cb(parseInt(existingId)); return; }
                 if (!name) { alert('Введите название'); return; }
                 var typeSel = bt.querySelector('.cabinet-type-select');
                 var params = [];
@@ -132,7 +133,7 @@ window.BlockTemplateModal = {
                         description: document.getElementById('blockDescription').value.trim() || null,
                         parameters: params})
                 }).then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});return r.json();})
-                .then(function(nb){ self._modal.style.display = 'none'; if (self._cb) self._cb(nb.id); })
+                .then(function(nb){ self._modal.style.display = 'none'; if (cb) cb(nb.id); })
                 .catch(function(err){ alert(err.message); });
             };
         });

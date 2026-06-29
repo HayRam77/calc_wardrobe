@@ -40,7 +40,7 @@
 
 <script>
 (function() {
-    var cabinetId = window.pageParam;
+    var cabinetId = window.pageParam; window.cabinetId = cabinetId;
     if (!cabinetId) { document.getElementById('cabinetContent').innerHTML = '<p>Шкаф не найден</p>'; return; }
     function esc(str) { var d=document.createElement('div'); d.textContent=str||''; return d.innerHTML; }
 
@@ -56,7 +56,7 @@
         loadSystems(); loadSystemComponents(); loadBlocks();
         document.getElementById('addSystemBtn').addEventListener('click', function(){ openSystemModal(); });
         document.getElementById('addSystemCompBtn').addEventListener('click', openSystemCompModal);
-        document.getElementById('addBlockBtn').addEventListener('click', openBlockModal);
+        document.getElementById('addBlockBtn').addEventListener('click', window.openBlockModal);
     });
 
     function loadSystems() {
@@ -162,58 +162,22 @@
         });
     }
 
-    function loadBlocks() {
+    window.loadBlocks = function() {
+        console.log('loadBlocks вызвана');
         var container = document.getElementById('cabinetBlocks');
-        fetch('/api/cabinets/' + cabinetId + '/systems').then(function(r){return r.json();}).then(function(systems){
-            if (!systems.length) { container.innerHTML = '<p>Нет систем</p>'; return; }
-            var html = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th>Тип комп. системы</th><th>Тип комп. шкафа</th><th>Название</th><th>Артикул</th><th>Кол-во</th><th>LN</th></tr>';
-            var allRows = [];
-            var done = 0;
-            systems.forEach(function(sys){
-                fetch('/api/systems/' + sys.system_id).then(function(r){return r.json();}).then(function(sysData){
-                    if (sysData.components && sysData.components.length) {
-                        var compPromises = sysData.components.map(function(comp){
-                            return fetch('/api/system-components/' + comp.component_id + '/blocks').then(function(r){return r.json();}).then(function(blocks){
-                                blocks.forEach(function(b){
-                                    allRows.push({
-                                        system: esc(sys.system_name||''),
-                                        sysCompType: esc(comp.type_name||''),
-                                        blockType: esc(b.type_name||''),
-                                        blockName: esc(b.name),
-                                        article: esc(b.article||''),
-                                        quantity: b.quantity,
-                                        ln: esc(b.ln||'')
-                                    });
-                                });
-                            });
-                        });
-                        Promise.all(compPromises).then(function(){
-                            done++;
-                            if (done === systems.length) {
-                                allRows.forEach(function(r){
-                                    html += '<tr><td>'+r.system+'</td><td>'+r.sysCompType+'</td><td>'+r.blockType+'</td><td>'+r.blockName+'</td><td>'+r.article+'</td><td>'+r.quantity+'</td><td>'+r.ln+'</td></tr>';
-                                });
-                                html += '</table></div>';
-                                container.innerHTML = html || '<p>Нет компонентов</p>';
-                            }
-                        });
-                    } else {
-                        done++;
-                        if (done === systems.length) {
-                            allRows.forEach(function(r){
-                                html += '<tr><td>'+r.system+'</td><td>'+r.sysCompType+'</td><td>'+r.blockType+'</td><td>'+r.blockName+'</td><td>'+r.article+'</td><td>'+r.quantity+'</td><td>'+r.ln+'</td></tr>';
-                            });
-                            html += '</table></div>';
-                            container.innerHTML = html || '<p>Нет компонентов</p>';
-                        }
-                    }
-                });
+        fetch('/api/cabinets/' + window.cabinetId + '/blocks').then(function(r){return r.json();}).then(function(data){
+            if (!data.length) { container.innerHTML = '<p>Нет компонентов</p>'; return; }
+            var h = '<div class="table-container"><table class="data-table"><tr><th>Тип комп. шкафа</th><th>Название</th><th>Артикул</th><th>Кол-во</th><th>LN</th><th></th></tr>';
+            data.forEach(function(b){
+                h += '<tr><td>'+esc(b.type_name||'')+'</td><td>'+esc(b.name)+'</td><td>'+esc(b.article||'')+'</td><td>'+b.quantity+'</td><td>'+esc(b.ln||'')+'</td><td><button class="btn btn-sm btn-delete" onclick="delBlock('+b.id+')">🗑️</button></td></tr>';
             });
+            h += '</table></div>';
+            container.innerHTML = h;
         });
     }
-    
+
     function loadBlocksOld() {
-        fetch('/api/cabinets/' + cabinetId + '/blocks').then(function(r){return r.json();}).then(function(data){
+        fetch('/api/cabinets/' + window.cabinetId + '/blocks').then(function(r){return r.json();}).then(function(data){
             var c = document.getElementById('cabinetBlocks');
             if (!data.length) { c.innerHTML = '<p>Нет компонентов</p>'; return; }
             var h = '<div class="table-container"><table class="data-table"><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Кол-во</th><th></th></tr>';
@@ -222,12 +186,12 @@
         });
     }
 
-    function openBlockModal() {
+    window.openBlockModal = function() {
         if (typeof BlockTemplateModal !== 'undefined') {
             BlockTemplateModal.open(function(blockId){
                 if (blockId) {
-                    fetch('/api/projects/blocks', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cabinet_id:parseInt(cabinetId),template_id:blockId,quantity:1})})
-                    .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});loadBlocks();})
+                    fetch('/api/cabinets/'+window.cabinetId+'/blocks', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({template_id:blockId,quantity:1})})
+                    .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});console.log('Добавлено, обновляем...');window.loadBlocks();})
                     .catch(function(e){alert(e.message);});
                 }
             });
@@ -236,7 +200,7 @@
 
     // blockForm больше не используется
 
-    window.delBlock = function(id) { fetch('/api/project-blocks/'+id,{method:'DELETE'}).then(loadBlocks); };
+    window.delBlock = function(id) { fetch('/api/cabinets/'+cabinetId+'/blocks/'+id,{method:'DELETE'}).then(loadBlocks); };
     window.editSysComp = function(linkId) {
         fetch('/api/systems/link/'+linkId).then(function(r){return r.json();}).then(function(link){
             if (link && link.component_id) {
