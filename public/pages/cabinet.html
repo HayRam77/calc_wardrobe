@@ -191,7 +191,7 @@
             BlockTemplateModal.open(function(blockId){
                 if (blockId) {
                     fetch('/api/cabinets/'+window.cabinetId+'/blocks', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({template_id:blockId,quantity:1})})
-                    .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});console.log('Добавлено, обновляем...');window.loadBlocks();})
+                    .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});console.log('Добавлено, обновляем...'); setTimeout(function(){ window.loadBlocks(); }, 500);})
                     .catch(function(e){alert(e.message);});
                 }
             });
