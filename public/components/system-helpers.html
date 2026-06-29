@@ -1,0 +1,39 @@
+<script>
+// Общие функции для страниц систем
+window.SysHelp = {
+    esc: function(s) { var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; },
+    
+    loadManufacturers: function(selector, selectedId, callback) {
+        fetch('/api/manufacturers').then(function(r){return r.json();}).then(function(data){
+            var sel = document.querySelector(selector); if (!sel) return;
+            sel.innerHTML = '<option value="">-- выберите --</option>';
+            data.forEach(function(m){ var o=document.createElement('option'); o.value=m.id; o.textContent=m.name; sel.appendChild(o); });
+            if (selectedId) sel.value = selectedId; if (callback) callback();
+        });
+    },
+    
+    createType: function(name, callback) {
+        fetch('/api/system-component-types', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
+        .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});return r.json();})
+        .then(function(nt){if(callback)callback(nt);}).catch(function(e){alert(e.message);});
+    },
+    
+    createParam: function(name, type, callback) {
+        fetch('/api/system-parameters', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,type:type||''})})
+        .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});return r.json();})
+        .then(function(np){if(callback)callback(np);}).catch(function(e){alert(e.message);});
+    },
+    
+    buildParamSelect: function(params, selectedId) {
+        var h = ''; if (params && params.length) { h += '<optgroup label="Существующие параметры">'; params.forEach(function(p){ h += '<option value="'+p.id+'"'+(selectedId==p.id?' selected':'')+'>'+p.name+'</option>'; }); h += '</optgroup>'; }
+        h += '<optgroup label="Добавить"><option value="__new__"'+(selectedId?'':' selected')+'>+ новый параметр</option></optgroup>';
+        return h;
+    },
+    
+    buildTypeSelect: function(types, selectedId) {
+        var h = ''; if (types && types.length) { h += '<optgroup label="Существующие типы">'; types.forEach(function(t){ h += '<option value="'+t.id+'"'+(selectedId==t.id?' selected':'')+'>'+t.name+'</option>'; }); h += '</optgroup>'; }
+        h += '<optgroup label="Добавить"><option value="__new__"'+(selectedId?'':' selected')+'>+ новый тип</option></optgroup>';
+        return h;
+    }
+};
+</script>
