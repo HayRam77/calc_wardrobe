@@ -61,7 +61,7 @@
 
     async function openTemplateModal(id){
         if (typeof BlockTemplateModal !== 'undefined') {
-            BlockTemplateModal.open(function(newId){ if(newId){ tModal.classList.remove('active'); loadTemplates(); } });
+            BlockTemplateModal.open(function(newId){ if(newId){ tModal.classList.remove('active'); loadTemplates(); } }, id);
         } else { setTimeout(function(){ openTemplateModal(id); }, 200); }
     }
 

@@ -40,7 +40,7 @@
 
 <script>
 (function() {
-    var cabinetId = window.pageParam; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId;
+    var cabinetId = window.pageParam; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId;
     if (!cabinetId) { document.getElementById('cabinetContent').innerHTML = '<p>Шкаф не найден</p>'; return; }
     function esc(str) { var d=document.createElement('div'); d.textContent=str||''; return d.innerHTML; }
 
@@ -140,26 +140,10 @@
         });
     }
 
-    function openSystemCompModal() {
-        fetch('/api/system-components').then(function(r){return r.json();}).then(function(comps){
-            fetch('/api/cabinets/' + cabinetId + '/systems').then(function(r){return r.json();}).then(function(systems){
-                var sSys = '<select id="scSystem" style="width:100%;"><option value="">-- система --</option>';
-                systems.forEach(function(s){ sSys += '<option value="'+s.system_id+'">'+esc(s.system_name||'')+'</option>'; }); sSys += '</select>';
-                var sComp = '<select id="scComp" style="width:100%;"><option value="">-- компонент --</option>';
-                comps.forEach(function(c){ sComp += '<option value="'+c.id+'">'+esc(c.type_name||'')+' '+esc(c.name)+'</option>'; }); sComp += '</select>';
-                var m = document.createElement('div'); m.className = 'modal'; m.style.display = 'block';
-                m.innerHTML = '<div class="modal-content" style="max-width:500px;"><span class="modal-close">&times;</span><h3>Добавить компонент системы</h3><div class="form-group"><label>Система</label>'+sSys+'</div><div class="form-group"><label>Компонент</label>'+sComp+'</div><button id="svSc" class="btn btn-primary">Добавить</button></div>';
-                document.body.appendChild(m);
-                m.querySelector('.modal-close').onclick = function(){m.remove();};
-                m.onclick = function(e){if(e.target===m)m.remove();};
-                m.querySelector('#svSc').onclick = function(){
-                    var sysId = parseInt(m.querySelector('#scSystem').value), compId = parseInt(m.querySelector('#scComp').value);
-                    if (!sysId || !compId) { alert('Выберите'); return; }
-                    fetch('/api/systems/'+sysId, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({components:[{component_id:compId,quantity:1}]})})
-                    .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});m.remove();loadSystemComponents();}).catch(function(e){alert(e.message);});
-                };
-            });
-        });
+    window.openSystemCompModal = function() {
+        if (typeof SystemCompModal !== 'undefined') {
+            SystemCompModal.open(null, function() { loadSystemComponents(); });
+        } else { setTimeout(window.openSystemCompModal, 200); }
     }
 
     window.loadBlocks = function() {
@@ -223,6 +207,19 @@
         .catch(function(e){ alert(e.message); });
     };
 
-window.pageInit = function() {};
+
+    window.editSysComp = function(linkId) {
+        fetch('/api/systems/link/'+linkId).then(function(r){return r.json();}).then(function(link){
+            if (link && link.component_id) {
+                SystemCompModal.open(link.component_id, function(){ loadSystemComponents(); });
+            }
+        });
+    };
+    window.delSysComp = function(linkId) {
+        if (!confirm('Удалить компонент из системы?')) return;
+        fetch('/api/systems/link/'+linkId, {method:'DELETE'}).then(function(){loadSystemComponents();});
+    };
+    window.pageInit = function() {};
+
 })();
 </script>

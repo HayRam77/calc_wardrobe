@@ -161,14 +161,9 @@ function loadComponents() {
 }
 
 document.getElementById('addComponentBtn').addEventListener('click', function() {
-    Promise.all([
-        fetch('/api/system-parameters').then(function(r){return r.json();}),
-        fetch('/api/system-component-types').then(function(r){return r.ok?r.json():[];})
-    ]).then(function(result){
-        window._allParams = result[0] || [];
-        window._allTypes = result[1] || [];
-        openComponentForm(null);
-    });
+    if (typeof SystemCompModal !== 'undefined') {
+        SystemCompModal.open(null, function() { loadComponents(); });
+    } else { setTimeout(function(){ document.getElementById('addComponentBtn').click(); }, 200); }
 });
 
 
@@ -394,6 +389,9 @@ function openComponentForm(comp) {
 }
 
 window.editSystemComponent = function(id) {
+    if (typeof SystemCompModal !== 'undefined') { SystemCompModal.open(id, function() { loadComponents(); }); return; }
+    // fallback
+
     if (typeof SystemCompModal !== 'undefined') { SystemCompModal.open(id, function(){ loadComponents(); }); return; }
     Promise.all([
         fetch('/api/system-parameters').then(function(r){return r.json();}),
