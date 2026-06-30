@@ -40,7 +40,7 @@
 
 <script>
 (function() {
-    var cabinetId = window.pageParam; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId;
+    var cabinetId = window.pageParam; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId;
     if (!cabinetId) { document.getElementById('cabinetContent').innerHTML = '<p>Шкаф не найден</p>'; return; }
     function esc(str) { var d=document.createElement('div'); d.textContent=str||''; return d.innerHTML; }
 
@@ -53,7 +53,8 @@
         html += '<div class="module-box"><h3>Компоненты шкафа</h3><div id="cabinetBlocks">Загрузка...</div><button id="addBlockBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить компонент шкафа</button></div>';
         
         document.getElementById('cabinetContent').innerHTML = html;
-        loadSystems(); loadSystemComponents(); loadBlocks();
+        loadSystems(); loadSystemComponents();
+        setTimeout(function(){ window.loadBlocks(); }, 100);
         document.getElementById('addSystemBtn').addEventListener('click', function(){ openSystemModal(); });
         document.getElementById('addSystemCompBtn').addEventListener('click', openSystemCompModal);
         document.getElementById('addBlockBtn').addEventListener('click', window.openBlockModal);
@@ -146,20 +147,7 @@
         } else { setTimeout(window.openSystemCompModal, 200); }
     }
 
-    window.loadBlocks = function() {
-        console.log('loadBlocks вызвана');
-        var container = document.getElementById('cabinetBlocks');
-        fetch('/api/cabinets/' + window.cabinetId + '/blocks').then(function(r){return r.json();}).then(function(data){
-            if (!data.length) { container.innerHTML = '<p>Нет компонентов</p>'; return; }
-            var h = '<div class="table-container"><table class="data-table"><tr><th>Тип комп. шкафа</th><th>Название</th><th>Артикул</th><th>Кол-во</th><th>LN</th><th></th></tr>';
-            data.forEach(function(b){
-                h += '<tr><td>'+esc(b.type_name||'')+'</td><td>'+esc(b.name)+'</td><td>'+esc(b.article||'')+'</td><td>'+b.quantity+'</td><td>'+esc(b.ln||'')+'</td><td><button class="btn btn-sm btn-delete" onclick="delBlock('+b.id+')">🗑️</button></td></tr>';
-            });
-            h += '</table></div>';
-            container.innerHTML = h;
-        });
-    }
-
+    
     
     window.openBlockModal = function() {
         if (typeof BlockTemplateModal !== 'undefined') {
@@ -219,7 +207,17 @@
         if (!confirm('Удалить компонент из системы?')) return;
         fetch('/api/systems/link/'+linkId, {method:'DELETE'}).then(function(){loadSystemComponents();});
     };
-    window.pageInit = function() {};
+    
+    window.loadBlocks = function() {
+        var container = document.getElementById('cabinetBlocks');
+        if (!container) return;
+        fetch('/api/cabinets/' + window.cabinetId + '/blocks/html')
+            .then(function(r){ return r.text(); })
+            .then(function(html){ container.innerHTML = html; })
+            .catch(function(e){ console.error(e); });
+    };
+
+window.pageInit = function() {};
 
 })();
 </script>

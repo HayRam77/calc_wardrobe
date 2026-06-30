@@ -202,7 +202,7 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
   try {
     const { template_id, quantity } = req.body;
     const result = await pool.query(
-      'INSERT INTO project_blocks (cabinet_id, template_id, quantity) VALUES ($1, $2, $3) ON CONFLICT (cabinet_id, template_id) DO UPDATE SET quantity = project_blocks.quantity + $3 RETURNING *',
+      'INSERT INTO project_blocks (cabinet_id, template_id, quantity) VALUES ($1, $2, $3) RETURNING *',
       [req.params.id, template_id, quantity || 1]
     );
     res.status(201).json(result.rows[0]);
@@ -306,22 +306,26 @@ router.delete('/:id/blocks/:blockId', auth, isAdmin, async (req, res) => {
 router.get('/:id/blocks/html', auth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT pb.*, bt.name, bt.article, bt.ln, ct.name AS type_name, m.name AS manufacturer_name
+      SELECT pb.id, bt.name AS block_name, bt.ln, ct.name AS block_type,
+             s.name AS system_name, sc.name AS system_component_name
       FROM project_blocks pb
       JOIN block_templates bt ON pb.template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
-      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
+      LEFT JOIN system_block_links sbl ON sbl.block_template_id = bt.id
+      LEFT JOIN system_components sc ON sbl.system_component_id = sc.id
+      LEFT JOIN system_components_link scl ON scl.component_id = sc.id
+      LEFT JOIN systems s ON scl.system_id = s.id
       WHERE pb.cabinet_id = $1
-      ORDER BY bt.name
+      ORDER BY s.name, sc.name, bt.name
     `, [req.params.id]);
     
     let html = '';
     if (result.rows.length === 0) {
       html = '<p>Нет компонентов</p>';
     } else {
-      html = '<div class="table-container"><table class="data-table"><tr><th>Тип комп. шкафа</th><th>Название</th><th>Артикул</th><th>Кол-во</th><th>LN</th><th>Действия</th></tr>';
+      html = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th>Компонент системы</th><th>Тип комп. шкафа</th><th>Название</th><th>LN</th><th>Действия</th></tr>';
       result.rows.forEach(b => {
-        html += '<tr><td>' + (b.type_name || '') + '</td><td>' + b.name + '</td><td>' + (b.article || '') + '</td><td>' + b.quantity + '</td><td>' + (b.ln || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editBlockQuantity(' + b.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="delBlock(' + b.id + ')">🗑️</button></td></tr>';
+        html += '<tr><td>' + (b.system_name || '-') + '</td><td>' + (b.system_component_name || '-') + '</td><td>' + (b.block_type || '') + '</td><td>' + b.block_name + '</td><td>' + (b.ln || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editBlockQuantity(' + b.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="delBlock(' + b.id + ')">🗑️</button></td></tr>';
       });
       html += '</table></div>';
     }
