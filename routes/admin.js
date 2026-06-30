@@ -78,4 +78,35 @@ router.get('/cabinets', async (req, res) => {
   }
 });
 
+
+const { exec } = require('child_process');
+
+// Экспорт дампа БД (только данные)
+router.get('/db/export', auth, isAdmin, async (req, res) => {
+  try {
+    const fileName = 'bd_calc_dump_' + new Date().toISOString().slice(0,10) + '.sql';
+    res.setHeader('Content-Disposition', 'attachment; filename=' + fileName);
+    res.setHeader('Content-Type', 'application/sql');
+    const cmd = 'PGPASSWORD=' + (process.env.DB_PASSWORD || '') + ' pg_dump --data-only --inserts --on-conflict-do-nothing -U ' + (process.env.DB_USER || 'hrroot') + ' -h ' + (process.env.DB_HOST || 'localhost') + ' -d ' + (process.env.DB_NAME || 'bd_calc');
+    exec(cmd, { maxBuffer: 100 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) { console.error(stderr); return res.status(500).json({ message: 'Ошибка экспорта' }); }
+      res.send(stdout);
+    });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка экспорта' }); }
+});
+
+// Импорт дампа БД
+const multer = require('multer');
+const upload = multer({ dest: '/tmp/' });
+router.post('/db/import', auth, isAdmin, upload.single('file'), async (req, res) => {
+  try {
+    const filePath = req.file.path;
+    const cmd = 'PGPASSWORD=' + (process.env.DB_PASSWORD || '') + ' psql -U ' + (process.env.DB_USER || 'hrroot') + ' -h ' + (process.env.DB_HOST || 'localhost') + ' -d ' + (process.env.DB_NAME || 'bd_calc') + ' -f ' + filePath;
+    exec(cmd, { maxBuffer: 100 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) { console.error(stderr); return res.status(500).json({ message: 'Ошибка импорта: ' + stderr }); }
+      res.json({ message: 'Дамп успешно импортирован' });
+    });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
+});
+
 module.exports = router;
