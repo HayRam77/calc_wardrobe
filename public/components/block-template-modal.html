@@ -4,7 +4,7 @@ window.BlockTemplateModal = {
     _cb: null,
     _modal: null,
     
-    open: function(callback) {
+    open: function(callback, preselectedId) {
         this._cb = callback;
         var cb = callback;
         var self = this;
@@ -41,6 +41,7 @@ window.BlockTemplateModal = {
                 blocks.forEach(function(b){
                     sel.innerHTML += '<option value="'+b.id+'">'+(b.type_name||'')+' '+b.name+' ('+(b.article||'')+')</option>';
                 });
+                if (preselectedId) { sel.value = preselectedId; sel.dispatchEvent(new Event('change')); }
                 sel.addEventListener('change', function(){
                     if (sel.value) {
                         var b = blocks.find(function(x){return x.id===parseInt(sel.value);});

@@ -301,4 +301,47 @@ router.delete('/:id/blocks/:blockId', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+
+// Получить HTML-фрагмент таблицы компонентов шкафа
+router.get('/:id/blocks/html', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT pb.*, bt.name, bt.article, bt.ln, ct.name AS type_name, m.name AS manufacturer_name
+      FROM project_blocks pb
+      JOIN block_templates bt ON pb.template_id = bt.id
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
+      WHERE pb.cabinet_id = $1
+      ORDER BY bt.name
+    `, [req.params.id]);
+    
+    let html = '';
+    if (result.rows.length === 0) {
+      html = '<p>Нет компонентов</p>';
+    } else {
+      html = '<div class="table-container"><table class="data-table"><tr><th>Тип комп. шкафа</th><th>Название</th><th>Артикул</th><th>Кол-во</th><th>LN</th><th>Действия</th></tr>';
+      result.rows.forEach(b => {
+        html += '<tr><td>' + (b.type_name || '') + '</td><td>' + b.name + '</td><td>' + (b.article || '') + '</td><td>' + b.quantity + '</td><td>' + (b.ln || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editBlockQuantity(' + b.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="delBlock(' + b.id + ')">🗑️</button></td></tr>';
+      });
+      html += '</table></div>';
+    }
+    res.send(html);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+
+
+// Обновить блок шкафа (количество или замена компонента)
+router.put('/:cabinetId/blocks/:blockId', auth, isAdmin, async (req, res) => {
+  try {
+    const { template_id, quantity } = req.body;
+    const result = await pool.query(
+      'UPDATE project_blocks SET template_id = COALESCE($1, template_id), quantity = COALESCE($2, quantity) WHERE id = $3 AND cabinet_id = $4 RETURNING *',
+      [template_id || null, quantity, req.params.blockId, req.params.cabinetId]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Блок не найден' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка обновления блока' }); }
+});
+
 module.exports = router;

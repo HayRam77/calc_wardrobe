@@ -40,7 +40,7 @@
 
 <script>
 (function() {
-    var cabinetId = window.pageParam; window.cabinetId = cabinetId; window.cabinetId = cabinetId;
+    var cabinetId = window.pageParam; window.cabinetId = cabinetId; window.cabinetId = cabinetId; window.cabinetId = cabinetId;
     if (!cabinetId) { document.getElementById('cabinetContent').innerHTML = '<p>Шкаф не найден</p>'; return; }
     function esc(str) { var d=document.createElement('div'); d.textContent=str||''; return d.innerHTML; }
 
@@ -176,16 +176,7 @@
         });
     }
 
-    function loadBlocksOld() {
-        fetch('/api/cabinets/' + window.cabinetId + '/blocks').then(function(r){return r.json();}).then(function(data){
-            var c = document.getElementById('cabinetBlocks');
-            if (!data.length) { c.innerHTML = '<p>Нет компонентов</p>'; return; }
-            var h = '<div class="table-container"><table class="data-table"><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Кол-во</th><th></th></tr>';
-            data.forEach(function(b){h+='<tr><td>'+esc(b.type_name||'')+'</td><td>'+esc(b.name)+'</td><td>'+esc(b.article||'')+'</td><td>'+b.quantity+'</td><td><button class="btn btn-sm btn-delete" onclick="delBlock('+b.id+')">🗑️</button></td></tr>';});
-            h += '</table></div>'; c.innerHTML = h;
-        });
-    }
-
+    
     window.openBlockModal = function() {
         if (typeof BlockTemplateModal !== 'undefined') {
             BlockTemplateModal.open(function(blockId){
@@ -213,6 +204,25 @@
         fetch('/api/systems/link/'+linkId, {method:'DELETE'}).then(function(){loadSystemComponents();});
     };
     
-    window.pageInit = function() {};
+    
+    window.editBlockQuantity = function(blockId) {
+        var newQty = prompt('Новое количество:');
+        if (!newQty || isNaN(newQty) || parseInt(newQty) < 1) return;
+        fetch('/api/cabinets/' + window.cabinetId + '/blocks/' + blockId, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({quantity: parseInt(newQty)})
+        })
+        .then(function(r){
+            if(!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+            // Обновляем таблицу через HTML-фрагмент
+            fetch('/api/cabinets/' + window.cabinetId + '/blocks/html')
+                .then(function(r){ return r.text(); })
+                .then(function(html){ document.getElementById('cabinetBlocks').innerHTML = html; });
+        })
+        .catch(function(e){ alert(e.message); });
+    };
+
+window.pageInit = function() {};
 })();
 </script>
