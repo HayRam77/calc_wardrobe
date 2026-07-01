@@ -1,0 +1,127 @@
+<script>
+// Универсальное модальное окно для добавления/редактирования материала
+window.MaterialModal = {
+    _cb: null,
+    _modal: null,
+
+    open: function(callback, preselectedId) {
+        this._cb = callback;
+        var self = this;
+        var isEdit = !!preselectedId;
+
+        // Создаём модальное окно если его нет
+        if (!this._modal) {
+            var m = document.createElement('div');
+            m.className = 'modal';
+            m.style.cssText = 'z-index:4000;';
+            m.innerHTML = '<div class="modal-content" style="max-width:600px;max-height:90vh;overflow-y:auto;">' +
+                '<span class="modal-close">&times;</span>' +
+                '<h3 id="materialModalTitle">Добавить материал</h3>' +
+                '<form id="materialForm">' +
+                '<div class="form-group"><label>Артикул</label><input type="text" id="materialArticle"></div>' +
+                '<div class="form-group"><label>Название *</label><input type="text" id="materialName" required></div>' +
+                '<div class="form-group"><label>Производитель</label><input type="text" id="materialManufacturer"></div>' +
+                '<div class="form-group"><label>Описание</label><textarea id="materialDescription" rows="2"></textarea></div>' +
+                '<div class="form-row" style="display:flex;gap:10px;">' +
+                '<div class="form-group" style="flex:1;"><label>Ед. изм.</label><input type="text" id="materialUnit" placeholder="шт, м, кг..."></div>' +
+                '<div class="form-group" style="flex:1;"><label>Цена, руб.</label><input type="number" id="materialPrice" step="0.01"></div>' +
+                '</div>' +
+                '<div id="materialError" class="error-message" style="display:none;"></div>' +
+                '<div class="form-actions">' +
+                '<button type="button" class="btn btn-secondary cancel-material-btn">Отмена</button>' +
+                '<button type="submit" class="btn btn-primary">Сохранить</button>' +
+                '</div>' +
+                '</form>' +
+                '</div>';
+            document.body.appendChild(m);
+            m.querySelector('.modal-close').addEventListener('click', function(){ m.style.display = 'none'; });
+            m.querySelector('.cancel-material-btn').addEventListener('click', function(){ m.style.display = 'none'; });
+            m.addEventListener('click', function(e){ if(e.target === m) m.style.display = 'none'; });
+            this._modal = m;
+        }
+
+        this._modal.style.display = 'block';
+        var form = document.getElementById('materialForm');
+        var title = document.getElementById('materialModalTitle');
+        var errorDiv = document.getElementById('materialError');
+
+        // Очищаем форму
+        document.getElementById('materialArticle').value = '';
+        document.getElementById('materialName').value = '';
+        document.getElementById('materialManufacturer').value = '';
+        document.getElementById('materialDescription').value = '';
+        document.getElementById('materialUnit').value = '';
+        document.getElementById('materialPrice').value = '';
+        errorDiv.style.display = 'none';
+
+        title.textContent = isEdit ? 'Редактировать материал' : 'Добавить материал';
+
+        // Если редактирование — загружаем данные
+        if (isEdit) {
+            fetch('/api/materials/' + preselectedId)
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    document.getElementById('materialArticle').value = data.article || '';
+                    document.getElementById('materialName').value = data.name || '';
+                    document.getElementById('materialManufacturer').value = data.manufacturer || '';
+                    document.getElementById('materialDescription').value = data.description || '';
+                    document.getElementById('materialUnit').value = data.unit || '';
+                    document.getElementById('materialPrice').value = data.price || '';
+                })
+                .catch(function(err){
+                    console.error(err);
+                    errorDiv.textContent = 'Ошибка загрузки данных';
+                    errorDiv.style.display = 'block';
+                });
+        }
+
+        // Обработка отправки формы
+        form.onsubmit = function(e) {
+            e.preventDefault();
+            var name = document.getElementById('materialName').value.trim();
+            if (!name) {
+                errorDiv.textContent = 'Введите название';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            var body = {
+                article: document.getElementById('materialArticle').value.trim() || null,
+                name: name,
+                manufacturer: document.getElementById('materialManufacturer').value.trim() || null,
+                description: document.getElementById('materialDescription').value.trim() || null,
+                unit: document.getElementById('materialUnit').value.trim() || null,
+                price: parseFloat(document.getElementById('materialPrice').value) || null
+            };
+
+            var url = isEdit ? '/api/materials/' + preselectedId : '/api/materials';
+            var method = isEdit ? 'PUT' : 'POST';
+
+            fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+            .then(function(r){
+                if (!r.ok) return r.json().then(function(d){ throw new Error(d.message || 'Ошибка'); });
+                return r.json();
+            })
+            .then(function(data){
+                self._modal.style.display = 'none';
+                if (self._cb) self._cb(data.id);
+            })
+            .catch(function(err){
+                errorDiv.textContent = err.message;
+                errorDiv.style.display = 'block';
+            });
+        };
+    },
+
+    // Вспомогательный метод для выбора материала (возвращает ID)
+    select: function(callback) {
+        this.open(function(id) {
+            if (callback) callback(id);
+        });
+    }
+};
+</script>

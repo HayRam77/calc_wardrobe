@@ -13,6 +13,7 @@ const systemComponentsRouter = require('./routes/systemComponents');
 const systemComponentTypesRouter = require('./routes/systemComponentTypes');
 const systemParametersRouter = require('./routes/systemParameters');
 const systemsRouter = require('./routes/systems');
+const materialsRouter = require('./routes/materials');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -39,6 +40,7 @@ app.use('/api/system-components', systemComponentsRouter);
 app.use('/api/system-component-types', systemComponentTypesRouter);
 app.use('/api/system-parameters', systemParametersRouter);
 app.use('/api/systems', systemsRouter);
+app.use('/api/materials', materialsRouter);
 
 // SPA fallback
 app.get('*', (req, res) => {

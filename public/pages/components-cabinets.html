@@ -45,49 +45,336 @@
 
 <script>
 (function() {
-    var user = JSON.parse(localStorage.getItem('user') || '{}');
+    var user = JSON.parse(localStorage.getItem('user') || 'null');
     var isAdmin = user && user.role === 'admin';
-    function esc(s) { var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+    var typesLoaded = false, paramsLoaded = false;
+    var isLoading = false;
+    
+    function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+    
+    function setPermissions() {
+        var ids = ['addTemplateBtn','exportTemplatesBtn','importTemplatesBtn','addTypeBtn','exportTypesBtn','importTypesBtn','addParamBtn','exportParamsBtn','importParamsBtn','templatesActionsCol','typesActionsCol','paramsActionsCol'];
+        ids.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = isAdmin ? '' : 'none';
+        });
+    }
+    setPermissions();
 
-    document.querySelectorAll('.tab-btn').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.tab-btn').forEach(function(x){x.classList.remove('active');});document.querySelectorAll('.tab-content').forEach(function(x){x.classList.remove('active');});b.classList.add('active');document.getElementById('tab-'+b.dataset.tab).classList.add('active');if(b.dataset.tab==='types')loadTypes();if(b.dataset.tab==='params')loadParams();});});
-    function setAdmin(){var d=isAdmin?'':'none';['addTemplateBtn','exportTemplatesBtn','importTemplatesBtn','addTypeBtn','exportTypesBtn','importTypesBtn','addParamBtn','exportParamsBtn','importParamsBtn','templatesActionsCol','typesActionsCol','paramsActionsCol'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=d;});}
-    setAdmin();
+    // Вкладки с защитой от повторных запросов
+    document.querySelectorAll('.tab-btn').forEach(function(b) {
+        b.addEventListener('click', function() {
+            // Защита от повторных кликов
+            if (isLoading) return;
+            
+            document.querySelectorAll('.tab-btn').forEach(function(x) { x.classList.remove('active'); });
+            document.querySelectorAll('.tab-content').forEach(function(x) { x.classList.remove('active'); });
+            this.classList.add('active');
+            document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+            
+            // Загружаем только если ещё не загружено
+            if (this.dataset.tab === 'types' && !typesLoaded) {
+                isLoading = true;
+                loadTypes();
+                typesLoaded = true;
+                setTimeout(function() { isLoading = false; }, 300);
+            }
+            if (this.dataset.tab === 'params' && !paramsLoaded) {
+                isLoading = true;
+                loadParams();
+                paramsLoaded = true;
+                setTimeout(function() { isLoading = false; }, 300);
+            }
+        });
+    });
 
-    async function loadTemplates(){var t=document.getElementById('templatesBody');try{var r=await fetch('/api/block-templates');var d=await r.json();if(!d.length){t.innerHTML='<tr><td colspan="10">Нет компонентов</td></tr>';return;}var h='';d.forEach(function(x){h+='<tr><td>'+esc(x.type_name||'')+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.manufacturer_name||'')+'</td><td>'+esc(x.article||'')+'</td><td>'+(x.price||'')+'</td><td>'+(x.weight_grams||'')+'</td><td>'+(x.power_watts||'')+'</td><td>'+esc(x.ln||'')+'</td><td>'+(x.url?'<a href="'+esc(x.url)+'" target="_blank">🔗</a>':'')+'</td>';if(isAdmin)h+='<td><button class="btn btn-sm btn-edit" data-id="'+x.id+'">✏️</button> <button class="btn btn-sm btn-delete" data-id="'+x.id+'">🗑️</button></td>';h+='</tr>';});t.innerHTML=h;t.querySelectorAll('.btn-edit').forEach(function(b){b.addEventListener('click',function(){openTemplateModal(this.dataset.id);});});t.querySelectorAll('.btn-delete').forEach(function(b){b.addEventListener('click',function(){if(confirm('Удалить?'))deleteTemplate(this.dataset.id);});});}catch(e){t.innerHTML='<tr><td colspan="10">Ошибка загрузки</td></tr>';}}
-    async function deleteTemplate(id){await fetch('/api/block-templates/'+id,{method:'DELETE'});loadTemplates();}
+    // Закрытие модалок
+    document.querySelectorAll('.modal .modal-close').forEach(function(el) {
+        el.addEventListener('click', function() {
+            this.closest('.modal').classList.remove('active');
+        });
+    });
 
-    var tModal=document.getElementById('templateModal');
-    document.querySelector('#templateModal .modal-close').addEventListener('click',function(){tModal.classList.remove('active');});
-
-    async function openTemplateModal(id){
-        if (typeof BlockTemplateModal !== 'undefined') {
-            BlockTemplateModal.open(function(newId){ if(newId){ tModal.classList.remove('active'); loadTemplates(); } }, id);
-        } else { setTimeout(function(){ openTemplateModal(id); }, 200); }
+    // ==================== КОМПОНЕНТЫ ====================
+    async function loadTemplates() {
+        var tbody = document.getElementById('templatesBody');
+        try {
+            var res = await fetch('/api/block-templates');
+            var data = await res.json();
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="10">Нет компонентов</td></tr>';
+                return;
+            }
+            var html = '';
+            data.forEach(function(item) {
+                html += '<tr>';
+                html += '<td>' + esc(item.type_name || '') + '</td>';
+                html += '<td>' + esc(item.name) + '</td>';
+                html += '<td>' + esc(item.manufacturer_name || '') + '</td>';
+                html += '<td>' + esc(item.article || '') + '</td>';
+                html += '<td>' + (item.price || '') + '</td>';
+                html += '<td>' + (item.weight_grams || '') + '</td>';
+                html += '<td>' + (item.power_watts || '') + '</td>';
+                html += '<td>' + esc(item.ln || '') + '</td>';
+                html += '<td>' + (item.url ? '<a href="' + esc(item.url) + '" target="_blank">🔗</a>' : '') + '</td>';
+                if (isAdmin) {
+                    html += '<td><button class="btn btn-sm btn-edit" data-id="' + item.id + '">✏️</button> <button class="btn btn-sm btn-delete" data-id="' + item.id + '">🗑️</button></td>';
+                }
+                html += '</tr>';
+            });
+            tbody.innerHTML = html;
+            
+            if (isAdmin) {
+                tbody.querySelectorAll('.btn-edit').forEach(function(btn) {
+                    btn.addEventListener('click', function() { openTemplateModal(this.dataset.id); });
+                });
+                tbody.querySelectorAll('.btn-delete').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        if (confirm('Удалить?')) deleteTemplate(this.dataset.id);
+                    });
+                });
+            }
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="10">Ошибка загрузки</td></tr>';
+        }
     }
 
-    document.getElementById('addTemplateBtn').addEventListener('click',function(){openTemplateModal();});
-    document.getElementById('exportTemplatesBtn').addEventListener('click',async function(){var r=await fetch('/api/block-templates/export');var b=await r.blob();var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='block_templates.xlsx';a.click();});
-    document.getElementById('importTemplatesBtn').addEventListener('click',function(){document.getElementById('importTemplatesFile').click();});
-    document.getElementById('importTemplatesFile').addEventListener('change',async function(){var fd=new FormData();fd.append('file',this.files[0]);await fetch('/api/block-templates/import',{method:'POST',body:fd});loadTemplates();this.value='';});
+    async function deleteTemplate(id) {
+        await fetch('/api/block-templates/' + id, { method: 'DELETE' });
+        loadTemplates();
+    }
 
-    async function loadTypes(){var t=document.getElementById('typesBody');try{var r=await fetch('/api/component-types');var d=await r.json();if(!d.length){t.innerHTML='<tr><td colspan="4">Нет типов</td></tr>';return;}var h='';d.forEach(function(x){h+='<tr><td>'+x.id+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.description||'')+'</td>';if(isAdmin)h+='<td><button class="btn btn-sm btn-edit" data-id="'+x.id+'">✏️</button> <button class="btn btn-sm btn-delete" data-id="'+x.id+'">🗑️</button></td>';h+='</tr>';});t.innerHTML=h;t.querySelectorAll('.btn-edit').forEach(function(b){b.addEventListener('click',function(){openTypeModal(this.dataset.id);});});t.querySelectorAll('.btn-delete').forEach(function(b){b.addEventListener('click',function(){fetch('/api/component-types/'+this.dataset.id,{method:'DELETE'}).then(loadTypes);});});}catch(e){t.innerHTML='<tr><td colspan="4">Ошибка загрузки</td></tr>';}}
-    var typeModal=document.getElementById('typeModal');
-    document.querySelector('#typeModal .modal-close').addEventListener('click',function(){typeModal.classList.remove('active');});
-    document.getElementById('addTypeBtn').addEventListener('click',function(){openTypeModal();});
-    function openTypeModal(id){document.getElementById('typeForm').innerHTML='<input type="hidden" id="typeId" value="'+(id||'')+'"><div class="form-group"><label>Название *</label><input type="text" id="typeName" required></div><div class="form-group"><label>Описание</label><textarea id="typeDescription" rows="2"></textarea></div><div class="form-actions"><button type="button" class="btn btn-secondary" onclick="document.getElementById(\'typeModal\').style.display=\'none\'">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';typeModal.classList.add('active');if(id){fetch('/api/component-types').then(function(r){return r.json();}).then(function(d){var t=d.find(function(x){return x.id==id;});if(t){document.getElementById('typeName').value=t.name;document.getElementById('typeDescription').value=t.description||'';}});}document.getElementById('typeForm').onsubmit=async function(e){e.preventDefault();var id=document.getElementById('typeId').value;var body={name:document.getElementById('typeName').value.trim(),description:document.getElementById('typeDescription').value.trim()};var url=id?'/api/component-types/'+id:'/api/component-types';var res=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(res.ok){typeModal.classList.remove('active');loadTypes();}};}
-    document.getElementById('exportTypesBtn').addEventListener('click',async function(){var r=await fetch('/api/component-types/export');var b=await r.blob();var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='component_types.xlsx';a.click();});
-    document.getElementById('importTypesBtn').addEventListener('click',function(){document.getElementById('importTypesFile').click();});
-    document.getElementById('importTypesFile').addEventListener('change',async function(){var fd=new FormData();fd.append('file',this.files[0]);await fetch('/api/component-types/import',{method:'POST',body:fd});loadTypes();this.value='';});
+    function openTemplateModal(id) {
+        if (typeof BlockTemplateModal !== 'undefined') {
+            BlockTemplateModal.open(function(newId) {
+                if (newId) { document.getElementById('templateModal').classList.remove('active'); loadTemplates(); }
+            }, id);
+        } else {
+            setTimeout(function() { openTemplateModal(id); }, 200);
+        }
+    }
 
-    async function loadParams(){var t=document.getElementById('paramsBody');try{var r=await fetch('/api/parameters');var d=await r.json();if(!d.length){t.innerHTML='<tr><td colspan="4">Нет параметров</td></tr>';return;}var h='';d.forEach(function(p){h+='<tr><td>'+p.id+'</td><td>'+esc(p.name)+'</td><td>'+esc(p.description||'')+'</td>';if(isAdmin)h+='<td><button class="btn btn-sm btn-edit" data-id="'+p.id+'">✏️</button> <button class="btn btn-sm btn-delete" data-id="'+p.id+'">🗑️</button></td>';h+='</tr>';});t.innerHTML=h;t.querySelectorAll('.btn-edit').forEach(function(b){b.addEventListener('click',function(){openParamModal(this.dataset.id);});});t.querySelectorAll('.btn-delete').forEach(function(b){b.addEventListener('click',function(){fetch('/api/parameters/'+this.dataset.id,{method:'DELETE'}).then(loadParams);});});}catch(e){t.innerHTML='<tr><td colspan="4">Ошибка загрузки</td></tr>';}}
-    var paramModal=document.getElementById('paramModal');
-    document.querySelector('#paramModal .modal-close').addEventListener('click',function(){paramModal.classList.remove('active');});
-    document.getElementById('addParamBtn').addEventListener('click',function(){openParamModal();});
-    function openParamModal(id){document.getElementById('paramForm').innerHTML='<input type="hidden" id="paramId" value="'+(id||'')+'"><div class="form-group"><label>Название *</label><input type="text" id="paramName" required></div><div class="form-group"><label>Описание</label><textarea id="paramDescription" rows="2"></textarea></div><div class="form-actions"><button type="button" class="btn btn-secondary" onclick="document.getElementById(\'paramModal\').style.display=\'none\'">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';paramModal.classList.add('active');if(id){fetch('/api/parameters').then(function(r){return r.json();}).then(function(d){var p=d.find(function(x){return x.id==id;});if(p){document.getElementById('paramName').value=p.name;document.getElementById('paramDescription').value=p.description||'';}});}document.getElementById('paramForm').onsubmit=async function(e){e.preventDefault();var id=document.getElementById('paramId').value;var body={name:document.getElementById('paramName').value.trim(),description:document.getElementById('paramDescription').value.trim()};var url=id?'/api/parameters/'+id:'/api/parameters';var res=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(res.ok){paramModal.classList.remove('active');loadParams();}};}
-    document.getElementById('exportParamsBtn').addEventListener('click',async function(){var r=await fetch('/api/parameters/export');var b=await r.blob();var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='parameters.xlsx';a.click();});
-    document.getElementById('importParamsBtn').addEventListener('click',function(){document.getElementById('importParamsFile').click();});
-    document.getElementById('importParamsFile').addEventListener('change',async function(){var fd=new FormData();fd.append('file',this.files[0]);await fetch('/api/parameters/import',{method:'POST',body:fd});loadParams();this.value='';});
+    document.getElementById('addTemplateBtn').addEventListener('click', function() { openTemplateModal(); });
+    document.getElementById('exportTemplatesBtn').addEventListener('click', async function() {
+        var r = await fetch('/api/block-templates/export');
+        var b = await r.blob();
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = 'block_templates.xlsx';
+        a.click();
+    });
+    document.getElementById('importTemplatesBtn').addEventListener('click', function() {
+        document.getElementById('importTemplatesFile').click();
+    });
+    document.getElementById('importTemplatesFile').addEventListener('change', async function() {
+        var fd = new FormData();
+        fd.append('file', this.files[0]);
+        await fetch('/api/block-templates/import', { method: 'POST', body: fd });
+        loadTemplates();
+        this.value = '';
+    });
 
-    loadTemplates();loadTypes();loadParams();
+    // ==================== ТИПЫ ====================
+    async function loadTypes() {
+        var tbody = document.getElementById('typesBody');
+        try {
+            var res = await fetch('/api/component-types');
+            var data = await res.json();
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="4">Нет типов</td></tr>';
+                return;
+            }
+            var html = '';
+            data.forEach(function(item) {
+                html += '<tr>';
+                html += '<td>' + item.id + '</td>';
+                html += '<td>' + esc(item.name) + '</td>';
+                html += '<td>' + esc(item.description || '') + '</td>';
+                if (isAdmin) {
+                    html += '<td><button class="btn btn-sm btn-edit" data-id="' + item.id + '">✏️</button> <button class="btn btn-sm btn-delete" data-id="' + item.id + '">🗑️</button></td>';
+                }
+                html += '</tr>';
+            });
+            tbody.innerHTML = html;
+            
+            if (isAdmin) {
+                tbody.querySelectorAll('.btn-edit').forEach(function(btn) {
+                    btn.addEventListener('click', function() { openTypeModal(this.dataset.id); });
+                });
+                tbody.querySelectorAll('.btn-delete').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        if (confirm('Удалить?')) {
+                            fetch('/api/component-types/' + this.dataset.id, { method: 'DELETE' }).then(loadTypes);
+                        }
+                    });
+                });
+            }
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="4">Ошибка загрузки</td></tr>';
+        }
+    }
+
+    function openTypeModal(id) {
+        var modal = document.getElementById('typeModal');
+        var form = document.getElementById('typeForm');
+        var title = document.getElementById('typeModalTitle');
+        
+        title.textContent = id ? 'Редактировать тип' : 'Добавить тип';
+        form.innerHTML = '<input type="hidden" id="typeId" value="' + (id || '') + '">' +
+            '<div class="form-group"><label>Название *</label><input type="text" id="typeName" required></div>' +
+            '<div class="form-group"><label>Описание</label><textarea id="typeDescription" rows="2"></textarea></div>' +
+            '<div class="form-actions"><button type="button" class="btn btn-secondary" onclick="document.getElementById(\'typeModal\').classList.remove(\'active\')">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';
+        modal.classList.add('active');
+        
+        if (id) {
+            fetch('/api/component-types').then(function(r) { return r.json(); }).then(function(data) {
+                var item = data.find(function(x) { return x.id == id; });
+                if (item) {
+                    document.getElementById('typeName').value = item.name;
+                    document.getElementById('typeDescription').value = item.description || '';
+                }
+            });
+        }
+        
+        form.onsubmit = async function(e) {
+            e.preventDefault();
+            var typeId = document.getElementById('typeId').value;
+            var body = {
+                name: document.getElementById('typeName').value.trim(),
+                description: document.getElementById('typeDescription').value.trim()
+            };
+            var url = typeId ? '/api/component-types/' + typeId : '/api/component-types';
+            await fetch(url, {
+                method: typeId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            modal.classList.remove('active');
+            loadTypes();
+        };
+    }
+
+    document.getElementById('addTypeBtn').addEventListener('click', function() { openTypeModal(); });
+    document.getElementById('exportTypesBtn').addEventListener('click', async function() {
+        var r = await fetch('/api/component-types/export');
+        var b = await r.blob();
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = 'component_types.xlsx';
+        a.click();
+    });
+    document.getElementById('importTypesBtn').addEventListener('click', function() {
+        document.getElementById('importTypesFile').click();
+    });
+    document.getElementById('importTypesFile').addEventListener('change', async function() {
+        var fd = new FormData();
+        fd.append('file', this.files[0]);
+        await fetch('/api/component-types/import', { method: 'POST', body: fd });
+        loadTypes();
+        this.value = '';
+    });
+
+    // ==================== ПАРАМЕТРЫ ====================
+    async function loadParams() {
+        var tbody = document.getElementById('paramsBody');
+        try {
+            var res = await fetch('/api/parameters');
+            var data = await res.json();
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="4">Нет параметров</td></tr>';
+                return;
+            }
+            var html = '';
+            data.forEach(function(item) {
+                html += '<tr>';
+                html += '<td>' + item.id + '</td>';
+                html += '<td>' + esc(item.name) + '</td>';
+                html += '<td>' + esc(item.description || '') + '</td>';
+                if (isAdmin) {
+                    html += '<td><button class="btn btn-sm btn-edit" data-id="' + item.id + '">✏️</button> <button class="btn btn-sm btn-delete" data-id="' + item.id + '">🗑️</button></td>';
+                }
+                html += '</tr>';
+            });
+            tbody.innerHTML = html;
+            
+            if (isAdmin) {
+                tbody.querySelectorAll('.btn-edit').forEach(function(btn) {
+                    btn.addEventListener('click', function() { openParamModal(this.dataset.id); });
+                });
+                tbody.querySelectorAll('.btn-delete').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        if (confirm('Удалить?')) {
+                            fetch('/api/parameters/' + this.dataset.id, { method: 'DELETE' }).then(loadParams);
+                        }
+                    });
+                });
+            }
+        } catch(e) {
+            tbody.innerHTML = '<tr><td colspan="4">Ошибка загрузки</td></tr>';
+        }
+    }
+
+    function openParamModal(id) {
+        var modal = document.getElementById('paramModal');
+        var form = document.getElementById('paramForm');
+        var title = document.getElementById('paramModalTitle');
+        
+        title.textContent = id ? 'Редактировать параметр' : 'Добавить параметр';
+        form.innerHTML = '<input type="hidden" id="paramId" value="' + (id || '') + '">' +
+            '<div class="form-group"><label>Название *</label><input type="text" id="paramName" required></div>' +
+            '<div class="form-group"><label>Описание</label><textarea id="paramDescription" rows="2"></textarea></div>' +
+            '<div class="form-actions"><button type="button" class="btn btn-secondary" onclick="document.getElementById(\'paramModal\').classList.remove(\'active\')">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';
+        modal.classList.add('active');
+        
+        if (id) {
+            fetch('/api/parameters').then(function(r) { return r.json(); }).then(function(data) {
+                var item = data.find(function(x) { return x.id == id; });
+                if (item) {
+                    document.getElementById('paramName').value = item.name;
+                    document.getElementById('paramDescription').value = item.description || '';
+                }
+            });
+        }
+        
+        form.onsubmit = async function(e) {
+            e.preventDefault();
+            var paramId = document.getElementById('paramId').value;
+            var body = {
+                name: document.getElementById('paramName').value.trim(),
+                description: document.getElementById('paramDescription').value.trim()
+            };
+            var url = paramId ? '/api/parameters/' + paramId : '/api/parameters';
+            await fetch(url, {
+                method: paramId ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            modal.classList.remove('active');
+            loadParams();
+        };
+    }
+
+    document.getElementById('addParamBtn').addEventListener('click', function() { openParamModal(); });
+    document.getElementById('exportParamsBtn').addEventListener('click', async function() {
+        var r = await fetch('/api/parameters/export');
+        var b = await r.blob();
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = 'parameters.xlsx';
+        a.click();
+    });
+    document.getElementById('importParamsBtn').addEventListener('click', function() {
+        document.getElementById('importParamsFile').click();
+    });
+    document.getElementById('importParamsFile').addEventListener('change', async function() {
+        var fd = new FormData();
+        fd.append('file', this.files[0]);
+        await fetch('/api/parameters/import', { method: 'POST', body: fd });
+        loadParams();
+        this.value = '';
+    });
+
+    // Загрузка при инициализации
+    loadTemplates();
 })();
 </script>

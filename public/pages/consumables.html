@@ -1,0 +1,134 @@
+<div class="page-content">
+    <div style="margin-bottom:10px;">
+        <button id="addConsumableBtn" class="btn btn-primary" style="display:none;">Добавить материал</button>
+        <button id="exportBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
+        <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls">
+        <button id="importBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
+    </div>
+    <div id="materialsTable" style="margin-top:15px;"></div>
+</div>
+
+<script>
+(function() {
+    var user = JSON.parse(localStorage.getItem('user') || 'null');
+    var isAdmin = user && user.role === 'admin';
+
+    if (isAdmin) {
+        document.getElementById('addConsumableBtn').style.display = '';
+        document.getElementById('exportBtn').style.display = '';
+        document.getElementById('importBtn').style.display = '';
+    }
+
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = s || '';
+        return d.innerHTML;
+    }
+
+    function formatPrice(price) {
+        if (price === null || price === undefined || price === '') return '';
+        var num = parseFloat(price);
+        if (isNaN(num)) return '';
+        return num.toFixed(2);
+    }
+
+    async function loadMaterials() {
+        var container = document.getElementById('materialsTable');
+        try {
+            var res = await fetch('/api/materials');
+            var data = await res.json();
+            if (!data.length) {
+                container.innerHTML = '<p>Нет материалов. Добавьте первый материал!</p>';
+                return;
+            }
+            var html = '<div class="table-container"><table class="data-table"><thead><tr>' +
+                '<th>ID</th><th>Артикул</th><th>Название</th><th>Производитель</th>' +
+                '<th>Описание</th><th>Ед. изм.</th><th>Цена, руб.</th>';
+            if (isAdmin) html += '<th>Действия</th>';
+            html += '</tr></thead><tbody>';
+
+            data.forEach(function(item) {
+                var price = formatPrice(item.price);
+                html += '<tr>' +
+                    '<td>' + item.id + '</td>' +
+                    '<td>' + esc(item.article || '') + '</td>' +
+                    '<td>' + esc(item.name) + '</td>' +
+                    '<td>' + esc(item.manufacturer || '') + '</td>' +
+                    '<td>' + esc(item.description || '') + '</td>' +
+                    '<td>' + esc(item.unit || '') + '</td>' +
+                    '<td>' + price + '</td>';
+                if (isAdmin) {
+                    html += '<td>' +
+                        '<button class="btn btn-sm btn-edit" data-id="' + item.id + '">✏️</button> ' +
+                        '<button class="btn btn-sm btn-delete" data-id="' + item.id + '">🗑️</button>' +
+                        '</td>';
+                }
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+
+            container.querySelectorAll('.btn-edit').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    if (typeof MaterialModal !== 'undefined') {
+                        MaterialModal.open(function(id) {
+                            if (id) loadMaterials();
+                        }, this.dataset.id);
+                    } else {
+                        console.error('MaterialModal не загружен');
+                        alert('Модальное окно не загружено. Обновите страницу.');
+                    }
+                });
+            });
+
+            container.querySelectorAll('.btn-delete').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    if (confirm('Удалить материал?')) {
+                        fetch('/api/materials/' + this.dataset.id, { method: 'DELETE' })
+                            .then(function() { loadMaterials(); })
+                            .catch(function(e) { alert(e.message); });
+                    }
+                });
+            });
+
+        } catch(e) {
+            container.innerHTML = '<p style="color:red;">Ошибка загрузки материалов</p>';
+            console.error(e);
+        }
+    }
+
+    document.getElementById('addConsumableBtn').addEventListener('click', function() {
+        if (typeof MaterialModal !== 'undefined') {
+            MaterialModal.open(function(id) {
+                if (id) loadMaterials();
+            });
+        } else {
+            alert('Модальное окно не загружено. Подождите...');
+            console.error('MaterialModal не загружен');
+        }
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', async function() {
+        var r = await fetch('/api/materials/export');
+        var b = await r.blob();
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = 'materials.xlsx';
+        a.click();
+    });
+
+    document.getElementById('importBtn').addEventListener('click', function() {
+        document.getElementById('importFile').click();
+    });
+    document.getElementById('importFile').addEventListener('change', async function() {
+        var fd = new FormData();
+        fd.append('file', this.files[0]);
+        await fetch('/api/materials/import', { method: 'POST', body: fd });
+        loadMaterials();
+        this.value = '';
+    });
+
+    loadMaterials();
+})();
+</script>

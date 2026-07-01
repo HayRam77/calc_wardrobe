@@ -64,433 +64,322 @@
 </div>
 
 <script>
-var currentUser = JSON.parse(localStorage.getItem('user') || 'null');
-var isAdmin = currentUser && currentUser.role === 'admin';
+(function() {
+    var currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+    var isAdmin = currentUser && currentUser.role === 'admin';
 
-function applyPermissions() {
-    var btns = ['addComponentBtn','exportComponentsBtn','importComponentsBtn','addTypeBtn','exportTypesBtn','importTypesBtn','addParamBtn','exportParamsBtn','importParamsBtn'];
-    var cols = ['componentsActionsCol','typesActionsCol','paramsActionsCol'];
-    btns.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = isAdmin ? '' : 'none'; });
-    cols.forEach(function(id) { var el = document.getElementById(id); if (el) el.style.display = isAdmin ? '' : 'none'; });
-}
-
-function initTabs() {
-    document.querySelectorAll('.tab-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
-            document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
-            btn.classList.add('active');
-            var target = document.getElementById('tab-' + btn.dataset.tab);
-            if (target) target.classList.add('active');
-            if (btn.dataset.tab === 'types') loadTypes();
-            if (btn.dataset.tab === 'params') loadParams();
+    function applyPermissions() {
+        var btns = ['addComponentBtn','exportComponentsBtn','importComponentsBtn','addTypeBtn','exportTypesBtn','importTypesBtn','addParamBtn','exportParamsBtn','importParamsBtn'];
+        var cols = ['componentsActionsCol','typesActionsCol','paramsActionsCol'];
+        btns.forEach(function(id) { 
+            var el = document.getElementById(id); 
+            if (el) el.style.display = isAdmin ? '' : 'none'; 
         });
+        cols.forEach(function(id) { 
+            var el = document.getElementById(id); 
+            if (el) el.style.display = isAdmin ? '' : 'none'; 
+        });
+    }
+
+    function initTabs() {
+        var typesLoaded = false, paramsLoaded = false;
+        document.querySelectorAll('.tab-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+                document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+                btn.classList.add('active');
+                var target = document.getElementById('tab-' + btn.dataset.tab);
+                if (target) target.classList.add('active');
+                if (btn.dataset.tab === 'types' && !typesLoaded) { 
+                    loadTypes(); 
+                    typesLoaded = true; 
+                }
+                if (btn.dataset.tab === 'params' && !paramsLoaded) { 
+                    loadParams(); 
+                    paramsLoaded = true; 
+                }
+            });
+        });
+    }
+
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = s || '';
+        return d.innerHTML;
+    }
+
+    var modal = document.getElementById('modal');
+    var modalTitle = document.getElementById('modalTitle');
+    var modalForm = document.getElementById('modalForm');
+
+    document.querySelector('.close-modal').addEventListener('click', function() { 
+        if (modal) modal.style.display = 'none'; 
     });
-}
 
-var modal = document.getElementById('modal');
-var modalTitle = document.getElementById('modalTitle');
-var modalForm = document.getElementById('modalForm');
-document.querySelector('.close-modal').addEventListener('click', function() { modal.style.display = 'none'; });
-window.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
-function closeModal() { modal.style.display = 'none'; modalForm.innerHTML = ''; }
-function showModal(title, html) { modalTitle.textContent = title; modalForm.innerHTML = html; document.querySelector('#modal .close-modal').style.display = title === 'Добавить компонент систем' ? 'none' : ''; modal.style.display = 'block'; }
-function escapeHtml(text) { return String(text).replace(/[&<>"]/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]; }); }
+    window.addEventListener('click', function(e) { 
+        if (e.target === modal) modal.style.display = 'none'; 
+    });
 
-function loadManufacturersForSelect(selector, selectedId, callback) {
-    fetch('/api/manufacturers').then(function(res) { return res.json(); }).then(function(data) {
-        var sel = document.querySelector(selector);
-        if (!sel) return;
-        sel.innerHTML = '<option value="">-- выберите --</option>';
-        data.forEach(function(m) { var opt = document.createElement('option'); opt.value = m.id; opt.textContent = m.name; sel.appendChild(opt); });
-        if (selectedId) sel.value = selectedId;
-        if (callback) callback();
-    }).catch(function(e) { console.error(e); });
-}
-
-function createNewType(name, callback) {
-    fetch('/api/system-component-types', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})})
-    .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message||'Ошибка');});return r.json();})
-    .then(function(nt){ if(callback)callback(nt); })
-    .catch(function(e){alert('Ошибка создания типа: '+e.message);});
-}
-
-function createNewParam(name, value, callback) {
-    fetch('/api/system-parameters', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,value:value||''})})
-    .then(function(res) { if (!res.ok) return res.json().then(function(d) { throw new Error(d.message||'Ошибка'); }); return res.json(); })
-    .then(function(newParam) { if (callback) callback(newParam); })
-    .catch(function(err) { alert('Ошибка создания параметра: '+err.message); });
-}
-
-function buildParamSelect(selectedId) {
-    var html = '';
-    if (window._allParams && window._allParams.length > 0) {
-        html += '<optgroup label="Существующие параметры">';
-        window._allParams.forEach(function(p) { html += '<option value="'+p.id+'"'+(selectedId==p.id?' selected':'')+'>'+escapeHtml(p.name)+'</option>'; });
-        html += '</optgroup>';
+    function closeModal() { 
+        if (modal) {
+            modal.style.display = 'none'; 
+            if (modalForm) modalForm.innerHTML = ''; 
+        }
     }
-    html += '<optgroup label="Добавить"><option value="__new__"'+(selectedId?'':' selected')+'>+ новый параметр</option></optgroup>';
-    return html;
-}
 
-function buildTypeSelect(selectedId) {
-    var html = '';
-    if (window._allTypes && window._allTypes.length > 0) {
-        html += '<optgroup label="Существующие типы">';
-        window._allTypes.forEach(function(t) { html += '<option value="'+t.id+'"'+(selectedId==t.id?' selected':'')+'>'+escapeHtml(t.name)+'</option>'; });
-        html += '</optgroup>';
+    function showModal(title, html) { 
+        if (!modal || !modalTitle || !modalForm) return;
+        modalTitle.textContent = title; 
+        modalForm.innerHTML = html; 
+        modal.style.display = 'block'; 
     }
-    html += '<optgroup label="Добавить"><option value="__new__"'+(selectedId?'':' selected')+'>+ новый тип</option></optgroup>';
-    return html;
-}
 
-// ==================== КОМПОНЕНТЫ СИСТЕМ ====================
-function loadComponents() {
-    fetch('/api/system-components').then(function(res) { if (!res.ok) throw new Error('Ошибка'); return res.json(); }).then(function(data) {
+    // ==================== КОМПОНЕНТЫ ====================
+    function loadComponents() {
         var tbody = document.getElementById('componentsBody');
-        var empty = document.getElementById('componentsEmpty');
-        if (!data.length) { empty.style.display = ''; tbody.innerHTML = ''; }
-        else {
-            empty.style.display = 'none';
-            tbody.innerHTML = data.map(function(item) {
-                var paramsHtml = item.params && item.params.length ? item.params.map(function(p) { return escapeHtml(p.name) + (p.type ? ' ('+escapeHtml(p.type)+')' : '') + ': ' + escapeHtml(p.value); }).join('<br>') : '-';
-                return '<tr><td>'+item.id+'</td><td>'+escapeHtml(item.type_name||'')+'</td><td>'+escapeHtml(item.name)+'</td><td>'+escapeHtml(item.manufacturer_name||'')+'</td><td>'+escapeHtml(item.article||'')+'</td><td>'+escapeHtml(item.description||'')+'</td><td>'+paramsHtml+'</td><td class="actions-col" style="display:'+(isAdmin?'':'none')+'"><button class="btn btn-sm btn-edit" onclick="editSystemComponent('+item.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent('+item.id+')">🗑️</button></td></tr>';
-            }).join('');
-        }
-    }).catch(function() { document.getElementById('componentsBody').innerHTML = '<tr><td colspan="8" class="error">Ошибка загрузки</td></tr>'; });
-}
-
-document.getElementById('addComponentBtn').addEventListener('click', function() {
-    if (typeof SystemCompModal !== 'undefined') {
-        SystemCompModal.open(null, function() { loadComponents(); });
-    } else { setTimeout(function(){ document.getElementById('addComponentBtn').click(); }, 200); }
-});
-
-
-// ==================== СВЯЗИ С КОМПОНЕНТАМИ ШКАФА ====================
-var allBlocks = [];
-function createNewBlock(name, type_id, manufacturer_id, article, cb) {
-    fetch('/api/block-templates', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,type_id:type_id,manufacturer_id:manufacturer_id,article:article||null})})
-    .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message);});return r.json();})
-    .then(function(nb){if(cb)cb(nb);}).catch(function(e){alert(e.message);});
-}
-function loadAllBlocks() {
-    return fetch('/api/block-templates').then(function(r){return r.json();}).then(function(d){allBlocks = d;});
-}
-
-function loadLinkedBlocks(compId, container) {
-    container.innerHTML = '<p>Загрузка...</p>';
-    fetch('/api/system-components/'+compId+'/blocks').then(function(r){return r.json();}).then(function(data){
-        if (!data.length) { container.innerHTML = '<p>Нет связанных компонентов</p>'; return; }
-        var h = '<table class="data-table"><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Производитель</th><th>Кол-во</th><th></th></tr>';
-        data.forEach(function(l){
-            h += '<tr><td>'+escapeHtml(l.type_name||'')+'</td><td>'+escapeHtml(l.name)+'</td><td>'+escapeHtml(l.article||'')+'</td><td>'+escapeHtml(l.manufacturer_name||'')+'</td><td>'+l.quantity+'</td><td><button class="btn btn-sm btn-delete" onclick="deleteBlockLink('+compId+','+l.id+',this)">×</button></td></tr>';
-        });
-        h += '</table>';
-        container.innerHTML = h;
-    });
-}
-
-function addBlockLinkRow(compId, container) {
-    loadAllBlocks();
-    fetch('/api/component-types').then(function(r){return r.json();}).then(function(types){
-        var sel = document.querySelector('.new-type-select');
-        if (sel) { sel.innerHTML = '<option value="">-- тип --</option>'+types.map(function(t){return '<option value="'+t.id+'">'+escapeHtml(t.name)+'</option>';}).join('')+'<option value="__new__">+ новый тип</option>'; }
-    });
-    var isNew = !compId;
-    var row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px;margin-bottom:5px;';
-    var s = document.createElement('select'); s.style.flex='2';
-    s.innerHTML = '<option value="">-- выберите --</option>'+allBlocks.map(function(b){return '<option value="'+b.id+'">'+escapeHtml(b.type_name||'')+' '+escapeHtml(b.name)+' ('+escapeHtml(b.article||'')+')</option>';}).join('')+'<optgroup label="Добавить"><option value="__new__">+ новый компонент шкафа</option></optgroup>';
-    var q = document.createElement('input'); q.type='number'; q.value='1'; q.min='1'; q.style.flex='0.5'; q.placeholder='Кол-во';
-    var newName = document.createElement('input'); newName.type='text'; newName.placeholder='Название'; newName.style.cssText = 'flex:1;display:none;';
-    var newType = document.createElement('select'); newType.style.cssText = 'flex:1;display:none;'; newType.className = 'new-type-select';
-    newType.innerHTML = '<option value="">-- тип --</option>';
-    var newArt = document.createElement('input'); newArt.type='text'; newArt.placeholder='Артикул'; newArt.style.cssText = 'flex:1;display:none;';
-    var sv = document.createElement('button'); sv.type='button'; sv.textContent='✓'; sv.className='btn btn-sm btn-primary';
-    var dl = document.createElement('button'); dl.type='button'; dl.textContent='×'; dl.className='btn btn-sm btn-delete';
-    s.addEventListener('change', function(){
-        if (s.value === '__new__') { newName.style.display = ''; newType.style.display = ''; newArt.style.display = ''; newType.style.flex = '1'; }
-        else { newName.style.display = 'none'; newType.style.display = 'none'; newArt.style.display = 'none'; }
-    });
-    newType.addEventListener('change', function(){
-        if (newType.value === '__new__') {
-            var tn = prompt('Название нового типа:');
-            if (!tn) return;
-            fetch('/api/component-types', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:tn})})
-            .then(function(r){return r.json();}).then(function(nt){
-                var opt = document.createElement('option'); opt.value = nt.id; opt.textContent = nt.name;
-                newType.appendChild(opt); newType.value = nt.id;
+        if (!tbody) return;
+        
+        fetch('/api/system-components')
+            .then(function(res) { 
+                if (!res.ok) throw new Error('Ошибка'); 
+                return res.json(); 
+            })
+            .then(function(data) {
+                var empty = document.getElementById('componentsEmpty');
+                if (!data.length) { 
+                    if (empty) empty.style.display = ''; 
+                    tbody.innerHTML = ''; 
+                } else {
+                    if (empty) empty.style.display = 'none';
+                    var html = '';
+                    data.forEach(function(item) {
+                        var paramsHtml = '-';
+                        if (item.params && item.params.length) {
+                            paramsHtml = item.params.map(function(p) {
+                                return esc(p.name) + (p.type ? ' (' + esc(p.type) + ')' : '') + ': ' + esc(p.value);
+                            }).join('<br>');
+                        }
+                        html += '<tr><td>' + item.id + '</td><td>' + esc(item.type_name || '') + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.manufacturer_name || '') + '</td><td>' + esc(item.article || '') + '</td><td>' + esc(item.description || '') + '</td><td>' + paramsHtml + '</td>';
+                        if (isAdmin) {
+                            html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent(' + item.id + ')">🗑️</button></td>';
+                        }
+                        html += '</tr>';
+                    });
+                    tbody.innerHTML = html;
+                }
+            })
+            .catch(function(err) {
+                console.error(err);
+                tbody.innerHTML = '<tr><td colspan="8" class="error">Ошибка загрузки</td></tr>';
             });
+    }
+
+    document.getElementById('addComponentBtn').addEventListener('click', function() {
+        if (typeof SystemCompModal !== 'undefined') {
+            SystemCompModal.open(null, function() { loadComponents(); });
+        } else {
+            setTimeout(function(){ document.getElementById('addComponentBtn').click(); }, 200);
         }
     });
-    sv.addEventListener('click', function(){
-        if (s.value === '__new__') {
-            var n = newName.value.trim(); if (!n) { alert('Введите название'); return; }
-            createNewBlock(n, newType.value && newType.value !== '__new__' ? newType.value : null, null, newArt.value.trim(), function(nb){
-                allBlocks.push(nb);
-                document.querySelectorAll('#linkedBlocks select').forEach(function(sel){
-                    sel.innerHTML += '<option value="'+nb.id+'">'+escapeHtml(nb.name)+'</option>';
-                });
-                s.innerHTML = '<option value="'+nb.id+'" selected>'+escapeHtml(nb.name)+'</option>';
-                s.value = nb.id; newName.style.display = 'none'; newType.style.display = 'none'; newArt.style.display = 'none';
-            });
-            return;
+
+    window.editSystemComponent = function(id) {
+        if (typeof SystemCompModal !== 'undefined') {
+            SystemCompModal.open(id, function() { loadComponents(); });
         }
-        if (!s.value) { alert('Выберите компонент'); return; }
-        fetch('/api/system-components/'+compId+'/blocks', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({block_template_id:parseInt(s.value),quantity:parseInt(q.value)||1})})
-        .then(function(){ loadLinkedBlocks(compId, container); });
-    });
-    dl.addEventListener('click', function(){ row.remove(); });
-    row.appendChild(s); row.appendChild(q); row.appendChild(newName); row.appendChild(newType); row.appendChild(newArt); row.appendChild(sv); row.appendChild(dl);
-    container.appendChild(row);
-}
-
-window.deleteBlockLink = function(compId, linkId, btn) {
-    fetch('/api/system-components/'+compId+'/blocks/'+linkId, {method:'DELETE'}).then(function(){
-        var container = document.getElementById('linkedBlocks');
-        loadLinkedBlocks(compId, container);
-    });
-};
-function openComponentForm(comp) {
-    var isEdit = !!comp;
-    var formHtml = '<div class="form-group"><label>Тип: <span style="color:red;">*</span></label><select id="compType" required></select>' +
-        '<div class="new-type-row" style="display:none; margin-top:5px; display:flex; gap:5px;">' +
-        '<input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;">' +
-        '<button type="button" class="btn btn-sm btn-primary save-new-type-btn">✓</button></div></div>';
-    formHtml += '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="compName" value="'+(comp?escapeHtml(comp.name):'')+'" required></div>';
-    formHtml += '<div class="form-group"><label>Производитель:</label><select id="compManufacturer"></select></div>';
-    formHtml += '<div class="form-group"><label>Артикул:</label><input type="text" id="compArticle" value="'+(comp?escapeHtml(comp.article||''):'')+'"></div>';
-    formHtml += '<div class="form-group"><label>Описание:</label><textarea id="compDescription" rows="3">'+(comp?escapeHtml(comp.description||''):'')+'</textarea></div>';
-    formHtml += '<div class="form-group"><label>Параметры:</label><div id="modalParams"></div><button type="button" id="addParamRowBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить параметр</button></div>';
-    formHtml += '<div class="form-group"><label>Компоненты шкафа:</label><div id="linkedBlocks"><p>Загрузка...</p></div><button type="button" id="addBlockLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить компонент шкафа</button></div>';
-    formHtml += '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>';
-
-    showModal(isEdit?'Редактировать компонент систем':'Добавить компонент систем', formHtml);
-    loadManufacturersForSelect('#compManufacturer', comp?comp.manufacturer_id:null);
-
-    // Заполняем select типов
-    var ts = document.getElementById('compType');
-    ts.innerHTML = buildTypeSelect(comp?comp.type_id:null);
-    
-    // Обработчик выбора типа
-    var newTypeRow = document.querySelector('.new-type-row');
-    var newTypeName = document.querySelector('.new-type-name');
-    var saveTypeBtn = document.querySelector('.save-new-type-btn');
-    
-    if (ts.value === '__new__') newTypeRow.style.display = 'flex';
-    
-    ts.addEventListener('change', function() {
-        if (ts.value === '__new__') newTypeRow.style.display = 'flex';
-        else newTypeRow.style.display = 'none';
-    });
-    
-    saveTypeBtn.addEventListener('click', function() {
-        var name = newTypeName.value.trim();
-        if (!name) { alert('Введите название типа'); return; }
-        createNewType(name, function(nt) {
-            window._allTypes.push(nt);
-            ts.innerHTML = buildTypeSelect(nt.id);
-            newTypeRow.style.display = 'none';
-            loadTypes();
-        });
-    });
-
-    // Параметры
-    function bindRow(row) {
-        var s = row.querySelector('.param-select');
-        var vi = row.querySelector('.param-value');
-        var ni = row.querySelector('.new-param-name');
-        var sv = row.querySelector('.save-new-param-btn');
-        s.addEventListener('change', function() {
-            if (s.value === '__new__') { ni.style.display=''; sv.style.display=''; }
-            else { ni.style.display='none'; sv.style.display='none'; }
-        });
-        row.querySelector('.remove-param-btn').addEventListener('click', function(){row.remove();});
-        sv.addEventListener('click', function() {
-            var name = ni.value.trim();
-            if (!name) { alert('Введите название параметра'); return; }
-            createNewParam(name, vi.value.trim(), function(np) {
-                window._allParams.push(np);
-                s.innerHTML = buildParamSelect(np.id);
-                ni.style.display='none'; sv.style.display='none';
-                document.querySelectorAll('.param-row select').forEach(function(sel){
-                    if (sel!==s) sel.innerHTML = buildParamSelect(sel.value==='__new__'?null:sel.value);
-                });
-                loadParams();
-            });
-        });
-    }
-
-    var paramsContainer = document.getElementById('modalParams');
-    if (comp && comp.params && comp.params.length) {
-        comp.params.forEach(function(p) { addParamRowToContainer(p.parameter_id || p.id, p.value, p.type); });
-    } else {
-        addParamRowToContainer(null, null, null);
-    }
-
-    function addParamRowToContainer(paramId, value, typeVal) {
-        var row = document.createElement('div'); row.className = 'param-row'; row.style.cssText = 'display:flex;gap:10px;margin-bottom:5px;';
-        var s = document.createElement('select'); s.className = 'param-select'; s.style.flex = '1';
-        s.innerHTML = buildParamSelect(paramId);
-        var vi = document.createElement('input'); vi.type='text'; vi.className='param-value'; vi.placeholder='Значение'; vi.style.flex='1'; if(value) vi.value=value; var ti = document.createElement('input'); ti.type='text'; ti.className='param-type'; ti.placeholder='Тип'; ti.style.flex='0.7'; if(typeVal) ti.value = typeVal;
-        var ni = document.createElement('input'); ni.type='text'; ni.className='new-param-name'; ni.placeholder='Название нового параметра'; ni.style.cssText='flex:1;display:none;';
-        var sv = document.createElement('button'); sv.type='button'; sv.className='btn btn-sm btn-primary save-new-param-btn'; sv.textContent='✓'; sv.style.display='none';
-        var dl = document.createElement('button'); dl.type='button'; dl.className='btn btn-sm btn-delete remove-param-btn'; dl.textContent='×';
-        if (s.value === '__new__' || !paramId) { ni.style.display=''; sv.style.display=''; }
-        row.appendChild(s); row.appendChild(vi); row.appendChild(ti); row.appendChild(ni); row.appendChild(sv); row.appendChild(dl);
-        paramsContainer.appendChild(row);
-        bindRow(row);
-    }
-
-    document.getElementById('addParamRowBtn').addEventListener('click', function() { addParamRowToContainer(null, null, null); });
-
-    // Инициализация связанных компонентов шкафа
-    var linkedContainer = document.getElementById('linkedBlocks');
-    if (isEdit) {
-        loadLinkedBlocks(comp.id, linkedContainer);
-    }
-    loadAllBlocks();
-    document.getElementById('addBlockLinkBtn').addEventListener('click', function() {
-        function tryOpenBlockModal() {
-            if (typeof BlockTemplateModal !== 'undefined') {
-                BlockTemplateModal.open(function(blockId) {
-                    if (blockId && isEdit) {
-                        fetch('/api/system-components/'+comp.id+'/blocks', {
-                            method:'POST',headers:{'Content-Type':'application/json'},
-                            body:JSON.stringify({block_template_id:blockId,quantity:1})
-                        }).then(function(){ loadLinkedBlocks(comp.id, linkedContainer); });
-                    }
-                });
-            } else { setTimeout(tryOpenBlockModal, 200); }
-        }
-        tryOpenBlockModal();
-    });
-
-    modalForm.onsubmit = function(e) {
-        e.preventDefault();
-        var name = document.getElementById('compName').value.trim();
-        var type_id = document.getElementById('compType').value;
-        var manufacturer_id = document.getElementById('compManufacturer').value || null;
-        var article = document.getElementById('compArticle').value.trim();
-        var description = document.getElementById('compDescription').value.trim();
-        if (!name || !type_id || type_id === '__new__') { alert('Заполните обязательные поля'); return; }
-        var params = [];
-        document.querySelectorAll('#modalParams .param-row').forEach(function(row) {
-            var s = row.querySelector('.param-select');
-            var vi = row.querySelector('.param-value');
-            var ti2 = row.querySelector('.param-type'); if (s.value && s.value !== '__new__') params.push({parameter_id: parseInt(s.value), value: vi.value.trim(), type: ti2 ? ti2.value.trim() : ''});
-        });
-        var url = isEdit ? '/api/system-components/'+comp.id : '/api/system-components';
-        var method = isEdit ? 'PUT' : 'POST';
-        fetch(url, {method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,type_id:type_id,manufacturer_id:manufacturer_id,article:article,description:description,params:params})})
-        .then(function(res){ if(!res.ok) return res.json().then(function(d){throw new Error(d.message||'Ошибка');}); closeModal(); loadComponents(); })
-        .catch(function(err){ alert(err.message); });
     };
-}
 
-window.editSystemComponent = function(id) {
-    if (typeof SystemCompModal !== 'undefined') { SystemCompModal.open(id, function() { loadComponents(); }); return; }
-    // fallback
+    window.deleteSystemComponent = function(id) {
+        if (!confirm('Удалить?')) return;
+        fetch('/api/system-components/' + id, { method: 'DELETE' })
+            .then(loadComponents)
+            .catch(function(e) { alert(e.message); });
+    };
 
-    if (typeof SystemCompModal !== 'undefined') { SystemCompModal.open(id, function(){ loadComponents(); }); return; }
-    Promise.all([
-        fetch('/api/system-parameters').then(function(r){return r.json();}),
-        fetch('/api/system-component-types').then(function(r){return r.ok?r.json():[];}),
-        fetch('/api/system-components/'+id).then(function(r){return r.json();})
-    ]).then(function(result){
-        window._allParams = result[0] || [];
-        window._allTypes = result[1] || [];
-        openComponentForm(result[2]);
-    });
-};
-
-window.deleteSystemComponent = function(id) {
-    if (!confirm('Удалить?')) return;
-    fetch('/api/system-components/'+id,{method:'DELETE'}).then(loadComponents).catch(function(e){alert(e.message);});
-};
-
-// ==================== ТИПЫ ====================
-function loadTypes() {
-    fetch('/api/system-component-types').then(function(r){if(!r.ok)throw new Error('Ошибка');return r.json();}).then(function(data){
+    // ==================== ТИПЫ ====================
+    function loadTypes() {
         var tbody = document.getElementById('typesBody');
-        var empty = document.getElementById('typesEmpty');
-        if (!data.length) { empty.style.display=''; tbody.innerHTML=''; }
-        else {
-            empty.style.display='none';
-            tbody.innerHTML = data.map(function(item){return '<tr><td>'+item.id+'</td><td>'+escapeHtml(item.name)+'</td><td>'+escapeHtml(item.description||'')+'</td><td class="actions-col" style="display:'+(isAdmin?'':'none')+'"><button class="btn btn-sm btn-edit" onclick="editSystemComponentType('+item.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponentType('+item.id+')">🗑️</button></td></tr>';}).join('');
-        }
-    }).catch(function(){document.getElementById('typesBody').innerHTML='<tr><td colspan="4" class="error">Ошибка загрузки</td></tr>';});
-}
+        if (!tbody) return;
+        
+        fetch('/api/system-component-types')
+            .then(function(r){ if(!r.ok) throw new Error('Ошибка'); return r.json(); })
+            .then(function(data){
+                var empty = document.getElementById('typesEmpty');
+                if (!data.length) { 
+                    if (empty) empty.style.display = ''; 
+                    tbody.innerHTML = ''; 
+                } else {
+                    if (empty) empty.style.display = 'none';
+                    var html = '';
+                    data.forEach(function(item){
+                        html += '<tr><td>' + item.id + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.description || '') + '</td>';
+                        if (isAdmin) {
+                            html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemComponentType(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponentType(' + item.id + ')">🗑️</button></td>';
+                        }
+                        html += '</tr>';
+                    });
+                    tbody.innerHTML = html;
+                }
+            })
+            .catch(function(err){
+                console.error(err);
+                tbody.innerHTML = '<tr><td colspan="4" class="error">Ошибка загрузки</td></tr>';
+            });
+    }
 
-document.getElementById('addTypeBtn').addEventListener('click', function() {
-    showModal('Добавить тип компонента систем','<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="typeName" required></div><div class="form-group"><label>Описание:</label><textarea id="typeDescription" rows="3"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>');
-    modalForm.onsubmit = function(e) {
-        e.preventDefault();
-        var name = document.getElementById('typeName').value.trim();
-        var desc = document.getElementById('typeDescription').value.trim();
-        if (!name) { alert('Введите название'); return; }
-        fetch('/api/system-component-types',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,description:desc})})
-        .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message||'Ошибка');});closeModal();loadTypes();})
-        .catch(function(e){alert(e.message);});
-    };
-});
-
-window.editSystemComponentType = function(id) {
-    fetch('/api/system-component-types/'+id).then(function(r){return r.json();}).then(function(t){
-        showModal('Редактировать тип','<div class="form-group"><label>Название:</label><input type="text" id="typeName" value="'+escapeHtml(t.name)+'" required></div><div class="form-group"><label>Описание:</label><textarea id="typeDescription" rows="3">'+escapeHtml(t.description||'')+'</textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>');
+    document.getElementById('addTypeBtn').addEventListener('click', function() {
+        showModal('Добавить тип компонента систем',
+            '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="typeName" required></div>' +
+            '<div class="form-group"><label>Описание:</label><textarea id="typeDescription" rows="3"></textarea></div>' +
+            '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+        );
         modalForm.onsubmit = function(e) {
             e.preventDefault();
-            fetch('/api/system-component-types/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('typeName').value.trim(),description:document.getElementById('typeDescription').value.trim()})})
-            .then(function(){closeModal();loadTypes();}).catch(function(e){alert(e.message);});
+            var name = document.getElementById('typeName').value.trim();
+            var desc = document.getElementById('typeDescription').value.trim();
+            if (!name) { alert('Введите название'); return; }
+            fetch('/api/system-component-types', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, description: desc })
+            })
+            .then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message || 'Ошибка'); }); closeModal(); loadTypes(); })
+            .catch(function(e){ alert(e.message); });
         };
     });
-};
 
-window.deleteSystemComponentType = function(id) {
-    if (!confirm('Удалить?')) return;
-    fetch('/api/system-component-types/'+id,{method:'DELETE'}).then(loadTypes).catch(function(e){alert(e.message);});
-};
+    window.editSystemComponentType = function(id) {
+        fetch('/api/system-component-types/' + id)
+            .then(function(r){ return r.json(); })
+            .then(function(t){
+                showModal('Редактировать тип',
+                    '<div class="form-group"><label>Название:</label><input type="text" id="typeName" value="' + esc(t.name) + '" required></div>' +
+                    '<div class="form-group"><label>Описание:</label><textarea id="typeDescription" rows="3">' + esc(t.description || '') + '</textarea></div>' +
+                    '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+                );
+                modalForm.onsubmit = function(e) {
+                    e.preventDefault();
+                    fetch('/api/system-component-types/' + id, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: document.getElementById('typeName').value.trim(),
+                            description: document.getElementById('typeDescription').value.trim()
+                        })
+                    })
+                    .then(function(){ closeModal(); loadTypes(); })
+                    .catch(function(e){ alert(e.message); });
+                };
+            });
+    };
 
-// ==================== ПАРАМЕТРЫ ====================
-function loadParams() {
-    fetch('/api/system-parameters').then(function(r){if(!r.ok)throw new Error('Ошибка');return r.json();}).then(function(data){
+    window.deleteSystemComponentType = function(id) {
+        if (!confirm('Удалить?')) return;
+        fetch('/api/system-component-types/' + id, { method: 'DELETE' })
+            .then(loadTypes)
+            .catch(function(e){ alert(e.message); });
+    };
+
+    // ==================== ПАРАМЕТРЫ ====================
+    function loadParams() {
         var tbody = document.getElementById('paramsBody');
-        var empty = document.getElementById('paramsEmpty');
-        if (!data.length) { empty.style.display=''; tbody.innerHTML=''; }
-        else {
-            empty.style.display='none';
-            tbody.innerHTML = data.map(function(item){return '<tr><td>'+item.id+'</td><td>'+escapeHtml(item.name)+'</td><td>'+escapeHtml(item.type||'')+'</td><td>'+escapeHtml(item.description||'')+'</td><td class="actions-col" style="display:'+(isAdmin?'':'none')+'"><button class="btn btn-sm btn-edit" onclick="editSystemParameter('+item.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemParameter('+item.id+')">🗑️</button></td></tr>';}).join('');
-        }
-    }).catch(function(){document.getElementById('paramsBody').innerHTML='<tr><td colspan="5" class="error">Ошибка загрузки</td></tr>';});
-}
+        if (!tbody) return;
+        
+        fetch('/api/system-parameters')
+            .then(function(r){ if(!r.ok) throw new Error('Ошибка'); return r.json(); })
+            .then(function(data){
+                var empty = document.getElementById('paramsEmpty');
+                if (!data.length) { 
+                    if (empty) empty.style.display = ''; 
+                    tbody.innerHTML = ''; 
+                } else {
+                    if (empty) empty.style.display = 'none';
+                    var html = '';
+                    data.forEach(function(item){
+                        html += '<tr><td>' + item.id + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.type || '') + '</td><td>' + esc(item.description || '') + '</td>';
+                        if (isAdmin) {
+                            html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemParameter(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemParameter(' + item.id + ')">🗑️</button></td>';
+                        }
+                        html += '</tr>';
+                    });
+                    tbody.innerHTML = html;
+                }
+            })
+            .catch(function(err){
+                console.error(err);
+                tbody.innerHTML = '<tr><td colspan="5" class="error">Ошибка загрузки</td></tr>';
+            });
+    }
 
-document.getElementById('addParamBtn').addEventListener('click', function() {
-    showModal('Добавить параметр','<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="paramName" required></div><div class="form-group"><label>Тип:</label><input type="text" id="paramType"></div><div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3"></textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>');
-    modalForm.onsubmit = function(e) {
-        e.preventDefault();
-        var n=document.getElementById('paramName').value.trim(), v=document.getElementById('paramValue').value.trim(), d=document.getElementById('paramDescription').value.trim();
-        if(!n){alert('Введите название');return;}
-        fetch('/api/system-parameters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,value:v,description:d})})
-        .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.message||'Ошибка');});closeModal();loadParams();})
-        .catch(function(e){alert(e.message);});
-    };
-});
-
-window.editSystemParameter = function(id) {
-    fetch('/api/system-parameters/'+id).then(function(r){return r.json();}).then(function(p){
-        showModal('Редактировать параметр','<div class="form-group"><label>Название:</label><input type="text" id="paramName" value="'+escapeHtml(p.name)+'" required></div><div class="form-group"><label>Тип:</label><input type="text" id="paramType" value="'+escapeHtml(p.type||'')+'"></div><div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3">'+escapeHtml(p.description||'')+'</textarea></div><div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>');
+    document.getElementById('addParamBtn').addEventListener('click', function() {
+        showModal('Добавить параметр',
+            '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="paramName" required></div>' +
+            '<div class="form-group"><label>Тип:</label><input type="text" id="paramType"></div>' +
+            '<div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3"></textarea></div>' +
+            '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+        );
         modalForm.onsubmit = function(e) {
             e.preventDefault();
-            fetch('/api/system-parameters/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:document.getElementById('paramName').value.trim(),type:document.getElementById('paramType').value.trim(),description:document.getElementById('paramDescription').value.trim()})})
-            .then(function(){closeModal();loadParams();}).catch(function(e){alert(e.message);});
+            var n = document.getElementById('paramName').value.trim();
+            if (!n) { alert('Введите название'); return; }
+            fetch('/api/system-parameters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: n,
+                    type: document.getElementById('paramType').value.trim(),
+                    description: document.getElementById('paramDescription').value.trim()
+                })
+            })
+            .then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message || 'Ошибка'); }); closeModal(); loadParams(); })
+            .catch(function(e){ alert(e.message); });
         };
     });
-};
 
-window.deleteSystemParameter = function(id) {
-    if(!confirm('Удалить?'))return;
-    fetch('/api/system-parameters/'+id,{method:'DELETE'}).then(loadParams).catch(function(e){alert(e.message);});
-};
+    window.editSystemParameter = function(id) {
+        fetch('/api/system-parameters/' + id)
+            .then(function(r){ return r.json(); })
+            .then(function(p){
+                showModal('Редактировать параметр',
+                    '<div class="form-group"><label>Название:</label><input type="text" id="paramName" value="' + esc(p.name) + '" required></div>' +
+                    '<div class="form-group"><label>Тип:</label><input type="text" id="paramType" value="' + esc(p.type || '') + '"></div>' +
+                    '<div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3">' + esc(p.description || '') + '</textarea></div>' +
+                    '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+                );
+                modalForm.onsubmit = function(e) {
+                    e.preventDefault();
+                    fetch('/api/system-parameters/' + id, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: document.getElementById('paramName').value.trim(),
+                            type: document.getElementById('paramType').value.trim(),
+                            description: document.getElementById('paramDescription').value.trim()
+                        })
+                    })
+                    .then(function(){ closeModal(); loadParams(); })
+                    .catch(function(e){ alert(e.message); });
+                };
+            });
+    };
 
-window.pageInit = function() { applyPermissions(); initTabs(); loadComponents(); };
+    window.deleteSystemParameter = function(id) {
+        if (!confirm('Удалить?')) return;
+        fetch('/api/system-parameters/' + id, { method: 'DELETE' })
+            .then(loadParams)
+            .catch(function(e){ alert(e.message); });
+    };
+
+    window.pageInit = function() { 
+        applyPermissions(); 
+        initTabs(); 
+        loadComponents(); 
+    };
+
+    // Если страница уже загружена через SPA, инициализируем сразу
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        applyPermissions();
+        initTabs();
+        loadComponents();
+    }
+})();
 </script>
