@@ -52,7 +52,7 @@ router.get('/:id', auth, async (req, res) => {
     const sys = await pool.query('SELECT * FROM systems WHERE id = $1', [req.params.id]);
     if (sys.rows.length === 0) return res.status(404).json({ message: 'Не найдена' });
     const comps = await pool.query(`
-      SELECT scl.*, sc.name, sc.article, sct.name as type_name
+      SELECT scl.id as link_id, scl.*, sc.id, sc.name, sc.article, sc.type_id, sct.name as type_name
       FROM system_components_link scl
       JOIN system_components sc ON scl.component_id = sc.id
       LEFT JOIN system_component_types sct ON sc.type_id = sct.id
@@ -127,3 +127,22 @@ router.delete('/link/:id', auth, isAdmin, async (req, res) => {
 });
 
 module.exports = router;
+
+// Добавить компонент в систему
+router.post('/:id/components', auth, isAdmin, async (req, res) => {
+    try {
+        const { component_id, quantity } = req.body;
+        const result = await pool.query(
+            `INSERT INTO system_components_link (system_id, component_id, quantity)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (system_id, component_id) 
+             DO UPDATE SET quantity = EXCLUDED.quantity
+             RETURNING *`,
+            [req.params.id, component_id, quantity || 1]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Ошибка добавления компонента в систему' });
+    }
+});

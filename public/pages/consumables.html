@@ -12,6 +12,7 @@
 (function() {
     var user = JSON.parse(localStorage.getItem('user') || 'null');
     var isAdmin = user && user.role === 'admin';
+    var allManufacturers = [];
 
     if (isAdmin) {
         document.getElementById('addConsumableBtn').style.display = '';
@@ -32,9 +33,45 @@
         return num.toFixed(2);
     }
 
+    // Загрузка производителей
+    function loadManufacturers() {
+        return fetch('/api/manufacturers')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                allManufacturers = data;
+                return data;
+            })
+            .catch(function(e) {
+                console.error('Ошибка загрузки производителей:', e);
+                return [];
+            });
+    }
+
+    // Построение select производителей
+    function buildManufacturerSelect(selectedId) {
+        var html = '<select id="materialManufacturer" class="form-control">';
+        html += '<option value="">-- без производителя --</option>';
+        allManufacturers.forEach(function(m) {
+            html += '<option value="' + m.id + '"' + (selectedId == m.id ? ' selected' : '') + '>' + esc(m.name) + '</option>';
+        });
+        html += '</select>';
+        return html;
+    }
+
+    // Получить название производителя по ID
+    function getManufacturerName(id) {
+        var found = allManufacturers.find(function(m) { return m.id == id; });
+        return found ? found.name : '';
+    }
+
     async function loadMaterials() {
         var container = document.getElementById('materialsTable');
         try {
+            // Загружаем производителей, если ещё не загружены
+            if (!allManufacturers.length) {
+                await loadManufacturers();
+            }
+
             var res = await fetch('/api/materials');
             var data = await res.json();
             if (!data.length) {
@@ -49,11 +86,12 @@
 
             data.forEach(function(item) {
                 var price = formatPrice(item.price);
+                var manufacturerName = getManufacturerName(item.manufacturer_id);
                 html += '<tr>' +
                     '<td>' + item.id + '</td>' +
                     '<td>' + esc(item.article || '') + '</td>' +
                     '<td>' + esc(item.name) + '</td>' +
-                    '<td>' + esc(item.manufacturer || '') + '</td>' +
+                    '<td>' + esc(manufacturerName) + '</td>' +
                     '<td>' + esc(item.description || '') + '</td>' +
                     '<td>' + esc(item.unit || '') + '</td>' +
                     '<td>' + price + '</td>';
@@ -100,9 +138,10 @@
 
     document.getElementById('addConsumableBtn').addEventListener('click', function() {
         if (typeof MaterialModal !== 'undefined') {
+            // Передаём список производителей в модальное окно
             MaterialModal.open(function(id) {
                 if (id) loadMaterials();
-            });
+            }, null, allManufacturers);
         } else {
             alert('Модальное окно не загружено. Подождите...');
             console.error('MaterialModal не загружен');
@@ -129,6 +168,9 @@
         this.value = '';
     });
 
-    loadMaterials();
+    // Загружаем производителей и материалы при инициализации
+    loadManufacturers().then(function() {
+        loadMaterials();
+    });
 })();
 </script>

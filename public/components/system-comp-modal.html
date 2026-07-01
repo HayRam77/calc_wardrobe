@@ -4,10 +4,14 @@ window.SystemCompModal = {
     _cb: null,
     _comp: null,
 
-    open: function(compId, callback) {
+    open: function(compId, callback, cabinetMode, cabinetId) {
         this._cb = callback;
         var self = this;
         var isEdit = !!compId;
+        var isCabinetMode = cabinetMode || false;
+        var cabinetIdParam = cabinetId || null;
+
+        console.log('🔍 SystemCompModal.open:', { compId, isEdit, cabinetMode, cabinetIdParam });
 
         var m = document.createElement('div');
         m.className = 'modal';
@@ -24,44 +28,100 @@ window.SystemCompModal = {
         if (isEdit) {
             loadData.push(fetch('/api/system-components/' + compId).then(function(r){ return r.json(); }));
         }
+        if (isCabinetMode && cabinetIdParam) {
+            loadData.push(fetch('/api/cabinets/' + cabinetIdParam + '/systems').then(function(r){ return r.json(); }));
+        }
 
         Promise.all(loadData).then(function(results){
             var params = results[0] || [];
             var types = results[1] || [];
             var comp = isEdit ? results[2] : null;
-            self._buildForm(m, comp, params, types, callback);
+            var systems = (isCabinetMode && cabinetIdParam && results.length > 3) ? results[3] : [];
+            
+            console.log('✅ Данные загружены:', { 
+                params: params.length, 
+                types: types.length, 
+                comp: comp ? comp.id : null,
+                compName: comp ? comp.name : null,
+                systems: systems.length,
+                cabinetIdParam: cabinetIdParam
+            });
+            
+            // Если систем нет, но есть cabinetId — пробуем загрузить ещё раз
+            if (isCabinetMode && cabinetIdParam && systems.length === 0) {
+                console.warn('⚠️ Системы не загружены, пробуем повторно...');
+                fetch('/api/cabinets/' + cabinetIdParam + '/systems')
+                    .then(function(r){ return r.json(); })
+                    .then(function(systemsData){
+                        console.log('✅ Повторная загрузка систем:', systemsData.length);
+                        self._buildForm(m, comp, params, types, callback, isCabinetMode, systemsData, cabinetIdParam);
+                    })
+                    .catch(function(err){
+                        console.error('❌ Ошибка повторной загрузки систем:', err);
+                        self._buildForm(m, comp, params, types, callback, isCabinetMode, [], cabinetIdParam);
+                    });
+            } else {
+                self._buildForm(m, comp, params, types, callback, isCabinetMode, systems, cabinetIdParam);
+            }
+        }).catch(function(err){
+            console.error('❌ Ошибка загрузки данных:', err);
+            alert('Ошибка загрузки данных. Проверьте подключение к серверу.');
         });
     },
 
-    _buildForm: function(m, comp, params, types, callback) {
+    _buildForm: function(m, comp, params, types, callback, isCabinetMode, systems, cabinetId) {
         var self = this;
         var isEdit = !!comp;
 
-        // Тип
-        var h = '<div class="form-group"><label>Тип: <span style="color:red;">*</span></label><select id="compType" required>';
+        console.log('🔨 _buildForm:', { 
+            isEdit, 
+            isCabinetMode, 
+            systemsCount: systems ? systems.length : 0,
+            compId: comp ? comp.id : null,
+            compName: comp ? comp.name : null
+        });
+
+        var h = '';
+        if (isCabinetMode) {
+            h += '<div class="form-group" id="cabinetSystemSelectGroup"><label>Система шкафа: <span style="color:red;">*</span></label><select id="cabinetSystemSelect" required><option value="">-- выберите систему --</option>';
+            if (systems && systems.length) {
+                systems.forEach(function(s) {
+                    h += '<option value="' + s.system_id + '">' + self._esc(s.system_name || 'Система #' + s.id) + '</option>';
+                });
+            }
+            h += '</select></div>';
+        }
+
+        h += '<div class="form-group"><label>Тип: <span style="color:red;">*</span></label><select id="compType" required>';
         h += '<option value="">-- выберите --</option>';
         if (types.length) {
             h += '<optgroup label="Существующие типы">';
-            types.forEach(function(t){ h += '<option value="'+t.id+'"'+(comp && comp.type_id == t.id ? ' selected' : '')+'>'+t.name+'</option>'; });
+            types.forEach(function(t){ 
+                var selected = (comp && comp.type_id == t.id) ? ' selected' : '';
+                h += '<option value="'+t.id+'"'+selected+'>'+t.name+'</option>'; 
+            });
             h += '</optgroup>';
         }
         h += '<optgroup label="Добавить"><option value="__new__">+ новый тип</option></optgroup></select>';
         h += '<div class="new-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;"><input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;"><button type="button" class="btn btn-sm btn-primary save-type-btn">✓</button></div></div>';
 
-        // Поля
         h += '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="compName" value="'+self._esc(comp ? comp.name : '')+'" required></div>';
         h += '<div class="form-group"><label>Производитель:</label><select id="compManufacturer"></select></div>';
         h += '<div class="form-group"><label>Артикул:</label><input type="text" id="compArticle" value="'+self._esc(comp ? comp.article || '' : '')+'"></div>';
         h += '<div class="form-group"><label>Описание:</label><textarea id="compDescription" rows="3">'+self._esc(comp ? comp.description || '' : '')+'</textarea></div>';
-
-        // Параметры
         h += '<div class="form-group"><label>Параметры:</label><div id="modalParams"></div><button type="button" id="addParamRowBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить параметр</button></div>';
 
-        // Компоненты шкафа (ВСЕГДА показывать блок)
-        h += '<div class="form-group"><label>Компоненты шкафа:</label><div id="linkedBlocks"><p>Загрузка...</p></div><button type="button" id="addBlockLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить компонент шкафа</button></div>';
+        if (isEdit) {
+            h += '<div class="form-group"><label>Компоненты шкафа:</label><div id="linkedBlocks"><p>Загрузка...</p></div><button type="button" id="addBlockLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить компонент шкафа</button></div>';
+        } else {
+            h += '<div class="form-group"><label>Компоненты шкафа:</label><div id="linkedBlocks"><p>Нет связанных компонентов</p></div><button type="button" id="addBlockLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить компонент шкафа</button></div>';
+        }
 
-        // Материалы компонента (ВСЕГДА показывать блок)
-        h += '<div class="form-group"><label>Материалы компонента:</label><div id="componentMaterials"><p>Загрузка...</p></div><button type="button" id="addMaterialLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить материал</button></div>';
+        if (isEdit) {
+            h += '<div class="form-group"><label>Материалы компонента:</label><div id="componentMaterials"><p>Загрузка...</p></div><button type="button" id="addMaterialLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить материал</button></div>';
+        } else {
+            h += '<div class="form-group"><label>Материалы компонента:</label><div id="componentMaterials"><p>Нет материалов</p></div><button type="button" id="addMaterialLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить материал</button></div>';
+        }
 
         h += '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="this.closest(\'.modal\').remove()">Отмена</button></div>';
 
@@ -71,7 +131,10 @@ window.SystemCompModal = {
         fetch('/api/manufacturers').then(function(r){ return r.json(); }).then(function(mans){
             var sel = document.getElementById('compManufacturer');
             sel.innerHTML = '<option value="">-- выберите --</option>';
-            mans.forEach(function(m){ sel.innerHTML += '<option value="'+m.id+'"'+(comp && comp.manufacturer_id == m.id ? ' selected' : '')+'>'+m.name+'</option>'; });
+            mans.forEach(function(m){ 
+                var selected = (comp && comp.manufacturer_id == m.id) ? ' selected' : '';
+                sel.innerHTML += '<option value="'+m.id+'"'+selected+'>'+m.name+'</option>'; 
+            });
         });
 
         // Обработчик типа
@@ -99,7 +162,10 @@ window.SystemCompModal = {
             s.innerHTML = '<option value="">-- параметр --</option>';
             if (params.length) {
                 s.innerHTML += '<optgroup label="Существующие параметры">';
-                params.forEach(function(p){ s.innerHTML += '<option value="'+p.id+'"'+(pId == p.id ? ' selected' : '')+'>'+p.name+'</option>'; });
+                params.forEach(function(p){ 
+                    var selected = (pId == p.id) ? ' selected' : '';
+                    s.innerHTML += '<option value="'+p.id+'"'+selected+'>'+p.name+'</option>'; 
+                });
                 s.innerHTML += '</optgroup>';
             }
             s.innerHTML += '<optgroup label="Добавить"><option value="__new__">+ новый параметр</option></optgroup>';
@@ -157,7 +223,10 @@ window.SystemCompModal = {
         }
 
         if (comp && comp.params && comp.params.length) {
-            comp.params.forEach(function(p){ addParamRow(p.parameter_id || p.id, p.value, p.type); });
+            console.log('📋 Загрузка параметров компонента:', comp.params.length);
+            comp.params.forEach(function(p){ 
+                addParamRow(p.parameter_id || p.id, p.value, p.type); 
+            });
         } else {
             addParamRow(null, null, null);
         }
@@ -166,7 +235,6 @@ window.SystemCompModal = {
         // ==================== КОМПОНЕНТЫ ШКАФА ====================
         var lc = document.getElementById('linkedBlocks');
         if (isEdit) {
-            // Загружаем связанные компоненты шкафа
             fetch('/api/system-components/' + comp.id + '/blocks')
                 .then(function(r){ return r.json(); })
                 .then(function(data){
@@ -182,8 +250,6 @@ window.SystemCompModal = {
                     }
                 })
                 .catch(function(){ lc.innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; });
-        } else {
-            lc.innerHTML = '<p>Нет связанных компонентов</p>';
         }
 
         document.getElementById('addBlockLinkBtn').addEventListener('click', function(){
@@ -202,7 +268,7 @@ window.SystemCompModal = {
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ block_template_id: blockId, quantity: parseInt(quantity) })
                             })
-                            .then(function(){ lc.innerHTML = '<p>Загрузка...</p>'; self._buildForm(m, comp, params, types, callback); })
+                            .then(function(){ lc.innerHTML = '<p>Загрузка...</p>'; self._buildForm(m, comp, params, types, callback, isCabinetMode, systems, cabinetId); })
                             .catch(function(e){ alert(e.message); });
                         }
                     }
@@ -215,7 +281,6 @@ window.SystemCompModal = {
         // ==================== МАТЕРИАЛЫ КОМПОНЕНТА ====================
         var mc = document.getElementById('componentMaterials');
         if (isEdit) {
-            // Загружаем материалы
             fetch('/api/materials/system-component/' + comp.id)
                 .then(function(r){ return r.json(); })
                 .then(function(data){
@@ -231,8 +296,6 @@ window.SystemCompModal = {
                     }
                 })
                 .catch(function(){ mc.innerHTML = '<p style="color:red;">Ошибка загрузки материалов</p>'; });
-        } else {
-            mc.innerHTML = '<p>Нет материалов</p>';
         }
 
         document.getElementById('addMaterialLinkBtn').addEventListener('click', function(){
@@ -251,7 +314,7 @@ window.SystemCompModal = {
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ material_id: materialId, quantity: parseInt(quantity) })
                             })
-                            .then(function(){ mc.innerHTML = '<p>Загрузка...</p>'; self._buildForm(m, comp, params, types, callback); })
+                            .then(function(){ mc.innerHTML = '<p>Загрузка...</p>'; self._buildForm(m, comp, params, types, callback, isCabinetMode, systems, cabinetId); })
                             .catch(function(e){ alert(e.message); });
                         }
                     }
@@ -261,7 +324,7 @@ window.SystemCompModal = {
             }
         });
 
-        // Сохранение
+        // ==================== СОХРАНЕНИЕ ====================
         m.querySelector('#sysCompForm').addEventListener('submit', function(e){
             e.preventDefault();
             var name = document.getElementById('compName').value.trim();
@@ -288,12 +351,40 @@ window.SystemCompModal = {
                 params: paramsArr
             };
             var url = isEdit ? '/api/system-components/' + comp.id : '/api/system-components';
+            
+            var selectedSystemId = null;
+            if (isCabinetMode) {
+                var systemSelect = document.getElementById('cabinetSystemSelect');
+                if (systemSelect) selectedSystemId = systemSelect.value;
+                if (!selectedSystemId) {
+                    alert('Выберите систему шкафа');
+                    return;
+                }
+            }
+
             fetch(url, {
                 method: isEdit ? 'PUT' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             })
-            .then(function(r){ if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); }); m.remove(); if (callback) callback(); })
+            .then(function(r){ 
+                if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); }); 
+                return r.json();
+            })
+            .then(function(data){
+                if (isCabinetMode && selectedSystemId) {
+                    return fetch('/api/systems/' + selectedSystemId + '/components', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ component_id: data.id, quantity: 1 })
+                    }).then(function(r){ 
+                        if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); }); 
+                        return data;
+                    });
+                }
+                return data;
+            })
+            .then(function(){ m.remove(); if (callback) callback(); })
             .catch(function(err){ alert(err.message); });
         });
     },

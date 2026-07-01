@@ -9,10 +9,15 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // ==================== ОСНОВНЫЕ CRUD ====================
 
-// Получить все материалы
+// Получить все материалы с данными производителя
 router.get('/', auth, async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM materials ORDER BY name');
+        const result = await pool.query(`
+            SELECT m.*, man.name as manufacturer_name
+            FROM materials m
+            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
+            ORDER BY m.name
+        `);
         res.json(result.rows);
     } catch (err) {
         console.error(err);
@@ -23,7 +28,12 @@ router.get('/', auth, async (req, res) => {
 // Получить один материал
 router.get('/:id', auth, async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM materials WHERE id = $1', [req.params.id]);
+        const result = await pool.query(`
+            SELECT m.*, man.name as manufacturer_name
+            FROM materials m
+            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
+            WHERE m.id = $1
+        `, [req.params.id]);
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Материал не найден' });
         }
@@ -37,12 +47,12 @@ router.get('/:id', auth, async (req, res) => {
 // Создать материал
 router.post('/', auth, isAdmin, async (req, res) => {
     try {
-        const { article, name, manufacturer, description, unit, price } = req.body;
+        const { article, name, manufacturer_id, description, unit, price } = req.body;
         const result = await pool.query(
-            `INSERT INTO materials (article, name, manufacturer, description, unit, price)
+            `INSERT INTO materials (article, name, manufacturer_id, description, unit, price)
              VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *`,
-            [article || null, name, manufacturer || null, description || null, unit || null, price || null]
+            [article || null, name, manufacturer_id || null, description || null, unit || null, price || null]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -54,14 +64,14 @@ router.post('/', auth, isAdmin, async (req, res) => {
 // Обновить материал
 router.put('/:id', auth, isAdmin, async (req, res) => {
     try {
-        const { article, name, manufacturer, description, unit, price } = req.body;
+        const { article, name, manufacturer_id, description, unit, price } = req.body;
         const result = await pool.query(
             `UPDATE materials 
-             SET article = $1, name = $2, manufacturer = $3, description = $4, 
+             SET article = $1, name = $2, manufacturer_id = $3, description = $4, 
                  unit = $5, price = $6, updated_at = CURRENT_TIMESTAMP
              WHERE id = $7
              RETURNING *`,
-            [article || null, name, manufacturer || null, description || null, unit || null, price || null, req.params.id]
+            [article || null, name, manufacturer_id || null, description || null, unit || null, price || null, req.params.id]
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Материал не найден' });
@@ -93,9 +103,10 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 router.get('/system-component/:id', auth, async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT scm.*, m.* 
+            SELECT scm.*, m.*, man.name as manufacturer_name
             FROM system_component_materials scm
             JOIN materials m ON scm.material_id = m.id
+            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
             WHERE scm.system_component_id = $1
             ORDER BY m.name
         `, [req.params.id]);
@@ -143,9 +154,10 @@ router.delete('/system-component/:componentId/:materialId', auth, isAdmin, async
 router.get('/block-template/:id', auth, async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT btm.*, m.* 
+            SELECT btm.*, m.*, man.name as manufacturer_name
             FROM block_template_materials btm
             JOIN materials m ON btm.material_id = m.id
+            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
             WHERE btm.block_template_id = $1
             ORDER BY m.name
         `, [req.params.id]);
@@ -193,7 +205,12 @@ router.delete('/block-template/:templateId/:materialId', auth, isAdmin, async (r
 
 router.get('/export', auth, async (req, res) => {
     try {
-        const result = await pool.query('SELECT id, article, name, manufacturer, description, unit, price FROM materials ORDER BY name');
+        const result = await pool.query(`
+            SELECT m.id, m.article, m.name, man.name as manufacturer, m.description, m.unit, m.price
+            FROM materials m
+            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
+            ORDER BY m.name
+        `);
         const ws = XLSX.utils.json_to_sheet(result.rows);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Материалы');
@@ -212,11 +229,21 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
         let imported = 0;
         for (const row of data) {
             try {
+                // Ищем производителя по названию
+                let manufacturerId = null;
+                if (row['производитель']) {
+                    const manResult = await pool.query(
+                        'SELECT id FROM manufacturers WHERE name ILIKE $1 LIMIT 1',
+                        [row['производитель']]
+                    );
+                    if (manResult.rows.length > 0) {
+                        manufacturerId = manResult.rows[0].id;
+                    }
+                }
                 await pool.query(
-                    `INSERT INTO materials (article, name, manufacturer, description, unit, price)
-                     VALUES ($1, $2, $3, $4, $5, $6)
-                     ON CONFLICT DO NOTHING`,
-                    [row['артикул'] || null, row['название'], row['производитель'] || null, 
+                    `INSERT INTO materials (article, name, manufacturer_id, description, unit, price)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [row['артикул'] || null, row['название'], manufacturerId,
                      row['описание'] || null, row['Ед.изм.'] || null, row['цена'] || null]
                 );
                 imported++;
