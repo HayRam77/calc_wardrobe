@@ -21,8 +21,8 @@
             </div>
             <div id="cabinetError" class="error-message" style="display:none;"></div>
             <div class="form-actions" style="margin-top:15px;">
-                <button type="button" class="btn btn-secondary" onclick="document.getElementById('cabinetModal').style.display='none'">Отмена</button>
-                <button type="submit" class="btn btn-primary">Сохранить</button>
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('cabinetModal').style.display='none'" id="project_btn_btn">Отмена</button>
+                <button type="submit" class="btn btn-primary" id="project_btn_btn_1">Сохранить</button>
             </div>
         </form>
     </div>
@@ -78,7 +78,7 @@
             }
             var h = '<div class="table-container"><table class="data-table"><tr><th>ID</th><th>Название</th><th>Описание</th><th></th></tr>';
             cabinets.forEach(function(c) {
-                h += '<tr><td>' + c.id + '</td><td><a href="/cabinet/' + c.id + '" onclick="event.preventDefault(); navigateTo(\'/cabinet/' + c.id + '\')">' + esc(c.name) + '</a></td><td>' + esc(c.description || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editCabinet(' + c.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteCabinet(' + c.id + ')">🗑️</button></td></tr>';
+                h += '<tr><td>' + c.id + '</td><td><a href="/cabinet/' + c.id + '" onclick="event.preventDefault(); navigateTo(\'/cabinet/' + c.id + '\')">' + esc(c.name) + '</a></td><td>' + esc(c.description || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editCabinet(' + c.id + ')" id="project_edit_btn">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteCabinet(' + c.id + ')" id="project_del_btn">🗑️</button></td></tr>';
             });
             h += '</table></div>';
             container.innerHTML = h;

@@ -38,13 +38,13 @@ window.SystemCompForm = {
             h += '</optgroup>';
         }
         h += '<optgroup label="Добавить"><option value="__new__">+ новый тип</option></optgroup></select>';
-        h += '<div class="new-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;"><input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;"><button type="button" class="btn btn-sm btn-primary save-type-btn">✓</button></div></div>';
+        h += '<div class="new-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;"><input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;"><button type="button" class="btn btn-sm btn-primary save-type-btn" id="system_comp_form_save_btn">✓</button></div></div>';
         h += '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="compName" value="'+this._esc(comp.name)+'" required></div>';
         h += '<div class="form-group"><label>Производитель:</label><select id="compManufacturer"></select></div>';
         h += '<div class="form-group"><label>Артикул:</label><input type="text" id="compArticle" value="'+this._esc(comp.article||'')+'"></div>';
         h += '<div class="form-group"><label>Описание:</label><textarea id="compDescription" rows="3">'+this._esc(comp.description||'')+'</textarea></div>';
         h += '<div class="form-group"><label>Параметры:</label><div id="modalParams"></div><button type="button" id="addParamRowBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить параметр</button></div>';
-        h += '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="this.closest(\'.modal\').remove()">Отмена</button></div>';
+        h += '<div class="form-actions"><button type="submit" class="btn btn-primary" id="system_comp_form_btn_btn">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="this.closest(\'.modal\').remove()" id="system_comp_form_btn_btn_1">Отмена</button></div>';
         
         m.querySelector('#sysCompForm').innerHTML = h;
         

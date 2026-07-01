@@ -1,10 +1,10 @@
 <div class="page-content">
     <div class="page-header"><h2>Администрирование</h2></div>
     <div class="tabs">
-        <button class="tab-btn active" data-tab="projects">Все проекты</button>
-        <button class="tab-btn" data-tab="cabinets">Все шкафы</button>
-        <button class="tab-btn" data-tab="users">Управление пользователями</button>
-        <button class="tab-btn" data-tab="db">База данных</button>
+        <button class="tab-btn active" data-tab="projects" id="admin_btn_btn">Все проекты</button>
+        <button class="tab-btn" data-tab="cabinets" id="admin_btn_btn_1">Все шкафы</button>
+        <button class="tab-btn" data-tab="users" id="admin_btn_btn_2">Управление пользователями</button>
+        <button class="tab-btn" data-tab="db" id="admin_btn_btn_3">База данных</button>
     </div>
     <div class="tab-content active" id="tab-projects">
         <div class="table-container"><table class="data-table"><thead><tr><th>ID</th><th>Название</th><th>Владелец</th><th>Описание</th><th>Дата создания</th></tr></thead><tbody id="allProjectsBody"><tr><td colspan="5">Загрузка...</td></tr></tbody></table></div>
@@ -37,7 +37,7 @@
             <div class="form-group"><label for="userPassword">Пароль *</label><input type="password" id="userPassword" required minlength="6"></div>
             <div class="form-group"><label for="userRole">Роль</label><select id="userRole"><option value="user">Пользователь</option><option value="admin">Администратор</option></select></div>
             <div id="userError" class="error-message" style="display:none;"></div>
-            <div class="form-actions"><button type="button" id="userCancelBtn" class="btn btn-secondary">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>
+            <div class="form-actions"><button type="button" id="userCancelBtn" class="btn btn-secondary">Отмена</button><button type="submit" class="btn btn-primary" id="admin_btn_btn_4">Сохранить</button></div>
         </form>
     </div>
 </div>

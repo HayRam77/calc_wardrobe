@@ -40,7 +40,7 @@
             if (!data.length) { t.innerHTML = '<tr><td colspan="4">Нет систем</td></tr>'; return; }
             t.innerHTML = data.map(function(s) {
                 return '<tr><td>' + s.id + '</td><td>' + esc(s.name) + '</td><td>' + esc(s.description || '') + '</td>' +
-                    (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')">🗑️</button></td>' : '') + '</tr>';
+                    (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')" id="automation_edit_btn">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')" id="automation_del_btn">🗑️</button></td>' : '') + '</tr>';
             }).join('');
         });
     }
@@ -53,7 +53,7 @@
         h += '<div class="form-group"><label>Название *</label><input type="text" id="sysName" value="' + esc(sys ? sys.name : '') + '" required></div>';
         h += '<div class="form-group"><label>Описание</label><textarea id="sysDesc" rows="2">' + esc(sys ? sys.description || '' : '') + '</textarea></div>';
         modalTitle.textContent = isEdit ? 'Редактировать систему' : 'Добавить систему';
-        modalForm.innerHTML = h + '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>';
+        modalForm.innerHTML = h + '<div class="form-actions"><button type="submit" class="btn btn-primary" id="automation_btn_btn">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'" id="automation_btn_btn_1">Отмена</button></div>';
         modal.style.display = 'block';
         modalForm.onsubmit = function(e) {
             e.preventDefault();

@@ -11,7 +11,7 @@ window.SystemTypeSelect = {
             h += '<optgroup label="Добавить"><option value="__new__">+ новый тип</option></optgroup></select>';
             h += '<div class="new-system-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;">';
             h += '<input type="text" class="new-system-type-name" placeholder="Название нового типа" style="flex:1;">';
-            h += '<button type="button" class="btn btn-sm btn-primary save-system-type-btn">✓</button></div>';
+            h += '<button type="button" class="btn btn-sm btn-primary save-system-type-btn" id="type_select_save_btn">✓</button></div>';
             container.innerHTML = h;
             var sel = container.querySelector('.system-type-select');
             var newRow = container.querySelector('.new-system-type-row');

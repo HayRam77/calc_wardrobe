@@ -35,7 +35,7 @@ window.BlockTemplateModal = {
             h += '<div class="form-group"><label>Ссылка</label><input type="url" id="blockUrl"></div>';
             h += '<div class="form-group"><label>Описание</label><textarea id="blockDescription" rows="2"></textarea></div>';
             h += '<h4>Параметры</h4><div id="blockParamsContainer"></div><button type="button" id="addBlockParamBtn" class="btn btn-sm btn-secondary">+ Добавить параметр</button>';
-            h += '<div class="form-actions"><button type="button" class="btn btn-secondary cancel-block-btn">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';
+            h += '<div class="form-actions"><button type="button" class="btn btn-secondary cancel-block-btn" id="block_cancel_btn">Отмена</button><button type="submit" class="btn btn-primary" id="block_btn_btn">Сохранить</button></div>';
             f.innerHTML = h;
 
             fetch('/api/block-templates').then(function(r){ return r.json(); }).then(function(blocks){
@@ -82,7 +82,7 @@ window.BlockTemplateModal = {
                     s += '</optgroup>';
                 }
                 s += '<optgroup label="Добавить"><option value="__new__">+ новый тип</option></optgroup></select>';
-                s += '<div class="new-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;"><input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;"><button type="button" class="btn btn-sm btn-primary save-type-btn">✓</button></div>';
+                s += '<div class="new-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;"><input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;"><button type="button" class="btn btn-sm btn-primary save-type-btn" id="block_save_btn">✓</button></div>';
                 bt.innerHTML = s;
                 var sel = bt.querySelector('.cabinet-type-select');
                 var nr = bt.querySelector('.new-type-row');
@@ -110,7 +110,7 @@ window.BlockTemplateModal = {
                         s2 += '</optgroup>';
                     }
                     s2 += '<optgroup label="Добавить"><option value="__new__">+ новый параметр</option></optgroup></select>';
-                    r.innerHTML = s2 + '<input type="text" class="cabinet-param-value" placeholder="Значение" style="flex:1;" value="'+(v||'')+'"><input type="text" class="cabinet-param-new-name" placeholder="Название" style="flex:2;display:none;"><button type="button" class="btn btn-sm btn-primary cabinet-param-save-btn" style="display:none;">✓</button>';
+                    r.innerHTML = s2 + '<input type="text" class="cabinet-param-value" placeholder="Значение" style="flex:1;" value="'+(v||'')+'"><input type="text" class="cabinet-param-new-name" placeholder="Название" style="flex:2;display:none;"><button type="button" class="btn btn-sm btn-primary cabinet-param-save-btn" style="display:none;" id="block_save_btn_1">✓</button>';
                     var dl = document.createElement('button');
                     dl.type = 'button';
                     dl.textContent = '✕';

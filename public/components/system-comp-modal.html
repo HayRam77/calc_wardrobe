@@ -37,6 +37,7 @@ window.SystemCompModal = {
         var self = this;
         var isEdit = !!comp;
 
+        // Тип
         var h = '<div class="form-group"><label>Тип: <span style="color:red;">*</span></label><select id="compType" required>';
         h += '<option value="">-- выберите --</option>';
         if (types.length) {
@@ -47,26 +48,33 @@ window.SystemCompModal = {
         h += '<optgroup label="Добавить"><option value="__new__">+ новый тип</option></optgroup></select>';
         h += '<div class="new-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;"><input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;"><button type="button" class="btn btn-sm btn-primary save-type-btn">✓</button></div></div>';
 
+        // Поля
         h += '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="compName" value="'+self._esc(comp ? comp.name : '')+'" required></div>';
         h += '<div class="form-group"><label>Производитель:</label><select id="compManufacturer"></select></div>';
         h += '<div class="form-group"><label>Артикул:</label><input type="text" id="compArticle" value="'+self._esc(comp ? comp.article || '' : '')+'"></div>';
         h += '<div class="form-group"><label>Описание:</label><textarea id="compDescription" rows="3">'+self._esc(comp ? comp.description || '' : '')+'</textarea></div>';
+
+        // Параметры
         h += '<div class="form-group"><label>Параметры:</label><div id="modalParams"></div><button type="button" id="addParamRowBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить параметр</button></div>';
 
-        if (isEdit) {
-            h += '<div class="form-group"><label>Компоненты шкафа:</label><div id="linkedBlocks"><p>Загрузка...</p></div><button type="button" id="addBlockLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить компонент шкафа</button></div>';
-        }
+        // Компоненты шкафа (ВСЕГДА показывать блок)
+        h += '<div class="form-group"><label>Компоненты шкафа:</label><div id="linkedBlocks"><p>Загрузка...</p></div><button type="button" id="addBlockLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить компонент шкафа</button></div>';
+
+        // Материалы компонента (ВСЕГДА показывать блок)
+        h += '<div class="form-group"><label>Материалы компонента:</label><div id="componentMaterials"><p>Загрузка...</p></div><button type="button" id="addMaterialLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить материал</button></div>';
 
         h += '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="this.closest(\'.modal\').remove()">Отмена</button></div>';
 
         m.querySelector('#sysCompForm').innerHTML = h;
 
+        // Производители
         fetch('/api/manufacturers').then(function(r){ return r.json(); }).then(function(mans){
             var sel = document.getElementById('compManufacturer');
             sel.innerHTML = '<option value="">-- выберите --</option>';
             mans.forEach(function(m){ sel.innerHTML += '<option value="'+m.id+'"'+(comp && comp.manufacturer_id == m.id ? ' selected' : '')+'>'+m.name+'</option>'; });
         });
 
+        // Обработчик типа
         var ts = document.getElementById('compType');
         var newTypeRow = m.querySelector('.new-type-row');
         if (ts.value === '__new__') newTypeRow.style.display = 'flex';
@@ -79,6 +87,7 @@ window.SystemCompModal = {
             .then(function(nt){ ts.innerHTML += '<option value="'+nt.id+'" selected>'+nt.name+'</option>'; ts.value = nt.id; newTypeRow.style.display = 'none'; });
         });
 
+        // Параметры
         var pc = document.getElementById('modalParams');
         function addParamRow(pId, val, typeVal) {
             var row = document.createElement('div');
@@ -154,40 +163,105 @@ window.SystemCompModal = {
         }
         document.getElementById('addParamRowBtn').addEventListener('click', function(){ addParamRow(null, null, null); });
 
+        // ==================== КОМПОНЕНТЫ ШКАФА ====================
+        var lc = document.getElementById('linkedBlocks');
         if (isEdit) {
-            var lc = document.getElementById('linkedBlocks');
+            // Загружаем связанные компоненты шкафа
             fetch('/api/system-components/' + comp.id + '/blocks')
                 .then(function(r){ return r.json(); })
                 .then(function(data){
                     if (!data.length) {
                         lc.innerHTML = '<p>Нет связанных компонентов</p>';
                     } else {
-                        var h2 = '<table class="data-table"><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Производитель</th><th>Кол-во</th><th></th></tr>';
+                        var h2 = '<table class="data-table"><thead><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Производитель</th><th>Кол-во</th><th></th></tr></thead><tbody>';
                         data.forEach(function(l){
                             h2 += '<tr><td>'+self._esc(l.type_name||'')+'</td><td>'+self._esc(l.name)+'</td><td>'+self._esc(l.article||'')+'</td><td>'+self._esc(l.manufacturer_name||'')+'</td><td>'+l.quantity+'</td><td><button class="btn btn-sm btn-delete" onclick="this.closest(\'tr\').remove();fetch(\'/api/system-components/'+comp.id+'/blocks/'+l.id+'\',{method:\'DELETE\'})">×</button></td></tr>';
                         });
-                        h2 += '</table>';
+                        h2 += '</tbody></table>';
                         lc.innerHTML = h2;
                     }
                 })
                 .catch(function(){ lc.innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; });
-
-            document.getElementById('addBlockLinkBtn').addEventListener('click', function(){
-                if (typeof BlockTemplateModal !== 'undefined') {
-                    BlockTemplateModal.open(function(blockId){
-                        if (blockId) {
-                            fetch('/api/system-components/'+comp.id+'/blocks', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ block_template_id: blockId, quantity: 1 })
-                            })
-                            .then(function(){ lc.innerHTML = '<p>Загрузка...</p>'; self._buildForm(m, comp, params, types, callback); });
-                        }
-                    });
-                }
-            });
+        } else {
+            lc.innerHTML = '<p>Нет связанных компонентов</p>';
         }
 
+        document.getElementById('addBlockLinkBtn').addEventListener('click', function(){
+            if (typeof BlockTemplateModal !== 'undefined') {
+                BlockTemplateModal.open(function(blockId){
+                    if (blockId) {
+                        var compId = comp ? comp.id : null;
+                        if (!compId) {
+                            alert('Сначала сохраните компонент, затем добавляйте компоненты шкафа');
+                            return;
+                        }
+                        var quantity = prompt('Количество:', '1');
+                        if (quantity && !isNaN(quantity) && parseInt(quantity) > 0) {
+                            fetch('/api/system-components/'+compId+'/blocks', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ block_template_id: blockId, quantity: parseInt(quantity) })
+                            })
+                            .then(function(){ lc.innerHTML = '<p>Загрузка...</p>'; self._buildForm(m, comp, params, types, callback); })
+                            .catch(function(e){ alert(e.message); });
+                        }
+                    }
+                });
+            } else {
+                alert('Модальное окно компонентов шкафа не загружено');
+            }
+        });
+
+        // ==================== МАТЕРИАЛЫ КОМПОНЕНТА ====================
+        var mc = document.getElementById('componentMaterials');
+        if (isEdit) {
+            // Загружаем материалы
+            fetch('/api/materials/system-component/' + comp.id)
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    if (!data.length) {
+                        mc.innerHTML = '<p>Нет материалов</p>';
+                    } else {
+                        var h3 = '<table class="data-table"><thead><tr><th>Артикул</th><th>Название</th><th>Ед.изм.</th><th>Цена</th><th>Кол-во</th><th></th></tr></thead><tbody>';
+                        data.forEach(function(item){
+                            h3 += '<tr><td>'+self._esc(item.article||'')+'</td><td>'+self._esc(item.name)+'</td><td>'+self._esc(item.unit||'')+'</td><td>'+(item.price||'')+'</td><td>'+item.quantity+'</td><td><button class="btn btn-sm btn-delete" onclick="this.closest(\'tr\').remove();fetch(\'/api/materials/system-component/'+comp.id+'/'+item.material_id+'\',{method:\'DELETE\'})">×</button></td></tr>';
+                        });
+                        h3 += '</tbody></table>';
+                        mc.innerHTML = h3;
+                    }
+                })
+                .catch(function(){ mc.innerHTML = '<p style="color:red;">Ошибка загрузки материалов</p>'; });
+        } else {
+            mc.innerHTML = '<p>Нет материалов</p>';
+        }
+
+        document.getElementById('addMaterialLinkBtn').addEventListener('click', function(){
+            if (typeof MaterialModal !== 'undefined') {
+                MaterialModal.select(function(materialId){
+                    if (materialId) {
+                        var compId = comp ? comp.id : null;
+                        if (!compId) {
+                            alert('Сначала сохраните компонент, затем добавляйте материалы');
+                            return;
+                        }
+                        var quantity = prompt('Количество:', '1');
+                        if (quantity && !isNaN(quantity) && parseInt(quantity) > 0) {
+                            fetch('/api/materials/system-component/'+compId, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ material_id: materialId, quantity: parseInt(quantity) })
+                            })
+                            .then(function(){ mc.innerHTML = '<p>Загрузка...</p>'; self._buildForm(m, comp, params, types, callback); })
+                            .catch(function(e){ alert(e.message); });
+                        }
+                    }
+                });
+            } else {
+                alert('Модальное окно материалов не загружено');
+            }
+        });
+
+        // Сохранение
         m.querySelector('#sysCompForm').addEventListener('submit', function(e){
             e.preventDefault();
             var name = document.getElementById('compName').value.trim();

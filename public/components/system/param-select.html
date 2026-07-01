@@ -12,7 +12,7 @@ window.SystemParamSelect = {
             h += '<input type="text" class="system-param-value" placeholder="Значение" style="flex:1;" value="'+(value||'')+'">';
             h += '<input type="text" class="system-param-type" placeholder="Тип" style="flex:0.7;" value="'+(typeVal||'')+'">';
             h += '<input type="text" class="system-param-new-name" placeholder="Название" style="flex:1;display:none;">';
-            h += '<button type="button" class="btn btn-sm btn-primary system-param-save-btn" style="display:none;">✓</button>';
+            h += '<button type="button" class="btn btn-sm btn-primary system-param-save-btn" style="display:none;" id="param_select_save_btn">✓</button>';
             container.innerHTML = h;
             var sel = container.querySelector('.system-param-select');
             var vi = container.querySelector('.system-param-value');

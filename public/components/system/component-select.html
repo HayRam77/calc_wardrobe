@@ -10,7 +10,7 @@ window.SystemComponentSelect = {
             h += '<input type="text" class="system-comp-new-name" placeholder="Название" style="flex:1;display:none;">';
             h += '<div class="system-comp-new-type" style="flex:1;display:none;"></div>';
             h += '<input type="text" class="system-comp-new-art" placeholder="Артикул" style="flex:1;display:none;">';
-            h += '<button type="button" class="btn btn-sm btn-primary system-comp-save-btn" style="display:none;">✓</button>';
+            h += '<button type="button" class="btn btn-sm btn-primary system-comp-save-btn" style="display:none;" id="component_select_save_btn">✓</button>';
             container.innerHTML = h;
             var sel = container.querySelector('.system-comp-select');
             var qty = container.querySelector('.system-comp-qty');

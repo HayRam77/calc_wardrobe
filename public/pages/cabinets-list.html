@@ -22,7 +22,7 @@
                 <div class="form-group"><label for="cabinetProject">Проект *</label><select id="cabinetProject" required></select></div>
                 <div class="form-group"><label for="cabinetDesc">Описание</label><textarea id="cabinetDesc" rows="2"></textarea></div>
                 <div id="cabinetError" class="error-message" style="display:none;"></div>
-                <div class="form-actions"><button type="button" class="btn btn-secondary" onclick="document.getElementById('modal').style.display='none'">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>
+                <div class="form-actions"><button type="button" class="btn btn-secondary" onclick="document.getElementById('modal').style.display='none'" id="cabinets_list_btn_btn">Отмена</button><button type="submit" class="btn btn-primary" id="cabinets_list_btn_btn_1">Сохранить</button></div>
             </form>
         </div>
     </div>
@@ -44,7 +44,7 @@
         fetch('/api/cabinets').then(function(r){return r.json();}).then(function(data){
             var t=document.getElementById('cabinetsBody');
             if(!data.length){t.innerHTML='<tr><td colspan="6">Нет шкафов</td></tr>';return;}
-            t.innerHTML=data.map(function(c){return'<tr><td>'+c.id+'</td><td><a href="/cabinet/'+c.id+'" onclick="event.preventDefault();navigateTo(\'/cabinet/'+c.id+'\')">'+esc(c.name)+'</a></td><td>'+esc(c.project_name||'')+'</td><td>'+esc(c.owner_name||'')+'</td><td>'+formatDate(c.created_at)+'</td>'+(isAdmin?'<td><button class="btn btn-sm btn-edit" onclick="editCabinet('+c.id+')">✏️</button> <button class="btn btn-sm btn-primary" onclick="cloneCabinet('+c.id+')">📋</button> <button class="btn btn-sm btn-delete" onclick="deleteCabinet('+c.id+')">🗑️</button></td>':'')+'</tr>';}).join('');
+            t.innerHTML=data.map(function(c){return'<tr><td>'+c.id+'</td><td><a href="/cabinet/'+c.id+'" onclick="event.preventDefault();navigateTo(\'/cabinet/'+c.id+'\')">'+esc(c.name)+'</a></td><td>'+esc(c.project_name||'')+'</td><td>'+esc(c.owner_name||'')+'</td><td>'+formatDate(c.created_at)+'</td>'+(isAdmin?'<td><button class="btn btn-sm btn-edit" onclick="editCabinet('+c.id+')" id="cabinets_list_edit_btn">✏️</button> <button class="btn btn-sm btn-primary" onclick="cloneCabinet('+c.id+')" id="cabinets_list_btn_btn_2">📋</button> <button class="btn btn-sm btn-delete" onclick="deleteCabinet('+c.id+')" id="cabinets_list_del_btn">🗑️</button></td>':'')+'</tr>';}).join('');
         });
     }
 

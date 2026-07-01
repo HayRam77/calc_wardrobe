@@ -25,7 +25,7 @@
             <div id="projectError" class="error-message" style="display:none;"></div>
             <div class="form-actions" style="margin-top:15px;">
                 <button type="button" id="projectCancelBtn" class="btn btn-secondary">Отмена</button>
-                <button type="submit" class="btn btn-primary">Сохранить</button>
+                <button type="submit" class="btn btn-primary" id="home_btn_btn">Сохранить</button>
             </div>
         </form>
     </div>
@@ -57,7 +57,7 @@
             html += '</tr></thead><tbody>';
             data.forEach(function(p) {
                 html += '<tr><td>' + p.id + '</td><td><a href="/project/' + p.id + '" onclick="navigateTo(\'/project/' + p.id + '\');return false;">' + escapeHtml(p.name) + '</a></td><td>' + escapeHtml(p.description || '') + '</td><td>' + escapeHtml(p.owner_name || p.user_id) + '</td>';
-                if (isAdmin) html += '<td><button class="btn btn-sm btn-edit" onclick="editProject(' + p.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteProject(' + p.id + ')">🗑️</button></td>';
+                if (isAdmin) html += '<td><button class="btn btn-sm btn-edit" onclick="editProject(' + p.id + ')" id="home_edit_btn">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteProject(' + p.id + ')" id="home_del_btn">🗑️</button></td>';
                 html += '</tr>';
             });
             html += '</tbody></table></div>';

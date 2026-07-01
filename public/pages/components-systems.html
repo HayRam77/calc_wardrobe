@@ -1,9 +1,9 @@
 <!-- public/pages/components-systems.html -->
 <div class="page-content">
     <div class="tabs">
-        <button class="tab-btn active" data-tab="components">Компоненты систем</button>
-        <button class="tab-btn" data-tab="types">Типы компонентов систем</button>
-        <button class="tab-btn" data-tab="params">Параметры компонентов систем</button>
+        <button class="tab-btn active" data-tab="components" id="components_systems_btn_btn">Компоненты систем</button>
+        <button class="tab-btn" data-tab="types" id="components_systems_btn_btn_1">Типы компонентов систем</button>
+        <button class="tab-btn" data-tab="params" id="components_systems_btn_btn_2">Параметры компонентов систем</button>
     </div>
 
     <div class="tab-content active" id="tab-components">
@@ -161,7 +161,7 @@
                         }
                         html += '<tr><td>' + item.id + '</td><td>' + esc(item.type_name || '') + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.manufacturer_name || '') + '</td><td>' + esc(item.article || '') + '</td><td>' + esc(item.description || '') + '</td><td>' + paramsHtml + '</td>';
                         if (isAdmin) {
-                            html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent(' + item.id + ')">🗑️</button></td>';
+                            html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent(' + item.id + ')" id="components_systems_edit_btn">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent(' + item.id + ')" id="components_systems_del_btn">🗑️</button></td>';
                         }
                         html += '</tr>';
                     });
@@ -213,7 +213,7 @@
                     data.forEach(function(item){
                         html += '<tr><td>' + item.id + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.description || '') + '</td>';
                         if (isAdmin) {
-                            html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemComponentType(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponentType(' + item.id + ')">🗑️</button></td>';
+                            html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemComponentType(' + item.id + ')" id="components_systems_edit_btn_1">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponentType(' + item.id + ')" id="components_systems_del_btn_1">🗑️</button></td>';
                         }
                         html += '</tr>';
                     });
@@ -230,7 +230,7 @@
         showModal('Добавить тип компонента систем',
             '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="typeName" required></div>' +
             '<div class="form-group"><label>Описание:</label><textarea id="typeDescription" rows="3"></textarea></div>' +
-            '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+            '<div class="form-actions"><button type="submit" class="btn btn-primary" id="components_systems_btn_btn_3">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()" id="components_systems_btn_btn_4">Отмена</button></div>'
         );
         modalForm.onsubmit = function(e) {
             e.preventDefault();
@@ -254,7 +254,7 @@
                 showModal('Редактировать тип',
                     '<div class="form-group"><label>Название:</label><input type="text" id="typeName" value="' + esc(t.name) + '" required></div>' +
                     '<div class="form-group"><label>Описание:</label><textarea id="typeDescription" rows="3">' + esc(t.description || '') + '</textarea></div>' +
-                    '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+                    '<div class="form-actions"><button type="submit" class="btn btn-primary" id="components_systems_btn_btn_5">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()" id="components_systems_btn_btn_6">Отмена</button></div>'
                 );
                 modalForm.onsubmit = function(e) {
                     e.preventDefault();
@@ -297,7 +297,7 @@
                     data.forEach(function(item){
                         html += '<tr><td>' + item.id + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.type || '') + '</td><td>' + esc(item.description || '') + '</td>';
                         if (isAdmin) {
-                            html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemParameter(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemParameter(' + item.id + ')">🗑️</button></td>';
+                            html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemParameter(' + item.id + ')" id="components_systems_edit_btn_2">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemParameter(' + item.id + ')" id="components_systems_del_btn_2">🗑️</button></td>';
                         }
                         html += '</tr>';
                     });
@@ -315,7 +315,7 @@
             '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="paramName" required></div>' +
             '<div class="form-group"><label>Тип:</label><input type="text" id="paramType"></div>' +
             '<div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3"></textarea></div>' +
-            '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+            '<div class="form-actions"><button type="submit" class="btn btn-primary" id="components_systems_btn_btn_7">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()" id="components_systems_btn_btn_8">Отмена</button></div>'
         );
         modalForm.onsubmit = function(e) {
             e.preventDefault();
@@ -343,7 +343,7 @@
                     '<div class="form-group"><label>Название:</label><input type="text" id="paramName" value="' + esc(p.name) + '" required></div>' +
                     '<div class="form-group"><label>Тип:</label><input type="text" id="paramType" value="' + esc(p.type || '') + '"></div>' +
                     '<div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3">' + esc(p.description || '') + '</textarea></div>' +
-                    '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+                    '<div class="form-actions"><button type="submit" class="btn btn-primary" id="components_systems_btn_btn_9">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()" id="components_systems_btn_btn_10">Отмена</button></div>'
                 );
                 modalForm.onsubmit = function(e) {
                     e.preventDefault();

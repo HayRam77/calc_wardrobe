@@ -14,13 +14,13 @@
                 <select id="systemSelect" required><option value="">-- выберите --</option></select>
                 <div class="new-system-row" style="display:none;margin-top:5px;display:flex;gap:5px;">
                     <input type="text" class="new-system-name" placeholder="Название новой системы" style="flex:1;">
-                    <button type="button" class="btn btn-sm btn-primary save-new-system-btn">✓</button>
+                    <button type="button" class="btn btn-sm btn-primary save-new-system-btn" id="cabinet_save_btn">✓</button>
                 </div>
             </div>
             <div id="systemError" class="error-message" style="display:none;"></div>
             <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="document.getElementById('systemModal').style.display='none'">Отмена</button>
-                <button type="submit" class="btn btn-primary">Сохранить</button>
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('systemModal').style.display='none'" id="cabinet_btn_btn">Отмена</button>
+                <button type="submit" class="btn btn-primary" id="cabinet_btn_btn_1">Сохранить</button>
             </div>
         </form>
     </div>
@@ -33,7 +33,7 @@
         <form id="blockForm">
             <div class="form-group"><label for="blockTemplate">Компонент *</label><select id="blockTemplate" required></select></div>
             <div class="form-group"><label for="blockQuantity">Количество</label><input type="number" id="blockQuantity" value="1" min="1"></div>
-            <div class="form-actions"><button type="button" class="btn btn-secondary" onclick="document.getElementById('blockModal').style.display='none'">Отмена</button><button type="submit" class="btn btn-primary">Добавить</button></div>
+            <div class="form-actions"><button type="button" class="btn btn-secondary" onclick="document.getElementById('blockModal').style.display='none'" id="cabinet_btn_btn_2">Отмена</button><button type="submit" class="btn btn-primary" id="cabinet_btn_btn_3">Добавить</button></div>
         </form>
     </div>
 </div>
@@ -65,7 +65,7 @@
             var c = document.getElementById('cabinetSystems');
             if (!data.length) { c.innerHTML = '<p>Нет систем</p>'; return; }
             var h = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th>Действия</th></tr>';
-            data.forEach(function(s){h += '<tr><td>'+esc(s.system_name||'')+'</td><td><button class="btn btn-sm btn-edit" onclick="editSystem('+s.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="delSystem('+s.id+')">🗑️</button></td></tr>';});
+            data.forEach(function(s){h += '<tr><td>'+esc(s.system_name||'')+'</td><td><button class="btn btn-sm btn-edit" onclick="editSystem('+s.id+')" id="cabinet_edit_btn">✏️</button> <button class="btn btn-sm btn-delete" onclick="delSystem('+s.id+')" id="cabinet_del_btn">🗑️</button></td></tr>';});
             h += '</table></div>'; c.innerHTML = h;
         });
     }
@@ -130,7 +130,7 @@
                     html += '<h4>'+esc(sys.system_name||'Система')+'</h4>';
                     if (sysData.components && sysData.components.length) {
                         html += '<div class="table-container"><table class="data-table"><tr><th>Компонент</th><th>Тип</th><th>Артикул</th><th>Кол-во</th><th>Действия</th></tr>';
-                        sysData.components.forEach(function(c){ html += '<tr><td>'+esc(c.name)+'</td><td>'+esc(c.type_name||'')+'</td><td>'+esc(c.article||'')+'</td><td>'+c.quantity+'</td><td><button class="btn btn-sm btn-edit" onclick="editSysComp('+c.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="delSysComp('+c.id+')">🗑️</button></td></tr>'; });
+                        sysData.components.forEach(function(c){ html += '<tr><td>'+esc(c.name)+'</td><td>'+esc(c.type_name||'')+'</td><td>'+esc(c.article||'')+'</td><td>'+c.quantity+'</td><td><button class="btn btn-sm btn-edit" onclick="editSysComp('+c.id+')" id="cabinet_edit_btn_1">✏️</button> <button class="btn btn-sm btn-delete" onclick="delSysComp('+c.id+')" id="cabinet_del_btn_1">🗑️</button></td></tr>'; });
                         html += '</table></div>';
                     } else { html += '<p>Нет компонентов</p>'; }
                     html += '<br>';

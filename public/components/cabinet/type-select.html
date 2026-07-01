@@ -13,7 +13,7 @@ window.CabinetTypeSelect = {
             html += '<optgroup label="Добавить"><option value="__new__">+ новый тип</option></optgroup></select>';
             html += '<div class="new-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;">';
             html += '<input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;">';
-            html += '<button type="button" class="btn btn-sm btn-primary save-type-btn">✓</button></div>';
+            html += '<button type="button" class="btn btn-sm btn-primary save-type-btn" id="type_select_save_btn">✓</button></div>';
             container.innerHTML = html;
 
             var sel = container.querySelector('.cabinet-type-select');
