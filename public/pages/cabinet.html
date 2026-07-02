@@ -510,15 +510,19 @@
         .then(function(r){
             if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
             window.loadCabinetMaterials();
+            console.log('✅ Количество обновлено, таблица обновлена');
         })
-        .catch(function(e){ alert(e.message); });
+        .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
     window.delMaterial = function(linkId) {
         if (!confirm('Удалить материал из шкафа?')) return;
         fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' })
-            .then(function(){ window.loadCabinetMaterials(); })
-            .catch(function(e){ alert(e.message); });
+            .then(function(){ 
+                window.loadCabinetMaterials();
+                console.log('✅ Материал удалён, таблица обновлена');
+            })
+            .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
     window.pageInit = function() {};
