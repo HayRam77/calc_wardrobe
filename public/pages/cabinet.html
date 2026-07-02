@@ -79,10 +79,53 @@
         .then(function(res) { return res.json(); })
         .then(function(cabinet) {
             document.querySelector('.page-title').textContent = 'Шкаф: ' + cabinet.name;
-            var html = '<div class="module-box"><h3>Системы шкафа</h3><div id="cabinetSystems">Загрузка...</div><button id="addSystemBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить систему</button></div>';
+            
+            // Создаем структуру с вкладками
+            var html = '<div class="cabinet-tabs">';
+            html += '<div class="tabs">';
+            html += '<button class="tab-btn active" data-tab="config">Конфигурация шкафа</button>';
+            html += '<button class="tab-btn" data-tab="calculation">Калькуляция шкафа</button>';
+            html += '<button class="tab-btn" data-tab="pricing">Расценки шкафа</button>';
+            html += '</div>';
+            
+            // Вкладка "Конфигурация шкафа" (существующий контент)
+            html += '<div class="tab-content active" id="tab-config">';
+            html += '<div class="module-box"><h3>Системы шкафа</h3><div id="cabinetSystems">Загрузка...</div><button id="addSystemBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить систему</button></div>';
             html += '<div class="module-box"><h3>Компоненты систем</h3><div id="cabinetSystemComponents">Загрузка...</div></div>';
             html += '<div class="module-box"><h3>Компоненты шкафа</h3><div id="cabinetBlocks">Загрузка...</div><button id="addBlockBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить компонент шкафа</button></div>';
+            html += '</div>';
+            
+            // Вкладка "Калькуляция шкафа" (заглушка)
+            html += '<div class="tab-content" id="tab-calculation">';
+            html += '<div style="padding:20px;text-align:center;color:#666;">';
+            html += '<h3 style="color:#1a5f7a;">Калькуляция шкафа</h3>';
+            html += '<p>Страница в разработке. Здесь будет отображаться калькуляция шкафа.</p>';
+            html += '</div>';
+            html += '</div>';
+            
+            // Вкладка "Расценки шкафа" (заглушка)
+            html += '<div class="tab-content" id="tab-pricing">';
+            html += '<div style="padding:20px;text-align:center;color:#666;">';
+            html += '<h3 style="color:#1a5f7a;">Расценки шкафа</h3>';
+            html += '<p>Страница в разработке. Здесь будут отображаться расценки шкафа.</p>';
+            html += '</div>';
+            html += '</div>';
+            
+            html += '</div>';
+            
             document.getElementById('cabinetContent').innerHTML = html;
+            
+            // Инициализация вкладок
+            document.querySelectorAll('.tab-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+                    document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+                    this.classList.add('active');
+                    var target = document.getElementById('tab-' + this.dataset.tab);
+                    if (target) target.classList.add('active');
+                });
+            });
+            
             loadSystems();
             loadSystemComponents();
             setTimeout(function(){ window.loadBlocks(); }, 100);
