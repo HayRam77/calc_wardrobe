@@ -9,7 +9,6 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // ==================== ОСНОВНЫЕ CRUD ====================
 
-// Получить все материалы с данными производителя
 router.get('/', auth, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -20,12 +19,11 @@ router.get('/', auth, async (req, res) => {
         `);
         res.json(result.rows);
     } catch (err) {
-        console.error('❌ Ошибка получения материалов:', err);
+        console.error(err);
         res.status(500).json({ message: 'Ошибка получения материалов' });
     }
 });
 
-// Получить один материал
 router.get('/:id', auth, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -39,12 +37,11 @@ router.get('/:id', auth, async (req, res) => {
         }
         res.json(result.rows[0]);
     } catch (err) {
-        console.error('❌ Ошибка получения материала:', err);
+        console.error(err);
         res.status(500).json({ message: 'Ошибка получения материала' });
     }
 });
 
-// Создать материал
 router.post('/', auth, isAdmin, async (req, res) => {
     try {
         const { article, name, manufacturer_id, description, unit, price } = req.body;
@@ -56,12 +53,11 @@ router.post('/', auth, isAdmin, async (req, res) => {
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
-        console.error('❌ Ошибка создания материала:', err);
+        console.error(err);
         res.status(500).json({ message: 'Ошибка создания материала' });
     }
 });
 
-// Обновить материал
 router.put('/:id', auth, isAdmin, async (req, res) => {
     try {
         const { article, name, manufacturer_id, description, unit, price } = req.body;
@@ -78,12 +74,11 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
         }
         res.json(result.rows[0]);
     } catch (err) {
-        console.error('❌ Ошибка обновления материала:', err);
+        console.error(err);
         res.status(500).json({ message: 'Ошибка обновления материала' });
     }
 });
 
-// Удалить материал
 router.delete('/:id', auth, isAdmin, async (req, res) => {
     try {
         const result = await pool.query('DELETE FROM materials WHERE id = $1 RETURNING *', [req.params.id]);
@@ -92,14 +87,13 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
         }
         res.json({ message: 'Материал удалён' });
     } catch (err) {
-        console.error('❌ Ошибка удаления материала:', err);
+        console.error(err);
         res.status(500).json({ message: 'Ошибка удаления материала' });
     }
 });
 
 // ==================== МАТЕРИАЛЫ КОМПОНЕНТА СИСТЕМЫ ====================
 
-// Получить материалы компонента системы
 router.get('/system-component/:id', auth, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -112,12 +106,11 @@ router.get('/system-component/:id', auth, async (req, res) => {
         `, [req.params.id]);
         res.json(result.rows);
     } catch (err) {
-        console.error('❌ Ошибка получения материалов компонента системы:', err);
+        console.error(err);
         res.status(500).json({ message: 'Ошибка получения материалов компонента системы' });
     }
 });
 
-// Добавить материал к компоненту системы
 router.post('/system-component/:id', auth, isAdmin, async (req, res) => {
     const client = await pool.connect();
     try {
@@ -133,7 +126,6 @@ router.post('/system-component/:id', auth, isAdmin, async (req, res) => {
             [req.params.id, material_id, quantity || 1]
         );
         
-        // Находим шкафы, в которых используется этот компонент системы
         const cabinetsResult = await client.query(`
             SELECT DISTINCT cs.cabinet_id, p.id as project_id
             FROM system_components_link scl
@@ -157,14 +149,13 @@ router.post('/system-component/:id', auth, isAdmin, async (req, res) => {
         res.status(201).json(result.rows[0]);
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('❌ Ошибка добавления материала к компоненту системы:', err);
+        console.error(err);
         res.status(500).json({ message: 'Ошибка добавления материала к компоненту системы' });
     } finally {
         client.release();
     }
 });
 
-// Удалить материал из компонента системы
 router.delete('/system-component/:componentId/:materialId', auth, isAdmin, async (req, res) => {
     try {
         await pool.query(
@@ -173,14 +164,13 @@ router.delete('/system-component/:componentId/:materialId', auth, isAdmin, async
         );
         res.json({ message: 'Материал удалён из компонента системы' });
     } catch (err) {
-        console.error('❌ Ошибка удаления материала из компонента системы:', err);
+        console.error(err);
         res.status(500).json({ message: 'Ошибка удаления материала из компонента системы' });
     }
 });
 
 // ==================== МАТЕРИАЛЫ ШКАФА ====================
 
-// Получить HTML-фрагмент для материалов шкафа
 router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -225,12 +215,11 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
         }
         res.send(html);
     } catch (err) {
-        console.error('❌ Ошибка в /cabinet/:cabinetId/html:', err);
+        console.error(err);
         res.status(500).json({ message: 'Ошибка', error: err.message });
     }
 });
 
-// Добавить материал в шкаф (прямая привязка)
 router.post('/cabinet/:cabinetId', auth, isAdmin, async (req, res) => {
     const client = await pool.connect();
     try {
@@ -261,14 +250,13 @@ router.post('/cabinet/:cabinetId', auth, isAdmin, async (req, res) => {
         res.status(201).json(result.rows[0]);
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('❌ Ошибка добавления материала в шкаф:', err);
+        console.error(err);
         res.status(500).json({ message: 'Ошибка добавления материала в шкаф', error: err.message });
     } finally {
         client.release();
     }
 });
 
-// Обновить количество материала в шкафу
 router.put('/cabinet/:cabinetId/:materialId', auth, isAdmin, async (req, res) => {
     try {
         const { quantity } = req.body;
@@ -286,7 +274,6 @@ router.put('/cabinet/:cabinetId/:materialId', auth, isAdmin, async (req, res) =>
     }
 });
 
-// Удалить материал из шкафа
 router.delete('/cabinet/:cabinetId/:materialId', auth, isAdmin, async (req, res) => {
     try {
         await pool.query(
@@ -305,19 +292,24 @@ router.delete('/cabinet/:cabinetId/:materialId', auth, isAdmin, async (req, res)
 router.get('/export', auth, async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT m.id, m.article, m.name, man.name as manufacturer, m.description, m.unit, m.price
+            SELECT m.id, m.article, m.name, m.description, m.unit, m.price
             FROM materials m
-            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
             ORDER BY m.name
         `);
         const ws = XLSX.utils.json_to_sheet(result.rows);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Материалы');
+        
+        const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+        
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename=materials.xlsx');
-        res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+        res.setHeader('Content-Length', buffer.length);
+        
+        res.send(buffer);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Ошибка экспорта' });
+        console.error('❌ Ошибка экспорта:', err);
+        res.status(500).json({ message: 'Ошибка экспорта', error: err.message });
     }
 });
 
