@@ -52,10 +52,12 @@ router.get('/:id', auth, async (req, res) => {
     const sys = await pool.query('SELECT * FROM systems WHERE id = $1', [req.params.id]);
     if (sys.rows.length === 0) return res.status(404).json({ message: 'Не найдена' });
     const comps = await pool.query(`
-      SELECT scl.id as link_id, scl.*, sc.id, sc.name, sc.article, sc.type_id, sct.name as type_name
+      SELECT scl.id as link_id, scl.*, sc.id, sc.name, sc.article, sc.type_id, sc.module_id,
+             sct.name as type_name, sm.name as module_name
       FROM system_components_link scl
       JOIN system_components sc ON scl.component_id = sc.id
       LEFT JOIN system_component_types sct ON sc.type_id = sct.id
+      LEFT JOIN system_modules sm ON sc.module_id = sm.id
       WHERE scl.system_id = $1
     `, [req.params.id]);
     res.json({ ...sys.rows[0], components: comps.rows });
