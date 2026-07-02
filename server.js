@@ -39,6 +39,8 @@ app.use('/api/admin', adminRouter);
 app.use('/api/system-components', systemComponentsRouter);
 app.use('/api/system-component-types', systemComponentTypesRouter);
 app.use('/api/system-parameters', systemParametersRouter);
+const systemModulesRouter = require("./routes/systemModules");
+app.use("/api/system-modules", systemModulesRouter);
 app.use('/api/systems', systemsRouter);
 app.use('/api/materials', materialsRouter);
 

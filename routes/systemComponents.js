@@ -16,6 +16,7 @@ router.get('/export', auth, async (req, res) => {
       FROM system_components sc
       LEFT JOIN system_component_types sct ON sc.type_id = sct.id
       LEFT JOIN manufacturers m ON sc.manufacturer_id = m.id
+      LEFT JOIN system_modules sm ON sc.module_id = sm.id
       ORDER BY sc.id
     `);
     
@@ -92,7 +93,8 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
 
 router.get('/', auth, async (req, res) => {
   try {
-    const components = await pool.query(`SELECT sc.*, sct.name AS type_name, sct.id AS type_id, m.name AS manufacturer_name, m.id AS manufacturer_id FROM system_components sc LEFT JOIN system_component_types sct ON sc.type_id = sct.id LEFT JOIN manufacturers m ON sc.manufacturer_id = m.id ORDER BY sc.id`);
+    const components = await pool.query(`SELECT sc.*, sct.name AS type_name, sct.id AS type_id, m.name AS manufacturer_name, m.id AS manufacturer_id FROM system_components sc LEFT JOIN system_component_types sct ON sc.type_id = sct.id LEFT JOIN manufacturers m ON sc.manufacturer_id = m.id
+      LEFT JOIN system_modules sm ON sc.module_id = sm.id ORDER BY sc.id`);
     const result = await Promise.all(components.rows.map(async (comp) => {
       const params = await pool.query(`SELECT sp.id, sp.name, sp.type, scp.value FROM system_component_params scp JOIN system_parameters sp ON scp.parameter_id = sp.id WHERE scp.component_id = $1`, [comp.id]);
       return { ...comp, params: params.rows };
@@ -103,7 +105,8 @@ router.get('/', auth, async (req, res) => {
 
 router.get('/:id', auth, async (req, res) => {
   try {
-    const comp = await pool.query(`SELECT sc.*, sct.name AS type_name, sct.id AS type_id, m.name AS manufacturer_name, m.id AS manufacturer_id FROM system_components sc LEFT JOIN system_component_types sct ON sc.type_id = sct.id LEFT JOIN manufacturers m ON sc.manufacturer_id = m.id WHERE sc.id = $1`, [req.params.id]);
+    const comp = await pool.query(`SELECT sc.*, sct.name AS type_name, sct.id AS type_id, m.name AS manufacturer_name, m.id AS manufacturer_id FROM system_components sc LEFT JOIN system_component_types sct ON sc.type_id = sct.id LEFT JOIN manufacturers m ON sc.manufacturer_id = m.id
+      LEFT JOIN system_modules sm ON sc.module_id = sm.id WHERE sc.id = $1`, [req.params.id]);
     if (comp.rows.length === 0) return res.status(404).json({ message: 'Не найден' });
     const params = await pool.query(`SELECT sp.id, sp.name, sp.type, scp.value FROM system_component_params scp JOIN system_parameters sp ON scp.parameter_id = sp.id WHERE scp.component_id = $1`, [req.params.id]);
     res.json({ ...comp.rows[0], params: params.rows });
@@ -140,7 +143,8 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
       }
     }
     await client.query('COMMIT');
-    const comp = await pool.query(`SELECT sc.*, sct.name AS type_name, sct.id AS type_id, m.name AS manufacturer_name, m.id AS manufacturer_id FROM system_components sc LEFT JOIN system_component_types sct ON sc.type_id = sct.id LEFT JOIN manufacturers m ON sc.manufacturer_id = m.id WHERE sc.id = $1`, [id]);
+    const comp = await pool.query(`SELECT sc.*, sct.name AS type_name, sct.id AS type_id, m.name AS manufacturer_name, m.id AS manufacturer_id FROM system_components sc LEFT JOIN system_component_types sct ON sc.type_id = sct.id LEFT JOIN manufacturers m ON sc.manufacturer_id = m.id
+      LEFT JOIN system_modules sm ON sc.module_id = sm.id WHERE sc.id = $1`, [id]);
     const params = await pool.query(`SELECT sp.id, sp.name, sp.type, scp.value FROM system_component_params scp JOIN system_parameters sp ON scp.parameter_id = sp.id WHERE scp.component_id = $1`, [id]);
     res.json({ ...comp.rows[0], params: params.rows });
   } catch (err) { await client.query('ROLLBACK'); console.error(err); res.status(500).json({ message: 'Ошибка' }); }
