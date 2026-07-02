@@ -228,7 +228,17 @@ window.SystemCompModal = {
                 ni.style.display = '';
                 sv.style.display = '';
             }
-            s.addEventListener('change', function(){ ni.style.display = sv.style.display = s.value === '__new__' ? '' : 'none'; });
+            // При выборе существующего параметра подгружаем его тип
+            s.addEventListener('change', function(){
+                ni.style.display = sv.style.display = s.value === '__new__' ? '' : 'none';
+                // Если выбран существующий параметр — подгружаем его тип
+                if (s.value && s.value !== '__new__') {
+                    var selectedParam = params.find(function(p) { return p.id == s.value; });
+                    if (selectedParam && selectedParam.type) {
+                        ti.value = selectedParam.type;
+                    }
+                }
+            });
             sv.addEventListener('click', function(){
                 var n = ni.value.trim();
                 if (!n) { alert('Введите название'); return; }
@@ -237,6 +247,8 @@ window.SystemCompModal = {
                 .then(function(np){
                     s.innerHTML += '<option value="'+np.id+'" selected>'+np.name+'</option>';
                     s.value = np.id;
+                    // Добавляем новый параметр в список params
+                    params.push({id: np.id, name: np.name, type: np.type});
                     ni.style.display = 'none';
                     sv.style.display = 'none';
                 });
