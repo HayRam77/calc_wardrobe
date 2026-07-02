@@ -102,11 +102,19 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 // Получить HTML-фрагмент для материалов шкафа
 router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
     try {
+        // Получаем все материалы из project_materials
         const result = await pool.query(`
-            SELECT pm.id, pm.material_id, pm.quantity,
-                   m.article, m.name as material_name, m.unit, m.price
+            SELECT pm.id, pm.material_id, pm.quantity, pm.linked,
+                   m.article, m.name as material_name, m.unit, m.price,
+                   s.name as system_name,
+                   sc.name as component_name
             FROM project_materials pm
             JOIN materials m ON pm.material_id = m.id
+            LEFT JOIN system_component_materials scm ON scm.material_id = m.id
+            LEFT JOIN system_components sc ON scm.system_component_id = sc.id
+            LEFT JOIN system_components_link scl ON scl.component_id = sc.id
+            LEFT JOIN systems s ON scl.system_id = s.id
+            LEFT JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = pm.cabinet_id
             WHERE pm.cabinet_id = $1
             ORDER BY pm.id
         `, [req.params.cabinetId]);
@@ -115,9 +123,15 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
         if (result.rows.length === 0) {
             html = '<p>Нет материалов</p>';
         } else {
-            html = '<div class="table-container"><table class="data-table"><thead><tr><th>Артикул</th><th>Название</th><th>Ед. изм.</th><th>Цена</th><th>Кол-во</th><th>Действия</th></tr></thead><tbody>';
+            html = '<div class="table-container"><table class="data-table"><thead><tr><th>Система</th><th>Компонент системы</th><th>Артикул</th><th>Название</th><th>Ед. изм.</th><th>Цена</th><th>Кол-во</th><th>Действия</th></tr></thead><tbody>';
             result.rows.forEach(row => {
+                // Если linked = TRUE и есть системная привязка — показываем
+                // Если linked = FALSE — показываем "-"
+                const systemName = (row.linked && row.system_name) ? row.system_name : '-';
+                const componentName = (row.linked && row.component_name) ? row.component_name : '-';
                 html += `<tr>
+                    <td>${systemName}</td>
+                    <td>${componentName}</td>
                     <td>${row.article || ''}</td>
                     <td>${row.material_name}</td>
                     <td>${row.unit || ''}</td>
@@ -241,5 +255,61 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
         res.status(500).json({ message: 'Ошибка импорта' });
     }
 });
+
+
+
+// ==================== МАТЕРИАЛЫ КОМПОНЕНТА СИСТЕМЫ ====================
+
+// Получить материалы компонента системы
+router.get('/system-component/:id', auth, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT scm.*, m.*, man.name as manufacturer_name
+            FROM system_component_materials scm
+            JOIN materials m ON scm.material_id = m.id
+            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
+            WHERE scm.system_component_id = $1
+            ORDER BY m.name
+        `, [req.params.id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('❌ Ошибка получения материалов компонента системы:', err);
+        res.status(500).json({ message: 'Ошибка получения материалов компонента системы', error: err.message });
+    }
+});
+
+// Добавить материал к компоненту системы
+router.post('/system-component/:id', auth, isAdmin, async (req, res) => {
+    try {
+        const { material_id, quantity } = req.body;
+        const result = await pool.query(
+            `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (system_component_id, material_id) 
+             DO UPDATE SET quantity = EXCLUDED.quantity
+             RETURNING *`,
+            [req.params.id, material_id, quantity || 1]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('❌ Ошибка добавления материала к компоненту системы:', err);
+        res.status(500).json({ message: 'Ошибка добавления материала к компоненту системы' });
+    }
+});
+
+// Удалить материал из компонента системы
+router.delete('/system-component/:componentId/:materialId', auth, isAdmin, async (req, res) => {
+    try {
+        await pool.query(
+            'DELETE FROM system_component_materials WHERE system_component_id = $1 AND material_id = $2',
+            [req.params.componentId, req.params.materialId]
+        );
+        res.json({ message: 'Материал удалён из компонента системы' });
+    } catch (err) {
+        console.error('❌ Ошибка удаления материала из компонента системы:', err);
+        res.status(500).json({ message: 'Ошибка удаления материала из компонента системы' });
+    }
+});
+
 
 module.exports = router;
