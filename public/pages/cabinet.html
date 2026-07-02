@@ -93,6 +93,7 @@
             html += '<div class="module-box"><h3>Системы шкафа</h3><div id="cabinetSystems">Загрузка...</div><button id="addSystemBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить систему</button></div>';
             html += '<div class="module-box"><h3>Компоненты систем</h3><div id="cabinetSystemComponents">Загрузка...</div></div>';
             html += '<div class="module-box"><h3>Компоненты шкафа</h3><div id="cabinetBlocks">Загрузка...</div><button id="addBlockBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить компонент шкафа</button></div>';
+            html += '<div class="module-box"><h3>Материалы шкафа</h3><div id="cabinetMaterials">Загрузка...</div><button id="addMaterialToCabinetBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить материал</button></div>';
             html += '</div>';
             
             // Вкладка "Калькуляция шкафа" (заглушка)
@@ -129,8 +130,10 @@
             loadSystems();
             loadSystemComponents();
             setTimeout(function(){ window.loadBlocks(); }, 100);
+            loadCabinetMaterials();
             document.getElementById('addSystemBtn').addEventListener('click', function(){ openSystemModal(); });
             document.getElementById('addBlockBtn').addEventListener('click', window.openBlockModal);
+            document.getElementById('addMaterialToCabinetBtn').addEventListener('click', openAddMaterialToCabinet);
         });
 
     function loadSystems() {
@@ -420,6 +423,7 @@
                         if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
                         console.log('Добавлено, обновляем...');
                         setTimeout(function(){ window.loadBlocks(); }, 500);
+                        window.loadCabinetMaterials();
                     })
                     .catch(function(e){ alert(e.message); });
                 }
@@ -457,6 +461,64 @@
             .then(function(r){ return r.text(); })
             .then(function(html){ container.innerHTML = html; })
             .catch(function(e){ console.error(e); });
+    };
+
+
+    // ==================== МАТЕРИАЛЫ ШКАФА ====================
+    window.loadCabinetMaterials = function() {
+        var container = document.getElementById('cabinetMaterials');
+        if (!container) return;
+        fetch('/api/materials/cabinet/' + cabinetId + '/html')
+            .then(function(r){ return r.text(); })
+            .then(function(html){ container.innerHTML = html; })
+            .catch(function(e){ console.error(e); container.innerHTML = '<p style="color:red;">Ошибка загрузки материалов</p>'; });
+    };
+
+    window.openAddMaterialToCabinet = function() {
+        if (typeof MaterialModal !== 'undefined') {
+            MaterialModal.open(function(materialId) {
+                if (materialId) {
+                    var quantity = prompt('Количество:', '1');
+                    if (quantity && !isNaN(quantity) && parseInt(quantity) > 0) {
+                        fetch('/api/materials/cabinet/' + cabinetId, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ material_id: materialId, quantity: parseInt(quantity) })
+                        })
+                        .then(function(r){
+                            if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+                            window.loadCabinetMaterials();
+                            alert('✅ Материал добавлен в шкаф!');
+                        })
+                        .catch(function(e){ alert('Ошибка: ' + e.message); });
+                    }
+                }
+            });
+        } else {
+            alert('Модальное окно материалов не загружено');
+        }
+    };
+
+    window.editMaterialQuantity = function(linkId) {
+        var newQty = prompt('Новое количество:');
+        if (!newQty || isNaN(newQty) || parseInt(newQty) < 1) return;
+        fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantity: parseInt(newQty) })
+        })
+        .then(function(r){
+            if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+            window.loadCabinetMaterials();
+        })
+        .catch(function(e){ alert(e.message); });
+    };
+
+    window.delMaterial = function(linkId) {
+        if (!confirm('Удалить материал из шкафа?')) return;
+        fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' })
+            .then(function(){ window.loadCabinetMaterials(); })
+            .catch(function(e){ alert(e.message); });
     };
 
     window.pageInit = function() {};
