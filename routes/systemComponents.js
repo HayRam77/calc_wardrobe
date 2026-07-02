@@ -20,7 +20,20 @@ router.get('/', auth, async (req, res) => {
             LEFT JOIN system_modules sm ON sc.module_id = sm.id
             ORDER BY sc.name
         `);
-        res.json(result.rows);
+        
+        // Загружаем параметры для каждого компонента
+        const components = result.rows;
+        for (let i = 0; i < components.length; i++) {
+            const paramsResult = await pool.query(`
+                SELECT scp.*, p.name as parameter_name
+                FROM system_component_params scp
+                JOIN system_parameters p ON scp.parameter_id = p.id
+                WHERE scp.component_id = $1
+            `, [components[i].id]);
+            components[i].params = paramsResult.rows;
+        }
+        
+        res.json(components);
     } catch (err) {
         console.error('❌ Ошибка получения компонентов:', err);
         res.status(500).json({ message: 'Ошибка получения компонентов', error: err.message });
@@ -41,7 +54,18 @@ router.get('/:id', auth, async (req, res) => {
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Компонент не найден' });
         }
-        res.json(result.rows[0]);
+        const comp = result.rows[0];
+        
+        // Загружаем параметры компонента
+        const paramsResult = await pool.query(`
+            SELECT scp.*, p.name as parameter_name
+            FROM system_component_params scp
+            JOIN system_parameters p ON scp.parameter_id = p.id
+            WHERE scp.component_id = $1
+        `, [req.params.id]);
+        comp.params = paramsResult.rows;
+        
+        res.json(comp);
     } catch (err) {
         console.error('❌ Ошибка получения компонента:', err);
         res.status(500).json({ message: 'Ошибка получения компонента' });
