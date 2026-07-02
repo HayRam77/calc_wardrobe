@@ -5,7 +5,7 @@
 </div>
 
 <div id="systemModal" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:500px;">
+    <div class="modal-content" style="max-width:95vw;">
         <span class="modal-close" onclick="document.getElementById('systemModal').style.display='none'">&times;</span>
         <h3>Добавить систему</h3>
         <form id="systemForm">
@@ -27,7 +27,7 @@
 </div>
 
 <div id="blockModal" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:500px;">
+    <div class="modal-content" style="max-width:95vw;">
         <span class="modal-close" onclick="document.getElementById('blockModal').style.display='none'">&times;</span>
         <h3>Добавить компонент</h3>
         <form id="blockForm">
@@ -40,7 +40,7 @@
 
 <!-- Модальное окно для привязки существующего компонента -->
 <div id="attachComponentModal" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:500px;">
+    <div class="modal-content" style="max-width:95vw;">
         <span class="modal-close" onclick="document.getElementById('attachComponentModal').style.display='none'">&times;</span>
         <h3 id="attachComponentModalTitle">Привязать компонент к системе</h3>
         <form id="attachComponentForm">
@@ -174,7 +174,7 @@
                             document.getElementById('systemForm').dataset.editId = sysId;
                         });
                 }
-                document.getElementById('systemModal').style.display = 'block';
+                document.getElementById('systemModal').style.display = 'flex';
                 sel.onchange = function() {
                     document.querySelector('.new-system-row').style.display = sel.value === '__new__' ? 'flex' : 'none';
                 };
@@ -308,12 +308,12 @@
                     if (comp.manufacturer_name) text += ' [' + comp.manufacturer_name + ']';
                     select.innerHTML += '<option value="' + comp.id + '">' + esc(text) + '</option>';
                 });
-                modal.style.display = 'block';
+                modal.style.display = 'flex';
             })
             .catch(function(err){
                 console.error('Ошибка загрузки компонентов:', err);
                 errorDiv.textContent = 'Ошибка загрузки компонентов';
-                errorDiv.style.display = 'block';
+                errorDiv.style.display = 'flex';
             });
         form.onsubmit = function(e) {
             e.preventDefault();
@@ -321,12 +321,12 @@
             var quantity = parseInt(document.getElementById('attachComponentQuantity').value);
             if (!componentId) {
                 errorDiv.textContent = 'Выберите компонент';
-                errorDiv.style.display = 'block';
+                errorDiv.style.display = 'flex';
                 return;
             }
             if (!quantity || quantity < 1) {
                 errorDiv.textContent = 'Введите корректное количество';
-                errorDiv.style.display = 'block';
+                errorDiv.style.display = 'flex';
                 return;
             }
             errorDiv.style.display = 'none';
@@ -343,7 +343,7 @@
             })
             .catch(function(e){
                 errorDiv.textContent = 'Ошибка привязки: ' + e.message;
-                errorDiv.style.display = 'block';
+                errorDiv.style.display = 'flex';
             });
         };
     };

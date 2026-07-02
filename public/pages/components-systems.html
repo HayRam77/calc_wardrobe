@@ -89,13 +89,13 @@
     function applyPermissions() {
         var btns = ['addComponentBtn','exportComponentsBtn','importComponentsBtn','addTypeBtn','exportTypesBtn','importTypesBtn','addParamBtn','exportParamsBtn','importParamsBtn','addModuleBtn','exportModulesBtn','importModulesBtn'];
         var cols = ['componentsActionsCol','typesActionsCol','paramsActionsCol','modulesActionsCol'];
-        btns.forEach(function(id) { 
-            var el = document.getElementById(id); 
-            if (el) el.style.display = isAdmin ? '' : 'none'; 
+        btns.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = isAdmin ? '' : 'none';
         });
-        cols.forEach(function(id) { 
-            var el = document.getElementById(id); 
-            if (el) el.style.display = isAdmin ? '' : 'none'; 
+        cols.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = isAdmin ? '' : 'none';
         });
     }
 
@@ -108,17 +108,17 @@
                 btn.classList.add('active');
                 var target = document.getElementById('tab-' + btn.dataset.tab);
                 if (target) target.classList.add('active');
-                if (btn.dataset.tab === 'types' && !typesLoaded) { 
-                    loadTypes(); 
-                    typesLoaded = true; 
+                if (btn.dataset.tab === 'types' && !typesLoaded) {
+                    loadTypes();
+                    typesLoaded = true;
                 }
-                if (btn.dataset.tab === 'params' && !paramsLoaded) { 
-                    loadParams(); 
-                    paramsLoaded = true; 
+                if (btn.dataset.tab === 'params' && !paramsLoaded) {
+                    loadParams();
+                    paramsLoaded = true;
                 }
-                if (btn.dataset.tab === 'modules' && !modulesLoaded) { 
-                    loadModules(); 
-                    modulesLoaded = true; 
+                if (btn.dataset.tab === 'modules' && !modulesLoaded) {
+                    loadModules();
+                    modulesLoaded = true;
                 }
             });
         });
@@ -134,43 +134,43 @@
     var modalTitle = document.getElementById('modalTitle');
     var modalForm = document.getElementById('modalForm');
 
-    document.querySelector('.close-modal').addEventListener('click', function() { 
-        if (modal) modal.style.display = 'none'; 
+    document.querySelector('.close-modal').addEventListener('click', function() {
+        if (modal) modal.style.display = 'none';
     });
 
-    window.addEventListener('click', function(e) { 
-        if (e.target === modal) modal.style.display = 'none'; 
+    window.addEventListener('click', function(e) {
+        if (e.target === modal) modal.style.display = 'none';
     });
 
-    function closeModal() { 
+    function closeModal() {
         if (modal) {
-            modal.style.display = 'none'; 
-            if (modalForm) modalForm.innerHTML = ''; 
+            modal.style.display = 'none';
+            if (modalForm) modalForm.innerHTML = '';
         }
     }
 
-    function showModal(title, html) { 
+    function showModal(title, html) {
         if (!modal || !modalTitle || !modalForm) return;
-        modalTitle.textContent = title; 
-        modalForm.innerHTML = html; 
-        modal.style.display = 'block'; 
+        modalTitle.textContent = title;
+        modalForm.innerHTML = html;
+        modal.style.display = 'flex';
     }
 
     // ==================== КОМПОНЕНТЫ ====================
     function loadComponents() {
         var tbody = document.getElementById('componentsBody');
         if (!tbody) return;
-        
+
         fetch('/api/system-components')
-            .then(function(res) { 
-                if (!res.ok) throw new Error('Ошибка'); 
-                return res.json(); 
+            .then(function(res) {
+                if (!res.ok) throw new Error('Ошибка');
+                return res.json();
             })
             .then(function(data) {
                 var empty = document.getElementById('componentsEmpty');
-                if (!data.length) { 
-                    if (empty) empty.style.display = ''; 
-                    tbody.innerHTML = ''; 
+                if (!data.length) {
+                    if (empty) empty.style.display = '';
+                    tbody.innerHTML = '';
                 } else {
                     if (empty) empty.style.display = 'none';
                     var html = '';
@@ -221,14 +221,14 @@
     function loadTypes() {
         var tbody = document.getElementById('typesBody');
         if (!tbody) return;
-        
+
         fetch('/api/system-component-types')
             .then(function(r){ if(!r.ok) throw new Error('Ошибка'); return r.json(); })
             .then(function(data){
                 var empty = document.getElementById('typesEmpty');
-                if (!data.length) { 
-                    if (empty) empty.style.display = ''; 
-                    tbody.innerHTML = ''; 
+                if (!data.length) {
+                    if (empty) empty.style.display = '';
+                    tbody.innerHTML = '';
                 } else {
                     if (empty) empty.style.display = 'none';
                     var html = '';
@@ -252,7 +252,7 @@
         showModal('Добавить тип компонента систем',
             '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="typeName" required></div>' +
             '<div class="form-group"><label>Описание:</label><textarea id="typeDescription" rows="3"></textarea></div>' +
-            '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+            '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>'
         );
         modalForm.onsubmit = function(e) {
             e.preventDefault();
@@ -276,7 +276,7 @@
                 showModal('Редактировать тип',
                     '<div class="form-group"><label>Название:</label><input type="text" id="typeName" value="' + esc(t.name) + '" required></div>' +
                     '<div class="form-group"><label>Описание:</label><textarea id="typeDescription" rows="3">' + esc(t.description || '') + '</textarea></div>' +
-                    '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+                    '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>'
                 );
                 modalForm.onsubmit = function(e) {
                     e.preventDefault();
@@ -305,14 +305,14 @@
     function loadParams() {
         var tbody = document.getElementById('paramsBody');
         if (!tbody) return;
-        
+
         fetch('/api/system-parameters')
             .then(function(r){ if(!r.ok) throw new Error('Ошибка'); return r.json(); })
             .then(function(data){
                 var empty = document.getElementById('paramsEmpty');
-                if (!data.length) { 
-                    if (empty) empty.style.display = ''; 
-                    tbody.innerHTML = ''; 
+                if (!data.length) {
+                    if (empty) empty.style.display = '';
+                    tbody.innerHTML = '';
                 } else {
                     if (empty) empty.style.display = 'none';
                     var html = '';
@@ -337,7 +337,7 @@
             '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="paramName" required></div>' +
             '<div class="form-group"><label>Тип:</label><input type="text" id="paramType"></div>' +
             '<div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3"></textarea></div>' +
-            '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+            '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>'
         );
         modalForm.onsubmit = function(e) {
             e.preventDefault();
@@ -365,7 +365,7 @@
                     '<div class="form-group"><label>Название:</label><input type="text" id="paramName" value="' + esc(p.name) + '" required></div>' +
                     '<div class="form-group"><label>Тип:</label><input type="text" id="paramType" value="' + esc(p.type || '') + '"></div>' +
                     '<div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3">' + esc(p.description || '') + '</textarea></div>' +
-                    '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+                    '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>'
                 );
                 modalForm.onsubmit = function(e) {
                     e.preventDefault();
@@ -395,14 +395,14 @@
     function loadModules() {
         var tbody = document.getElementById('modulesBody');
         if (!tbody) return;
-        
+
         fetch('/api/system-modules')
             .then(function(r){ if(!r.ok) throw new Error('Ошибка'); return r.json(); })
             .then(function(data){
                 var empty = document.getElementById('modulesEmpty');
-                if (!data.length) { 
-                    if (empty) empty.style.display = ''; 
-                    tbody.innerHTML = ''; 
+                if (!data.length) {
+                    if (empty) empty.style.display = '';
+                    tbody.innerHTML = '';
                 } else {
                     if (empty) empty.style.display = 'none';
                     var html = '';
@@ -426,7 +426,7 @@
         showModal('Добавить модуль системы',
             '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="moduleName" required></div>' +
             '<div class="form-group"><label>Описание:</label><textarea id="moduleDescription" rows="3"></textarea></div>' +
-            '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+            '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>'
         );
         modalForm.onsubmit = function(e) {
             e.preventDefault();
@@ -450,7 +450,7 @@
                 showModal('Редактировать модуль',
                     '<div class="form-group"><label>Название:</label><input type="text" id="moduleName" value="' + esc(item.name) + '" required></div>' +
                     '<div class="form-group"><label>Описание:</label><textarea id="moduleDescription" rows="3">' + esc(item.description || '') + '</textarea></div>' +
-                    '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button></div>'
+                    '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>'
                 );
                 modalForm.onsubmit = function(e) {
                     e.preventDefault();
@@ -516,10 +516,10 @@
         this.value = '';
     });
 
-    window.pageInit = function() { 
-        applyPermissions(); 
-        initTabs(); 
-        loadComponents(); 
+    window.pageInit = function() {
+        applyPermissions();
+        initTabs();
+        loadComponents();
         loadModules();
     };
 

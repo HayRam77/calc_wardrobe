@@ -6,7 +6,7 @@
 
 <!-- Модальное окно для шкафа -->
 <div id="cabinetModal" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:500px;">
+    <div class="modal-content" style="max-width:95vw;">
         <span class="modal-close" onclick="document.getElementById('cabinetModal').style.display='none'">&times;</span>
         <h3 id="cabinetModalTitle">Добавить шкаф</h3>
         <form id="cabinetForm">
@@ -94,7 +94,7 @@
         document.getElementById('cabinetName').value = cabinet ? cabinet.name : '';
         document.getElementById('cabinetDescription').value = cabinet ? cabinet.description || '' : '';
         cabinetError.style.display = 'none';
-        cabinetModal.style.display = 'block';
+        cabinetModal.style.display = 'flex';
     }
 
     cabinetForm.addEventListener('submit', function(e) {

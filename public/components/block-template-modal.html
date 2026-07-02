@@ -13,15 +13,15 @@ window.BlockTemplateModal = {
         if (!this._modal) {
             var m = document.createElement('div');
             m.className = 'modal';
-            m.style.cssText = 'z-index:3000;';
-            m.innerHTML = '<div class="modal-content" style="max-width:700px;max-height:90vh;overflow-y:auto;"><span class="modal-close">&times;</span><h3 id="blockModalTitle">Добавить компонент шкафа</h3><form id="blockTemplateForm"><input type="hidden" id="blockTemplateId"></form></div>';
+            m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3000;';
+            m.innerHTML = '<div class="modal-content" style="max-width:95vw;max-height:90vh;overflow-y:auto;"><span class="modal-close">&times;</span><h3 id="blockModalTitle">Добавить компонент шкафа</h3><form id="blockTemplateForm"><input type="hidden" id="blockTemplateId"></form></div>';
             document.body.appendChild(m);
             m.querySelector('.modal-close').addEventListener('click', function(){ m.style.display = 'none'; });
             m.addEventListener('click', function(e){ if(e.target === m) m.style.display = 'none'; });
             this._modal = m;
         }
 
-        this._modal.style.display = 'block';
+        this._modal.style.display = 'flex';
         var f = document.getElementById('blockTemplateForm');
         f.innerHTML = ''; // очищаем перед построением
 

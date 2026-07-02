@@ -43,9 +43,9 @@
   .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #1a5f7a; box-shadow: 0 0 0 2px rgba(26,95,122,0.2); }
   .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; }
   .error-message { color: #d32f2f; font-size: 13px; margin-bottom: 8px; }
-  .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: flex-start; padding-top: 50px; }
+  .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center; padding-top: 0; }
   .modal.active { display: flex; }
-  .modal-content { background: white; padding: 25px; border-radius: 8px; min-width: 350px; max-width: 90vw; max-height: 85vh; overflow-y: auto; position: relative; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+  .modal-content { background: white; padding: 25px; border-radius: 8px; min-width: 350px; max-width: 95vw; max-height: 85vh; overflow-y: auto; position: relative; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
   .modal-close { position: absolute; top: 10px; right: 15px; font-size: 22px; cursor: pointer; color: #888; line-height: 1; }
   .modal-close:hover { color: #333; }
   .tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid #e0e0e0; }
@@ -117,9 +117,9 @@ window.fetch = function(url, options) {
   if (token) { options.headers = options.headers || {}; if (!options.headers['Authorization']) options.headers['Authorization'] = 'Bearer ' + token; }
   return originalFetch(url, options).then(function(response) {
     if (response.status === 401 || response.status === 403) {
-      localStorage.removeItem('token'); 
-      localStorage.removeItem('user'); 
-      currentUser = null; 
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      currentUser = null;
       updateUserUI();
       window.location.href = '/login.html';
       return response;
@@ -137,11 +137,11 @@ async function loadPage(url) {
   var container = document.getElementById('contentContainer');
   container.innerHTML = '<p>Загрузка...</p>';
   var titles = { '/': 'Проекты', '/automation': 'Системы автоматизации', '/components-systems': 'Компоненты систем', '/components-cabinets': 'Компоненты шкафов', '/manufacturers': 'Производители', '/consumables': 'Расходные материалы', '/admin': 'Администрирование' };
-  
+
   if (url.startsWith('/project/')) { pageTitle.textContent = 'Проект'; document.title = 'Проект - Конфигуратор вентиляции'; }
   else if (url.startsWith('/cabinet/')) { pageTitle.textContent = 'Шкаф'; document.title = 'Шкаф - Конфигуратор вентиляции'; }
   else { pageTitle.textContent = titles[url] || 'Конфигуратор вентиляции'; document.title = (titles[url] || 'Конфигуратор вентиляции') + ' - Конфигуратор вентиляции'; }
-  
+
   try {
     var file = '';
     if (url === '/') file = 'pages/home.html';
@@ -166,7 +166,6 @@ async function loadPage(url) {
       else { newScript.textContent = oldScript.textContent; }
       oldScript.parentNode.replaceChild(newScript, oldScript);
     });
-    // Загружаем модульные компоненты, если они нужны
     loadModuleComponents();
     setTimeout(function() { if (typeof window.pageInit === 'function' && !window._pageInitDone) { window._pageInitDone = true; window.pageInit(); } }, 100);
   } catch (e) { container.innerHTML = '<p>Ошибка загрузки страницы</p>'; }
@@ -179,8 +178,7 @@ sidebar.querySelectorAll('a').forEach(function(link) {
 function loadModuleComponents() {
     if (window._modulesLoaded) return;
     window._modulesLoaded = true;
-    
-    // Загружаем модальное окно компонента шкафа
+
     fetch('/components/block-template-modal.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
         var div = document.createElement('div'); div.innerHTML = html;
         div.querySelectorAll('script').forEach(function(s){
@@ -188,8 +186,7 @@ function loadModuleComponents() {
             ns.textContent = s.textContent; document.body.appendChild(ns);
         });
     });
-    
-    // Загружаем форму редактирования компонента системы
+
     fetch('/components/system-comp-edit.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
         var div = document.createElement('div'); div.innerHTML = html;
         div.querySelectorAll('script').forEach(function(s){
@@ -197,8 +194,7 @@ function loadModuleComponents() {
             ns.textContent = s.textContent; document.body.appendChild(ns);
         });
     });
-    
-    // Загружаем форму редактирования компонента системы
+
     fetch('/components/system-comp-form.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
         var div = document.createElement('div'); div.innerHTML = html;
         div.querySelectorAll('script').forEach(function(s){
@@ -206,8 +202,7 @@ function loadModuleComponents() {
             ns.textContent = s.textContent; document.body.appendChild(ns);
         });
     });
-    
-    // Загружаем модальное окно компонента системы
+
     fetch('/components/system-comp-modal.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
     fetch("/components/material-modal.html?_="+Date.now()).then(function(r){return r.text();}).then(function(html){var div=document.createElement("div");div.innerHTML=html;div.querySelectorAll("script").forEach(function(s){var ns=document.createElement("script");ns.textContent=s.textContent;document.body.appendChild(ns);});});
         var div = document.createElement('div'); div.innerHTML = html;
@@ -217,7 +212,6 @@ function loadModuleComponents() {
         });
     });
 
-    // Загружаем модальное окно материала
     fetch('/components/material-modal.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
         var div = document.createElement('div'); div.innerHTML = html;
         div.querySelectorAll('script').forEach(function(s){
@@ -225,8 +219,8 @@ function loadModuleComponents() {
             ns.textContent = s.textContent; document.body.appendChild(ns);
         });
     });
-    
-    
+
+
 var page = window.location.pathname;
 }
 

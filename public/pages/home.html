@@ -9,7 +9,7 @@
 </div>
 
 <div id="projectModal" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width:500px;">
+    <div class="modal-content" style="max-width:95vw;">
         <span class="modal-close">&times;</span>
         <h3 id="projectModalTitle">Создать проект</h3>
         <form id="projectForm">
@@ -76,7 +76,7 @@
         document.getElementById('projectDescription').value = '';
         errorDiv.style.display = 'none';
         modalTitle.textContent = 'Создать проект';
-        modal.style.display = 'block';
+        modal.style.display = 'flex';
     });
 
     document.querySelector('#projectModal .modal-close').addEventListener('click', function() { modal.style.display = 'none'; });
@@ -107,7 +107,7 @@
             document.getElementById('projectDescription').value = p.description || '';
             errorDiv.style.display = 'none';
             modalTitle.textContent = 'Редактировать проект';
-            modal.style.display = 'block';
+            modal.style.display = 'flex';
         } catch(err) { alert(err.message); }
     };
 

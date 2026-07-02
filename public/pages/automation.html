@@ -54,7 +54,7 @@
         h += '<div class="form-group"><label>Описание</label><textarea id="sysDesc" rows="2">' + esc(sys ? sys.description || '' : '') + '</textarea></div>';
         modalTitle.textContent = isEdit ? 'Редактировать систему' : 'Добавить систему';
         modalForm.innerHTML = h + '<div class="form-actions"><button type="submit" class="btn btn-primary" id="automation_btn_btn">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'" id="automation_btn_btn_1">Отмена</button></div>';
-        modal.style.display = 'block';
+        modal.style.display = 'flex';
         modalForm.onsubmit = function(e) {
             e.preventDefault();
             var name = document.getElementById('sysName').value.trim();
