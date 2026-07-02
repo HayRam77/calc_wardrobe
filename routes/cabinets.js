@@ -217,9 +217,9 @@ router.get('/:id/systems', auth, async (req, res) => {
     `, [req.params.id]);
     console.log('✅ Найдено систем:', result.rows.length);
     res.json(result.rows);
-  } catch (err) { 
-    console.error('❌ Ошибка:', err); 
-    res.status(500).json({ message: 'Ошибка', error: err.message }); 
+  } catch (err) {
+    console.error('❌ Ошибка:', err);
+    res.status(500).json({ message: 'Ошибка', error: err.message });
   }
 });
 
@@ -253,7 +253,6 @@ router.delete('/:id/systems/:systemId', auth, isAdmin, async (req, res) => {
 
 router.get('/:id/blocks/html', auth, async (req, res) => {
   try {
-    // Получаем все компоненты шкафа с полем linked
     const blocksResult = await pool.query(`
       SELECT pb.id, pb.template_id, pb.linked, bt.name AS block_name, bt.ln, ct.name AS block_type
       FROM project_blocks pb
@@ -267,7 +266,6 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       return res.send('<p>Нет компонентов</p>');
     }
 
-    // Получаем все system_block_links для этого шкафа
     const linksResult = await pool.query(`
       SELECT sbl.block_template_id, sc.name as component_name, s.name as system_name
       FROM system_block_links sbl
@@ -278,7 +276,6 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       WHERE cs.cabinet_id = $1
     `, [req.params.id]);
 
-    // Создаём карту привязок по template_id
     const linkMap = {};
     linksResult.rows.forEach(row => {
       if (!linkMap[row.block_template_id]) {
@@ -292,9 +289,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
 
     let html = '<div class="table-container"><table class="data-table"><thead><tr><th>Система</th><th>Компонент системы</th><th>Тип комп. шкафа</th><th>Название</th><th>LN</th><th>Действия</th></tr></thead><tbody>';
 
-    // Для каждой записи project_blocks определяем привязку
     for (const block of blocksResult.rows) {
-      // Используем поле linked для определения привязки
       const links = linkMap[block.template_id] || [];
       const hasLink = block.linked === true && links.length > 0;
       const systemName = hasLink ? links[0].system_name : '-';
@@ -307,7 +302,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         <td>${block.block_name}</td>
         <td>${block.ln || ''}</td>
         <td>
-          <button class="btn btn-sm btn-edit" onclick="editBlockQuantity(${block.id})">✏️</button>
+          <button class="btn btn-sm btn-edit" onclick="openBlockModalWithId(${block.id}, ${block.template_id})">✏️</button>
           <button class="btn btn-sm btn-delete" onclick="delBlock(${block.id})">🗑️</button>
         </td>
       </tr>`;
@@ -329,7 +324,7 @@ router.delete('/:id/blocks/:blockId', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// Обновить блок шкафа (количество)
+// Обновить блок шкафа (количество) -- оставлен для совместимости
 router.put('/:cabinetId/blocks/:blockId', auth, isAdmin, async (req, res) => {
   try {
     const { quantity } = req.body;

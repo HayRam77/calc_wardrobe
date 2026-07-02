@@ -79,44 +79,39 @@
         .then(function(res) { return res.json(); })
         .then(function(cabinet) {
             document.querySelector('.page-title').textContent = 'Шкаф: ' + cabinet.name;
-            
-            // Создаем структуру с вкладками
+
             var html = '<div class="cabinet-tabs">';
             html += '<div class="tabs">';
             html += '<button class="tab-btn active" data-tab="config">Конфигурация шкафа</button>';
             html += '<button class="tab-btn" data-tab="calculation">Калькуляция шкафа</button>';
             html += '<button class="tab-btn" data-tab="pricing">Расценки шкафа</button>';
             html += '</div>';
-            
-            // Вкладка "Конфигурация шкафа" (существующий контент)
+
             html += '<div class="tab-content active" id="tab-config">';
             html += '<div class="module-box"><h3>Системы шкафа</h3><div id="cabinetSystems">Загрузка...</div><button id="addSystemBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить систему</button></div>';
             html += '<div class="module-box"><h3>Компоненты систем</h3><div id="cabinetSystemComponents">Загрузка...</div></div>';
             html += '<div class="module-box"><h3>Компоненты шкафа</h3><div id="cabinetBlocks">Загрузка...</div><button id="addBlockBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить компонент шкафа</button></div>';
             html += '<div class="module-box"><h3>Материалы шкафа</h3><div id="cabinetMaterials">Загрузка...</div><button id="addMaterialToCabinetBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить материал</button></div>';
             html += '</div>';
-            
-            // Вкладка "Калькуляция шкафа" (заглушка)
+
             html += '<div class="tab-content" id="tab-calculation">';
             html += '<div style="padding:20px;text-align:center;color:#666;">';
             html += '<h3 style="color:#1a5f7a;">Калькуляция шкафа</h3>';
             html += '<p>Страница в разработке. Здесь будет отображаться калькуляция шкафа.</p>';
             html += '</div>';
             html += '</div>';
-            
-            // Вкладка "Расценки шкафа" (заглушка)
+
             html += '<div class="tab-content" id="tab-pricing">';
             html += '<div style="padding:20px;text-align:center;color:#666;">';
             html += '<h3 style="color:#1a5f7a;">Расценки шкафа</h3>';
             html += '<p>Страница в разработке. Здесь будут отображаться расценки шкафа.</p>';
             html += '</div>';
             html += '</div>';
-            
+
             html += '</div>';
-            
+
             document.getElementById('cabinetContent').innerHTML = html;
-            
-            // Инициализация вкладок
+
             document.querySelectorAll('.tab-btn').forEach(function(btn) {
                 btn.addEventListener('click', function() {
                     document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
@@ -126,7 +121,7 @@
                     if (target) target.classList.add('active');
                 });
             });
-            
+
             loadSystems();
             loadSystemComponents();
             setTimeout(function(){ window.loadBlocks(); }, 100);
@@ -434,24 +429,7 @@
     };
 
     window.delBlock = function(id) {
-        fetch('/api/cabinets/' + cabinetId + '/blocks/' + id, { method: 'DELETE' }).then(loadBlocks);
-    };
-
-    window.editBlockQuantity = function(blockId) {
-        var newQty = prompt('Новое количество:');
-        if (!newQty || isNaN(newQty) || parseInt(newQty) < 1) return;
-        fetch('/api/cabinets/' + window.cabinetId + '/blocks/' + blockId, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ quantity: parseInt(newQty) })
-        })
-        .then(function(r){
-            if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-            fetch('/api/cabinets/' + window.cabinetId + '/blocks/html')
-                .then(function(r){ return r.text(); })
-                .then(function(html){ document.getElementById('cabinetBlocks').innerHTML = html; });
-        })
-        .catch(function(e){ alert(e.message); });
+        fetch('/api/cabinets/' + cabinetId + '/blocks/' + id, { method: 'DELETE' }).then(window.loadBlocks);
     };
 
     window.loadBlocks = function() {
@@ -462,7 +440,6 @@
             .then(function(html){ container.innerHTML = html; })
             .catch(function(e){ console.error(e); });
     };
-
 
     // ==================== МАТЕРИАЛЫ ШКАФА ====================
     window.loadCabinetMaterials = function() {
@@ -518,7 +495,7 @@
     window.delMaterial = function(linkId) {
         if (!confirm('Удалить материал из шкафа?')) return;
         fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' })
-            .then(function(){ 
+            .then(function(){
                 window.loadCabinetMaterials();
                 console.log('✅ Материал удалён, таблица обновлена');
             })
@@ -527,4 +504,18 @@
 
     window.pageInit = function() {};
 })();
+
+// Функция открытия модального окна компонента шкафа для редактирования
+// blockId - ID в project_blocks (не используется для загрузки), templateId - ID шаблона
+window.openBlockModalWithId = function(blockId, templateId) {
+    if (typeof BlockTemplateModal !== "undefined") {
+        BlockTemplateModal.open(function(updatedId) {
+            if (typeof window.loadBlocks === "function") window.loadBlocks();
+            if (typeof window.loadCabinetMaterials === "function") window.loadCabinetMaterials();
+        }, parseInt(templateId));
+    } else {
+        console.error("BlockTemplateModal не загружен");
+        alert("Ошибка: модальное окно не загружено");
+    }
+};
 </script>
