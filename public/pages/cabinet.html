@@ -123,7 +123,7 @@
             });
 
             loadSystems();
-            loadSystemComponents();
+            loadSystemComponents(); window.loadCabinetMaterials(); window.loadBlocks();
             setTimeout(function(){ window.loadBlocks(); }, 100);
             loadCabinetMaterials();
             document.getElementById('addSystemBtn').addEventListener('click', function(){ openSystemModal(); });
@@ -217,7 +217,7 @@
             if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
             document.getElementById('systemModal').style.display = 'none';
             loadSystems();
-            loadSystemComponents();
+            loadSystemComponents(); window.loadCabinetMaterials(); window.loadBlocks();
         })
         .catch(function(e){ alert(e.message); });
     });
@@ -226,7 +226,7 @@
     window.delSystem = function(id) {
         if (!confirm('Удалить систему из шкафа?')) return;
         fetch('/api/cabinets/' + cabinetId + '/systems/' + id, { method: 'DELETE' })
-            .then(function(){ loadSystems(); loadSystemComponents(); });
+            .then(function(){ loadSystems(); loadSystemComponents(); window.loadCabinetMaterials(); window.loadBlocks(); });
     };
 
     function loadSystemComponents() {
@@ -338,7 +338,7 @@
             .then(function(r){
                 if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
                 modal.style.display = 'none';
-                loadSystemComponents();
+                loadSystemComponents(); window.loadCabinetMaterials(); window.loadBlocks();
                 alert('✅ Компонент успешно привязан к системе!');
             })
             .catch(function(e){
@@ -362,7 +362,7 @@
                         })
                         .then(function(r){
                             if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-                            loadSystemComponents();
+                            loadSystemComponents(); window.loadCabinetMaterials(); window.loadBlocks();
                             alert('✅ Компонент успешно добавлен в систему!');
                         })
                         .catch(function(e){ alert('Ошибка: ' + e.message); });
@@ -379,7 +379,7 @@
         if (typeof SystemCompModal !== 'undefined') {
             SystemCompModal.open(compId, function() {
                 console.log('✅ Компонент обновлён, обновляем список');
-                loadSystemComponents();
+                loadSystemComponents(); window.loadCabinetMaterials(); window.loadBlocks();
             });
         } else {
             alert('Модальное окно компонентов систем не загружено');
@@ -397,7 +397,7 @@
         fetch('/api/systems/link/' + linkId, { method: 'DELETE' })
             .then(function(r){
                 if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-                loadSystemComponents();
+                loadSystemComponents(); window.loadCabinetMaterials(); window.loadBlocks();
                 alert('✅ Компонент отвязан от системы');
             })
             .catch(function(e){
@@ -494,7 +494,7 @@
 
     window.delMaterial = function(linkId) {
         if (!confirm('Удалить материал из шкафа?')) return;
-        fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' })
+        if (linkId < 0) { fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' }).then(function(){ window.loadCabinetMaterials(); }).catch(function(e){ alert('Ошибка: ' + e.message); }); return; } fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' })
             .then(function(){
                 window.loadCabinetMaterials();
                 console.log('✅ Материал удалён, таблица обновлена');
