@@ -9,7 +9,37 @@ const upload = multer({ storage: multer.memoryStorage() });
 const { body, param } = require('express-validator');
 const validate = require('../middleware/validation');
 
-// Получение всех шкафов проекта
+async function syncSystemToCabinet(client, cabinetId, systemId) {
+  const blocks = await client.query(`
+    SELECT sbl.block_template_id, sbl.quantity
+    FROM system_block_links sbl
+    JOIN system_components sc ON sbl.system_component_id = sc.id
+    JOIN system_components_link scl ON scl.component_id = sc.id
+    WHERE scl.system_id = $1
+  `, [systemId]);
+  for (const b of blocks.rows) {
+    await client.query(`
+      INSERT INTO project_blocks (cabinet_id, template_id, quantity, linked)
+      VALUES ($1, $2, $3, true)
+      ON CONFLICT (cabinet_id, template_id) DO UPDATE SET quantity = EXCLUDED.quantity, linked = true
+    `, [cabinetId, b.block_template_id, b.quantity]);
+  }
+  const materials = await client.query(`
+    SELECT scm.material_id, scm.quantity
+    FROM system_component_materials scm
+    JOIN system_components sc ON scm.system_component_id = sc.id
+    JOIN system_components_link scl ON scl.component_id = sc.id
+    WHERE scl.system_id = $1
+  `, [systemId]);
+  for (const m of materials.rows) {
+    await client.query(`
+      INSERT INTO project_materials (cabinet_id, project_id, material_id, quantity, linked)
+      VALUES ($1, (SELECT project_id FROM cabinets WHERE id=$1), $2, $3, true)
+      ON CONFLICT (cabinet_id, material_id, linked) DO UPDATE SET quantity = EXCLUDED.quantity
+    `, [cabinetId, m.material_id, m.quantity]);
+  }
+}
+
 router.get('/', auth, async (req, res) => {
   try {
     const { project_id } = req.query;
@@ -51,7 +81,6 @@ router.get('/project/:projectId', auth, async (req, res) => {
   }
 });
 
-// Получение одного шкафа
 router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -76,7 +105,6 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// Создание шкафа
 router.post('/', auth, validate([
   body('name').trim().notEmpty().withMessage('Название шкафа обязательно'),
   body('project_id').isInt({ min: 1 }).withMessage('Укажите корректный ID проекта'),
@@ -106,7 +134,6 @@ router.post('/', auth, validate([
   }
 });
 
-// Обновление шкафа
 router.put('/:id', auth, validate([
   param('id').isInt().withMessage('Некорректный ID'),
   body('name').optional().trim().notEmpty().withMessage('Название не может быть пустым'),
@@ -152,7 +179,6 @@ router.put('/:id', auth, validate([
   }
 });
 
-// Удаление шкафа
 router.delete('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -182,7 +208,7 @@ router.delete('/:id', auth, async (req, res) => {
 router.get('/:id/blocks', auth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT pb.*, bt.name, bt.article, bt.ln, ct.name as type_name, m.name as manufacturer_name
+      SELECT pb.*, bt.name, bt.article, bt.ln, bt.tm, ct.name as type_name, m.name as manufacturer_name
       FROM project_blocks pb
       JOIN block_templates bt ON pb.template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
@@ -196,10 +222,11 @@ router.get('/:id/blocks', auth, async (req, res) => {
 
 router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
   try {
-    const template_id = parseInt(req.body.template_id); const quantity = parseInt(req.body.quantity) || 1;
+    const template_id = parseInt(req.body.template_id);
+    const quantity = parseInt(req.body.quantity) || 1;
     const result = await pool.query(
       'INSERT INTO project_blocks (cabinet_id, template_id, quantity) VALUES ($1, $2, $3) RETURNING *',
-      [req.params.id, template_id, quantity || 1]
+      [req.params.id, template_id, quantity]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
@@ -207,7 +234,6 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
 
 router.get('/:id/systems', auth, async (req, res) => {
   try {
-    console.log('🔍 GET /api/cabinets/' + req.params.id + '/systems');
     const result = await pool.query(`
       SELECT cs.*, s.name as system_name, s.description as system_description
       FROM cabinet_systems cs
@@ -215,23 +241,28 @@ router.get('/:id/systems', auth, async (req, res) => {
       WHERE cs.cabinet_id = $1
       ORDER BY s.name
     `, [req.params.id]);
-    console.log('✅ Найдено систем:', result.rows.length);
     res.json(result.rows);
-  } catch (err) {
-    console.error('❌ Ошибка:', err);
-    res.status(500).json({ message: 'Ошибка', error: err.message });
-  }
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
 router.post('/:id/systems', auth, isAdmin, async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const { system_id, name, description } = req.body;
-    const result = await pool.query(
+    const cabinetId = req.params.id;
+    const csResult = await client.query(
       'INSERT INTO cabinet_systems (cabinet_id, system_id, name, description) VALUES ($1, $2, $3, $4) ON CONFLICT (cabinet_id, system_id) DO UPDATE SET name=$3, description=$4 RETURNING *',
-      [req.params.id, system_id, name || null, description || null]
+      [cabinetId, system_id, name || null, description || null]
     );
-    res.status(201).json(result.rows[0]);
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+    // await syncSystemToCabinet(client, cabinetId, system_id); // временно отключено
+    await client.query('COMMIT');
+    res.status(201).json(csResult.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка' });
+  } finally { client.release(); }
 });
 
 router.put('/:id/systems/:systemId', auth, isAdmin, async (req, res) => {
@@ -249,12 +280,11 @@ router.delete('/:id/systems/:systemId', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// ==================== HTML ФРАГМЕНТ ДЛЯ КОМПОНЕНТОВ ШКАФА ====================
-
+// ==================== HTML ФРАГМЕНТ (с TM) ====================
 router.get('/:id/blocks/html', auth, async (req, res) => {
   try {
     const blocksResult = await pool.query(`
-      SELECT pb.id, pb.template_id, pb.linked, bt.name AS block_name, bt.ln, ct.name AS block_type
+      SELECT pb.id, pb.template_id, pb.linked, bt.name AS block_name, bt.ln, bt.tm, ct.name AS block_type
       FROM project_blocks pb
       JOIN block_templates bt ON pb.template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
@@ -278,16 +308,11 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
 
     const linkMap = {};
     linksResult.rows.forEach(row => {
-      if (!linkMap[row.block_template_id]) {
-        linkMap[row.block_template_id] = [];
-      }
-      linkMap[row.block_template_id].push({
-        system_name: row.system_name,
-        component_name: row.component_name
-      });
+      if (!linkMap[row.block_template_id]) linkMap[row.block_template_id] = [];
+      linkMap[row.block_template_id].push({ system_name: row.system_name, component_name: row.component_name });
     });
 
-    let html = '<div class="table-container"><table class="data-table"><thead><tr><th>Система</th><th>Компонент системы</th><th>Тип комп. шкафа</th><th>Название</th><th>LN</th><th>Действия</th></tr></thead><tbody>';
+    let html = '<div class="table-container"><table class="data-table"><thead><tr><th>Система</th><th>Компонент системы</th><th>Тип комп. шкафа</th><th>Название</th><th>LN</th><th>TM</th><th>Действия</th></tr></thead><tbody>';
 
     for (const block of blocksResult.rows) {
       const links = linkMap[block.template_id] || [];
@@ -301,6 +326,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         <td>${block.block_type || ''}</td>
         <td>${block.block_name}</td>
         <td>${block.ln || ''}</td>
+        <td>${block.tm || ''}</td>
         <td>
           <button class="btn btn-sm btn-edit" onclick="openBlockModalWithId(${block.id}, ${block.template_id})">✏️</button>
           <button class="btn btn-sm btn-delete" onclick="delBlock(${block.id})">🗑️</button>
@@ -316,7 +342,6 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
   }
 });
 
-// Удалить компонент из шкафа
 router.delete('/:id/blocks/:blockId', auth, isAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM project_blocks WHERE id=$1 AND cabinet_id=$2', [req.params.blockId, req.params.id]);
@@ -324,7 +349,6 @@ router.delete('/:id/blocks/:blockId', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// Обновить блок шкафа (количество) -- оставлен для совместимости
 router.put('/:cabinetId/blocks/:blockId', auth, isAdmin, async (req, res) => {
   try {
     const { quantity } = req.body;
@@ -337,7 +361,6 @@ router.put('/:cabinetId/blocks/:blockId', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка обновления блока' }); }
 });
 
-// Экспорт
 router.get('/export', auth, async (req, res) => {
   try {
     const result = await pool.query(`SELECT c.id as ID, c.name as Название, p.name as Проект, u.username as Создатель, c.created_at as Дата_создания, c.description as Описание FROM cabinets c JOIN projects p ON c.project_id = p.id LEFT JOIN users u ON c.user_id = u.id ORDER BY c.id`);

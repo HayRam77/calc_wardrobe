@@ -103,8 +103,8 @@ window.SystemCompModal = {
         h += '<div class="form-group"><label>Производитель:</label><select id="compManufacturer"></select></div>';
         h += '<div class="form-group"><label>Артикул:</label><input type="text" id="compArticle" value="'+self._esc(comp ? comp.article || '' : '')+'"></div>';
         h += '<div class="form-group"><label>Описание:</label><textarea id="compDescription" rows="3">'+self._esc(comp ? comp.description || '' : '')+'</textarea></div>';
-        h += '<div class="form-row"><div class="form-group"><label>LN</label><input type="text" id="compLn" value="'+self._esc(comp ? comp.ln || '' : '')+'"></div><div class="form-group"><label>TM</label><input type="text" id="compTm" value="'+self._esc(comp ? comp.tm || '' : '')+'"></div></div>';
-        h += '<div class="form-group"><label>Параметры:</label><div id="modalParams"></div><button type="button" id="addParamRowBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить параметр</button></div>';
+        h += '<div class="form-group"><label>Параметры:</label>
+        h += '<div class="form-row"><div class="form-group"><label>LN</label><input type="text" id="compLn" value="'+self._esc(comp ? comp.ln || '' : '')+'"></div><div class="form-group"><label>TM</label><input type="text" id="compTm" value="'+self._esc(comp ? comp.tm || '' : '')+'"></div></div>';<div id="modalParams"></div><button type="button" id="addParamRowBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить параметр</button></div>';
 
         if (isEdit) {
             h += '<div class="form-group"><label>Компоненты шкафа:</label><div id="linkedBlocks"><p>Загрузка...</p></div><button type="button" id="addBlockLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить компонент шкафа</button></div>';

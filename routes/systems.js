@@ -13,7 +13,7 @@ router.get('/', auth, async (req, res) => {
     const result = [];
     for (const sys of systems.rows) {
       const comps = await pool.query(`
-        SELECT scl.*, sc.name, sc.article, sct.name as type_name
+        SELECT scl.*, sc.name, sc.article, sc.ln, sc.tm, sct.name as type_name
         FROM system_components_link scl
         JOIN system_components sc ON scl.component_id = sc.id
         LEFT JOIN system_component_types sct ON sc.type_id = sct.id
@@ -52,7 +52,7 @@ router.get('/:id', auth, async (req, res) => {
     const sys = await pool.query('SELECT * FROM systems WHERE id = $1', [req.params.id]);
     if (sys.rows.length === 0) return res.status(404).json({ message: 'Не найдена' });
     const comps = await pool.query(`
-      SELECT scl.id as link_id, scl.*, sc.id, sc.name, sc.article, sc.type_id, sc.module_id,
+      SELECT scl.id as link_id, scl.*, sc.id, sc.name, sc.article, sc.type_id, sc.module_id, sc.ln, sc.tm,
              sct.name as type_name, sm.name as module_name
       FROM system_components_link scl
       JOIN system_components sc ON scl.component_id = sc.id
@@ -86,7 +86,7 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
     await client.query('COMMIT');
     const sys = await pool.query('SELECT * FROM systems WHERE id=$1', [req.params.id]);
     const comps = await pool.query(`
-      SELECT scl.*, sc.name, sc.article, sct.name as type_name
+      SELECT scl.*, sc.name, sc.article, sc.ln, sc.tm, sct.name as type_name
       FROM system_components_link scl
       JOIN system_components sc ON scl.component_id = sc.id
       LEFT JOIN system_component_types sct ON sc.type_id = sct.id

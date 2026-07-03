@@ -12,7 +12,8 @@
             <input type="file" id="importTemplatesFile" style="display:none" accept=".xlsx,.xls">
             <button id="importTemplatesBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
         </div>
-        <div class="table-container"><table class="data-table"><thead><tr><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th><th>Вес, гр.</th><th>Q, Вт</th><th>LN</th><th>Ссылка</th><th id="templatesActionsCol" style="display:none;">Действия</th></tr></thead><tbody id="templatesBody"><tr><td colspan="10">Загрузка...</td></tr></tbody></table></div>
+        <div class="table-container"><table class="data-table"><thead><tr><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th><th>Вес, гр.</th><th>Q, Вт</th><th>LN</th>
+                        <th>TM</th><th>Ссылка</th><th id="templatesActionsCol" style="display:none;">Действия</th></tr></thead><tbody id="templatesBody"><tr><td colspan="11">Загрузка...</td></tr></tbody></table></div>
     </div>
     <div class="tab-content" id="tab-types">
         <div style="margin-bottom:10px;">
@@ -102,7 +103,7 @@
             var res = await fetch('/api/block-templates');
             var data = await res.json();
             if (!data.length) {
-                tbody.innerHTML = '<tr><td colspan="10">Нет компонентов</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11">Нет компонентов</td></tr>';
                 return;
             }
             var html = '';
@@ -116,6 +117,7 @@
                 html += '<td>' + (item.weight_grams || '') + '</td>';
                 html += '<td>' + (item.power_watts || '') + '</td>';
                 html += '<td>' + esc(item.ln || '') + '</td>';
+                html += '<td>' + (item.tm || '') + '</td>';
                 html += '<td>' + (item.url ? '<a href="' + esc(item.url) + '" target="_blank">🔗</a>' : '') + '</td>';
                 if (isAdmin) {
                     html += '<td><button class="btn btn-sm btn-edit" data-id="' + item.id + '">✏️</button> <button class="btn btn-sm btn-delete" data-id="' + item.id + '">🗑️</button></td>';
@@ -135,7 +137,7 @@
                 });
             }
         } catch(e) {
-            tbody.innerHTML = '<tr><td colspan="10">Ошибка загрузки</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11">Ошибка загрузки</td></tr>';
         }
     }
 

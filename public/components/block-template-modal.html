@@ -1,17 +1,10 @@
 <script>
 window.BlockTemplateModal = {
-    _modal: null,
-    _cb: null,
-    _preselectedId: null,
-
+    _modal: null, _cb: null, _preselectedId: null,
     open: function(callback, preselectedId) {
-        this._cb = callback;
-        this._preselectedId = preselectedId || null;
-        var self = this;
-
+        this._cb = callback; this._preselectedId = preselectedId || null; var self = this;
         if (!this._modal) {
-            var m = document.createElement('div');
-            m.className = 'modal';
+            var m = document.createElement('div'); m.className = 'modal';
             m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3000;';
             m.innerHTML = '<div class="modal-content" style="max-width:95vw;max-height:90vh;overflow-y:auto;"><span class="modal-close">&times;</span><h3 id="blockModalTitle">Добавить компонент шкафа</h3><form id="blockTemplateForm"><input type="hidden" id="blockTemplateId"></form></div>';
             document.body.appendChild(m);
@@ -19,11 +12,8 @@ window.BlockTemplateModal = {
             m.addEventListener('click', function(e){ if(e.target === m) m.style.display = 'none'; });
             this._modal = m;
         }
-
         this._modal.style.display = 'flex';
-        var f = document.getElementById('blockTemplateForm');
-        f.innerHTML = '';
-
+        var f = document.getElementById('blockTemplateForm'); f.innerHTML = '';
         fetch('/api/manufacturers').then(function(r){ return r.json(); }).then(function(manufacturers){
             var h = '<div class="form-group"><label>Существующий компонент</label><select id="existingBlockSelect" style="width:100%;"><option value="">-- выберите или создайте новый --</option></select></div>';
             h += '<div class="form-row"><div class="form-group"><label>Тип</label><div id="blockTypeContainer"></div></div>';
@@ -33,6 +23,7 @@ window.BlockTemplateModal = {
             h += '<div class="form-row"><div class="form-group"><label>Название *</label><input type="text" id="blockName" required></div><div class="form-group"><label>Артикул</label><input type="text" id="blockArticle"></div></div>';
             h += '<div class="form-row"><div class="form-group"><label>Цена, руб.</label><input type="number" id="blockPrice" step="0.01"></div><div class="form-group"><label>Вес, гр.</label><input type="number" id="blockWeight" step="0.01"></div></div>';
             h += '<div class="form-row"><div class="form-group"><label>Мощность, Вт</label><input type="number" id="blockPower" step="0.01"></div><div class="form-group"><label>LN</label><input type="text" id="blockLn"></div></div>';
+            h += '<div class="form-row"><div class="form-group"><label>TM</label><input type="text" id="blockTm"></div></div>';
             h += '<div class="form-group"><label>Ссылка</label><input type="url" id="blockUrl"></div>';
             h += '<div class="form-group"><label>Описание</label><textarea id="blockDescription" rows="2"></textarea></div>';
             h += '<div style="margin-top:15px;"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.querySelector(\'.modal\').style.display=\'none\'">Отмена</button></div>';
@@ -41,34 +32,25 @@ window.BlockTemplateModal = {
             fetch('/api/component-types').then(function(r){ return r.json(); }).then(function(types){
                 var container = document.getElementById('blockTypeContainer');
                 if (container) {
-                    var sel = document.createElement('select');
-                    sel.id = 'blockType';
-                    sel.style.width = '100%';
+                    var sel = document.createElement('select'); sel.id = 'blockType'; sel.style.width = '100%';
                     sel.innerHTML = '<option value="">-- Тип --</option>';
                     types.forEach(function(t){ sel.innerHTML += '<option value="'+t.id+'">'+t.name+'</option>'; });
                     container.appendChild(sel);
                 }
-                if (self._preselectedId) {
-                    setTimeout(function(){ self._loadData(self._preselectedId); }, 50);
-                }
+                if (self._preselectedId) setTimeout(function(){ self._loadData(self._preselectedId); }, 50);
             });
 
             fetch('/api/block-templates').then(function(r){ return r.json(); }).then(function(blocks){
                 var sel = document.getElementById('existingBlockSelect');
                 if (sel) {
                     blocks.forEach(function(b){
-                        var opt = document.createElement('option');
-                        opt.value = b.id;
+                        var opt = document.createElement('option'); opt.value = b.id;
                         opt.textContent = b.name + (b.article ? ' ('+b.article+')' : '');
                         sel.appendChild(opt);
                     });
                     sel.addEventListener('change', function(){
                         var val = this.value;
-                        if (val) {
-                            self._loadData(val);
-                        } else {
-                            self._clearForm();
-                        }
+                        if (val) self._loadData(val); else self._clearForm();
                     });
                 }
             });
@@ -86,6 +68,7 @@ window.BlockTemplateModal = {
                 var weight = parseFloat(document.getElementById('blockWeight')?.value) || 0;
                 var power = parseFloat(document.getElementById('blockPower')?.value) || 0;
                 var ln = document.getElementById('blockLn')?.value?.trim();
+                var tm = document.getElementById('blockTm')?.value?.trim();
                 var url = document.getElementById('blockUrl')?.value?.trim();
                 var description = document.getElementById('blockDescription')?.value?.trim();
 
@@ -95,84 +78,48 @@ window.BlockTemplateModal = {
                     method: method,
                     headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({
-                        name: name,
-                        article: article,
-                        manufacturer_id: manufacturer_id,
-                        type_id: type_id,
-                        price: price,
-                        weight_grams: weight,
-                        power_watts: power,
-                        ln: ln,
-                        url: url,
-                        description: description
+                        name: name, article: article, manufacturer_id: manufacturer_id, type_id: type_id,
+                        price: price, weight_grams: weight, power_watts: power, ln: ln, tm: tm,
+                        url: url, description: description
                     })
                 }).then(function(r){ return r.json(); }).then(function(result){
-                    if (result.error) {
-                        alert('Ошибка: '+result.error);
-                    } else {
-                        self._modal.style.display = 'none';
-                        if (self._cb) self._cb(result.id || result);
-                    }
+                    if (result.error) { alert('Ошибка: '+result.error); }
+                    else { self._modal.style.display = 'none'; if (self._cb) self._cb(result.id || result); }
                 }).catch(function(err){ alert('Ошибка запроса: '+err.message); });
             });
         });
     },
-
     _safeSetValue: function(id, value) {
         var el = document.getElementById(id);
         if (el) el.value = value !== null && value !== undefined ? value : '';
         else setTimeout(function(){ var el2 = document.getElementById(id); if (el2) el2.value = value; }, 100);
     },
-
     _loadData: function(id) {
         var self = this;
         fetch('/api/block-templates/'+id)
-            .then(function(r){
-                if (!r.ok) throw new Error('Not found');
-                return r.json();
-            })
+            .then(function(r){ if(!r.ok) throw new Error('Not found'); return r.json(); })
             .then(function(data){
-                if (!data || !data.id) {
-                    alert('Компонент не найден');
-                    return;
-                }
-                self._safeSetValue('blockTemplateId', data.id);
-                self._safeSetValue('blockName', data.name);
-                self._safeSetValue('blockArticle', data.article);
-                self._safeSetValue('blockPrice', data.price);
-                self._safeSetValue('blockWeight', data.weight_grams);
-                self._safeSetValue('blockPower', data.power_watts);
-                self._safeSetValue('blockLn', data.ln);
-                self._safeSetValue('blockUrl', data.url);
-                self._safeSetValue('blockDescription', data.description);
+                if (!data || !data.id) { alert('Компонент не найден'); return; }
+                self._safeSetValue('blockTemplateId', data.id); self._safeSetValue('blockName', data.name);
+                self._safeSetValue('blockArticle', data.article); self._safeSetValue('blockPrice', data.price);
+                self._safeSetValue('blockWeight', data.weight_grams); self._safeSetValue('blockPower', data.power_watts);
+                self._safeSetValue('blockLn', data.ln); self._safeSetValue('blockTm', data.tm);
+                self._safeSetValue('blockUrl', data.url); self._safeSetValue('blockDescription', data.description);
                 if (data.manufacturer_id) self._safeSetValue('blockManufacturer', data.manufacturer_id);
                 if (data.type_id) self._safeSetValue('blockType', data.type_id);
                 document.getElementById('blockModalTitle').textContent = 'Редактировать компонент шкафа';
-                var sel = document.getElementById('existingBlockSelect');
-                if (sel) sel.value = data.id;
+                var sel = document.getElementById('existingBlockSelect'); if (sel) sel.value = data.id;
             })
-            .catch(function(err){
-                console.error('Ошибка загрузки данных компонента:', err);
-                alert('Не удалось загрузить данные компонента.');
-            });
+            .catch(function(err){ console.error(err); alert('Не удалось загрузить данные.'); });
     },
-
     _clearForm: function() {
-        this._safeSetValue('blockTemplateId', '');
-        this._safeSetValue('blockName', '');
-        this._safeSetValue('blockArticle', '');
-        this._safeSetValue('blockPrice', '');
-        this._safeSetValue('blockWeight', '');
-        this._safeSetValue('blockPower', '');
-        this._safeSetValue('blockLn', '');
-        this._safeSetValue('blockUrl', '');
-        this._safeSetValue('blockDescription', '');
-        this._safeSetValue('blockManufacturer', '');
-        this._safeSetValue('blockType', '');
-        var title = document.getElementById('blockModalTitle');
-        if (title) title.textContent = 'Добавить компонент шкафа';
-        var sel = document.getElementById('existingBlockSelect');
-        if (sel) sel.value = '';
+        this._safeSetValue('blockTemplateId', ''); this._safeSetValue('blockName', ''); this._safeSetValue('blockArticle', '');
+        this._safeSetValue('blockPrice', ''); this._safeSetValue('blockWeight', ''); this._safeSetValue('blockPower', '');
+        this._safeSetValue('blockLn', ''); this._safeSetValue('blockTm', '');
+        this._safeSetValue('blockUrl', ''); this._safeSetValue('blockDescription', '');
+        this._safeSetValue('blockManufacturer', ''); this._safeSetValue('blockType', '');
+        var title = document.getElementById('blockModalTitle'); if (title) title.textContent = 'Добавить компонент шкафа';
+        var sel = document.getElementById('existingBlockSelect'); if (sel) sel.value = '';
     }
 };
 </script>
