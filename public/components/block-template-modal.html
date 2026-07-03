@@ -3,7 +3,6 @@ window.BlockTemplateModal = {
     _modal: null,
     _cb: null,
     _preselectedId: null,
-    _loaded: false,
 
     open: function(callback, preselectedId) {
         this._cb = callback;
@@ -23,7 +22,7 @@ window.BlockTemplateModal = {
 
         this._modal.style.display = 'flex';
         var f = document.getElementById('blockTemplateForm');
-        f.innerHTML = ''; // очищаем перед построением
+        f.innerHTML = '';
 
         fetch('/api/manufacturers').then(function(r){ return r.json(); }).then(function(manufacturers){
             var h = '<div class="form-group"><label>Существующий компонент</label><select id="existingBlockSelect" style="width:100%;"><option value="">-- выберите или создайте новый --</option></select></div>';
@@ -36,11 +35,9 @@ window.BlockTemplateModal = {
             h += '<div class="form-row"><div class="form-group"><label>Мощность, Вт</label><input type="number" id="blockPower" step="0.01"></div><div class="form-group"><label>LN</label><input type="text" id="blockLn"></div></div>';
             h += '<div class="form-group"><label>Ссылка</label><input type="url" id="blockUrl"></div>';
             h += '<div class="form-group"><label>Описание</label><textarea id="blockDescription" rows="2"></textarea></div>';
-            h += '<h4>Параметры</h4><div id="blockParamsContainer"></div><button type="button" id="addBlockParamBtn" class="btn btn-sm btn-secondary">+ Добавить параметр</button>';
             h += '<div style="margin-top:15px;"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.querySelector(\'.modal\').style.display=\'none\'">Отмена</button></div>';
             f.innerHTML = h;
 
-            // Загружаем типы и потом данные
             fetch('/api/component-types').then(function(r){ return r.json(); }).then(function(types){
                 var container = document.getElementById('blockTypeContainer');
                 if (container) {
@@ -51,14 +48,11 @@ window.BlockTemplateModal = {
                     types.forEach(function(t){ sel.innerHTML += '<option value="'+t.id+'">'+t.name+'</option>'; });
                     container.appendChild(sel);
                 }
-                // После построения формы загружаем данные, если есть preselectedId
                 if (self._preselectedId) {
-                    // Небольшая задержка, чтобы DOM гарантированно обновился
                     setTimeout(function(){ self._loadData(self._preselectedId); }, 50);
                 }
             });
 
-            // Загружаем список существующих блоков
             fetch('/api/block-templates').then(function(r){ return r.json(); }).then(function(blocks){
                 var sel = document.getElementById('existingBlockSelect');
                 if (sel) {
@@ -79,25 +73,15 @@ window.BlockTemplateModal = {
                 }
             });
 
-            // Параметры
-            document.getElementById('addBlockParamBtn').addEventListener('click', function(){
-                var container = document.getElementById('blockParamsContainer');
-                if (container) {
-                    var div = document.createElement('div');
-                    div.className = 'form-row';
-                    div.innerHTML = '<input type="text" name="param_key[]" placeholder="Ключ" style="flex:1;"> <input type="text" name="param_value[]" placeholder="Значение" style="flex:1;"> <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">✕</button>';
-                    container.appendChild(div);
-                }
-            });
-
-            // Отправка формы
             f.addEventListener('submit', function(e){
                 e.preventDefault();
                 var id = document.getElementById('blockTemplateId')?.value;
                 var name = document.getElementById('blockName')?.value?.trim();
                 var article = document.getElementById('blockArticle')?.value?.trim();
-                var manufacturer_id = document.getElementById('blockManufacturer')?.value || null;
-                var type_id = document.getElementById('blockType')?.value || null;
+                var manufacturer_id_str = document.getElementById('blockManufacturer')?.value || '';
+                var type_id_str = document.getElementById('blockType')?.value || '';
+                var manufacturer_id = manufacturer_id_str ? parseInt(manufacturer_id_str) : null;
+                var type_id = type_id_str ? parseInt(type_id_str) : null;
                 var price = parseFloat(document.getElementById('blockPrice')?.value) || 0;
                 var weight = parseFloat(document.getElementById('blockWeight')?.value) || 0;
                 var power = parseFloat(document.getElementById('blockPower')?.value) || 0;
@@ -105,23 +89,22 @@ window.BlockTemplateModal = {
                 var url = document.getElementById('blockUrl')?.value?.trim();
                 var description = document.getElementById('blockDescription')?.value?.trim();
 
-                var params = [];
-                var keys = document.querySelectorAll('input[name="param_key[]"]');
-                var vals = document.querySelectorAll('input[name="param_value[]"]');
-                for (var i=0; i<keys.length; i++) {
-                    if (keys[i].value.trim() && vals[i].value.trim()) {
-                        params.push({key: keys[i].value.trim(), value: vals[i].value.trim()});
-                    }
-                }
-
                 var apiUrl = id ? '/api/block-templates/'+id : '/api/block-templates';
                 var method = id ? 'PUT' : 'POST';
                 fetch(apiUrl, {
                     method: method,
                     headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({
-                        name, article, manufacturer_id, component_type_id: type_id,
-                        price, weight, power, ln, url, description, params
+                        name: name,
+                        article: article,
+                        manufacturer_id: manufacturer_id,
+                        type_id: type_id,
+                        price: price,
+                        weight_grams: weight,
+                        power_watts: power,
+                        ln: ln,
+                        url: url,
+                        description: description
                     })
                 }).then(function(r){ return r.json(); }).then(function(result){
                     if (result.error) {
@@ -164,20 +147,6 @@ window.BlockTemplateModal = {
                 self._safeSetValue('blockDescription', data.description);
                 if (data.manufacturer_id) self._safeSetValue('blockManufacturer', data.manufacturer_id);
                 if (data.type_id) self._safeSetValue('blockType', data.type_id);
-
-                var container = document.getElementById('blockParamsContainer');
-                if (container) {
-                    container.innerHTML = '';
-                    if (data.parameters && data.parameters.length) {
-                        data.parameters.forEach(function(p){
-                            var div = document.createElement('div');
-                            div.className = 'form-row';
-                            div.innerHTML = '<input type="text" name="param_key[]" value="'+ (p.param_name || '') +'" placeholder="Ключ" style="flex:1;"> <input type="text" name="param_value[]" value="'+ (p.param_value || '') +'" placeholder="Значение" style="flex:1;"> <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">✕</button>';
-                            container.appendChild(div);
-                        });
-                    }
-                }
-
                 document.getElementById('blockModalTitle').textContent = 'Редактировать компонент шкафа';
                 var sel = document.getElementById('existingBlockSelect');
                 if (sel) sel.value = data.id;
@@ -200,8 +169,6 @@ window.BlockTemplateModal = {
         this._safeSetValue('blockDescription', '');
         this._safeSetValue('blockManufacturer', '');
         this._safeSetValue('blockType', '');
-        var container = document.getElementById('blockParamsContainer');
-        if (container) container.innerHTML = '';
         var title = document.getElementById('blockModalTitle');
         if (title) title.textContent = 'Добавить компонент шкафа';
         var sel = document.getElementById('existingBlockSelect');

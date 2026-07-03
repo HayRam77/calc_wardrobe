@@ -196,7 +196,7 @@ router.get('/:id/blocks', auth, async (req, res) => {
 
 router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
   try {
-    const { template_id, quantity } = req.body;
+    const template_id = parseInt(req.body.template_id); const quantity = parseInt(req.body.quantity) || 1;
     const result = await pool.query(
       'INSERT INTO project_blocks (cabinet_id, template_id, quantity) VALUES ($1, $2, $3) RETURNING *',
       [req.params.id, template_id, quantity || 1]

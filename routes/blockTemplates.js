@@ -19,11 +19,11 @@ router.get('/export', auth, async (req, res) => {
     `);
     const allParams = await pool.query('SELECT id, name FROM parameters ORDER BY id');
     const paramNames = allParams.rows.map(p => p.name);
-    
+
     const result = await Promise.all(templates.rows.map(async (t) => {
       const params = await pool.query(
-        `SELECT p.name, cpv.value FROM component_param_values cpv 
-         JOIN parameters p ON cpv.param_id = p.id 
+        `SELECT p.name, cpv.value FROM component_param_values cpv
+         JOIN parameters p ON cpv.param_id = p.id
          WHERE cpv.component_id = $1`, [t.id]
       );
       const row = {
@@ -42,7 +42,7 @@ router.get('/export', auth, async (req, res) => {
       row['Ссылка'] = t.url || '';
       return row;
     }));
-    
+
     const ws = XLSX.utils.json_to_sheet(result);
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Компоненты шкафов');
     res.setHeader('Content-Disposition', 'attachment; filename=block_templates.xlsx');
@@ -57,24 +57,26 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
     const allParams = await pool.query('SELECT id, name FROM parameters');
     const paramMap = {};
     allParams.rows.forEach(p => { paramMap[p.name] = p.id; });
-    
+
     const fixedCols = ['Тип', 'Название', 'Производитель', 'Артикул', 'Описание', 'Цена', 'Вес', 'Q', 'LN', 'Ссылка'];
-    
+
     let imported = 0;
     for (const row of data) {
       try {
         const typeRes = await pool.query('SELECT id FROM component_types WHERE name = $1', [row['Тип']]);
         const manRes = await pool.query('SELECT id FROM manufacturers WHERE name = $1', [row['Производитель']]);
-        
+
         const compResult = await pool.query(
-          `INSERT INTO block_templates (name, type_id, manufacturer_id, article, description, price, weight_grams, power_watts, ln, url) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ON CONFLICT (article) DO UPDATE SET name=$1, type_id=$2, manufacturer_id=$3, description=$5, price=$6, weight_grams=$7, power_watts=$8, ln=$9, url=$10 RETURNING id`,
+          `INSERT INTO block_templates (name, type_id, manufacturer_id, article, description, price, weight_grams, power_watts, ln, url)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           ON CONFLICT (article) DO UPDATE SET name=$1, type_id=$2, manufacturer_id=$3, description=$5, price=$6, weight_grams=$7, power_watts=$8, ln=$9, url=$10
+           RETURNING id`,
           [row['Название'] || '', typeRes.rows[0]?.id || null, manRes.rows[0]?.id || null, row['Артикул'] || null, row['Описание'] || null, row['Цена'] || null, row['Вес'] || null, row['Q'] || null, row['LN'] || null, row['Ссылка'] || null]
         );
         const compId = compResult.rows[0].id;
-        
+
         await pool.query('DELETE FROM component_param_values WHERE component_id = $1', [compId]);
-        
+
         for (const key of Object.keys(row)) {
           if (!fixedCols.includes(key) && paramMap[key] && row[key]) {
             await pool.query(
@@ -106,15 +108,43 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 router.post('/', auth, isAdmin, async (req, res) => {
+  console.log('POST /api/block-templates body:', JSON.stringify(req.body));
   const { name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, ln, url, description, parameters } = req.body;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const result = await client.query(`INSERT INTO block_templates (name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, ln, url, description) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`, [name, type_id || null, manufacturer_id || null, article || null, price || null, labor || null, weight_grams || null, power_watts || null, ln || null, url || null, description || null]);
+    const typeId = (type_id != null && type_id !== '') ? parseInt(type_id) : null;
+    const manId = (manufacturer_id != null && manufacturer_id !== '') ? parseInt(manufacturer_id) : null;
+    let result;
+    if (article) {
+      // Если article указан, проверяем существование и делаем upsert вручную
+      const existing = await client.query('SELECT id FROM block_templates WHERE article = $1', [article]);
+      if (existing.rows.length > 0) {
+        const id = existing.rows[0].id;
+        result = await client.query(
+          `UPDATE block_templates SET name=$1, type_id=$2, manufacturer_id=$3, price=$4, labor=$5, weight_grams=$6, power_watts=$7, ln=$8, url=$9, description=$10, updated_at=CURRENT_TIMESTAMP
+           WHERE id=$11 RETURNING *`,
+          [name, typeId, manId, price || null, labor || null, weight_grams || null, power_watts || null, ln || null, url || null, description || null, id]
+        );
+        console.log(`Обновлён существующий компонент с article=${article}, id=${id}`);
+      } else {
+        result = await client.query(
+          `INSERT INTO block_templates (name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, ln, url, description)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+          [name, typeId, manId, article, price || null, labor || null, weight_grams || null, power_watts || null, ln || null, url || null, description || null]
+        );
+      }
+    } else {
+      result = await client.query(
+        `INSERT INTO block_templates (name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, ln, url, description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [name, typeId, manId, article || null, price || null, labor || null, weight_grams || null, power_watts || null, ln || null, url || null, description || null]
+      );
+    }
     if (parameters && Array.isArray(parameters)) for (const p of parameters) if (p.parameter_id) await client.query('INSERT INTO component_param_values (component_id, param_id, value) VALUES ($1, $2, $3)', [result.rows[0].id, p.parameter_id, p.param_value || p.value || '']);
     await client.query('COMMIT');
     res.status(201).json(result.rows[0]);
-  } catch (err) { await client.query('ROLLBACK'); console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+  } catch (err) { await client.query('ROLLBACK'); console.error('Ошибка POST /api/block-templates:', err); res.status(500).json({ message: 'Ошибка', error: err.message }); }
   finally { client.release(); }
 });
 
@@ -124,7 +154,13 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
     await client.query('BEGIN');
     const allowed = ['name', 'type_id', 'manufacturer_id', 'article', 'price', 'labor', 'weight_grams', 'power_watts', 'ln', 'url', 'description'];
     const fields = []; const values = []; let c = 1;
-    for (const f of allowed) if (bodyFields[f] !== undefined) { fields.push(`${f} = $${c++}`); values.push(bodyFields[f]); }
+    for (const f of allowed) {
+      if (bodyFields[f] !== undefined) {
+        let val = bodyFields[f];
+        if ((f === 'type_id' || f === 'manufacturer_id') && val === '') val = null;
+        fields.push(`${f} = $${c++}`); values.push(val);
+      }
+    }
     let result;
     if (fields.length > 0) { values.push(id); result = await client.query(`UPDATE block_templates SET ${fields.join(', ')} WHERE id = $${c} RETURNING *`, values); }
     else { result = await client.query('SELECT * FROM block_templates WHERE id = $1', [id]); }
