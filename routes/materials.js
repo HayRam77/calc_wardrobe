@@ -62,8 +62,8 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
     try {
         const { article, name, manufacturer_id, description, unit, price } = req.body;
         const result = await pool.query(
-            `UPDATE materials 
-             SET article = $1, name = $2, manufacturer_id = $3, description = $4, 
+            `UPDATE materials
+             SET article = $1, name = $2, manufacturer_id = $3, description = $4,
                  unit = $5, price = $6, updated_at = CURRENT_TIMESTAMP
              WHERE id = $7
              RETURNING *`,
@@ -116,35 +116,16 @@ router.post('/system-component/:id', auth, isAdmin, async (req, res) => {
     try {
         await client.query('BEGIN');
         const { material_id, quantity } = req.body;
-        
+
         const result = await client.query(
             `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
              VALUES ($1, $2, $3)
-             ON CONFLICT (system_component_id, material_id) 
+             ON CONFLICT (system_component_id, material_id)
              DO UPDATE SET quantity = EXCLUDED.quantity
              RETURNING *`,
             [req.params.id, material_id, quantity || 1]
         );
-        
-        const cabinetsResult = await client.query(`
-            SELECT DISTINCT cs.cabinet_id, p.id as project_id
-            FROM system_components_link scl
-            JOIN cabinet_systems cs ON cs.system_id = scl.system_id
-            JOIN cabinets c ON cs.cabinet_id = c.id
-            JOIN projects p ON c.project_id = p.id
-            WHERE scl.component_id = $1
-        `, [req.params.id]);
-        
-        for (const row of cabinetsResult.rows) {
-            await client.query(
-                `INSERT INTO project_materials (cabinet_id, project_id, material_id, quantity, linked)
-                 VALUES ($1, $2, $3, $4, TRUE)
-                 ON CONFLICT (cabinet_id, material_id, linked) 
-                 DO UPDATE SET quantity = EXCLUDED.quantity`,
-                [row.cabinet_id, row.project_id, material_id, quantity || 1]
-            );
-        }
-        
+
         await client.query('COMMIT');
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -169,22 +150,54 @@ router.delete('/system-component/:componentId/:materialId', auth, isAdmin, async
     }
 });
 
+// Обновить количество материала компонента системы
+router.put('/system-component/:componentId/:materialId', auth, isAdmin, async (req, res) => {
+    try {
+        const { quantity } = req.body;
+        const result = await pool.query(
+            'UPDATE system_component_materials SET quantity = $1 WHERE system_component_id = $2 AND material_id = $3 RETURNING *',
+            [quantity, req.params.componentId, req.params.materialId]
+        );
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Связь не найдена' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Ошибка обновления количества материала:', err);
+        res.status(500).json({ message: 'Ошибка обновления количества материала' });
+    }
+});
+
 // ==================== МАТЕРИАЛЫ ШКАФА ====================
 
+// HTML-фрагмент материалов шкафа (исправлен запрос без дублирования строк)
 router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT pm.id, pm.material_id, pm.quantity, pm.linked,
-                   m.article, m.name as material_name, m.unit, m.price,
-                   s.name as system_name,
-                   sc.name as component_name
+                   m.article, m.name AS material_name, m.unit, m.price,
+                   (SELECT s.name
+                    FROM system_component_materials scm
+                    JOIN system_components sc ON scm.system_component_id = sc.id
+                    JOIN system_components_link scl ON scl.component_id = sc.id
+                    JOIN systems s ON scl.system_id = s.id
+                    JOIN cabinet_systems cs ON cs.system_id = s.id
+                    WHERE scm.material_id = pm.material_id
+                      AND cs.cabinet_id = pm.cabinet_id
+                      AND pm.linked = true
+                    LIMIT 1) AS system_name,
+                   (SELECT sc.name
+                    FROM system_component_materials scm
+                    JOIN system_components sc ON scm.system_component_id = sc.id
+                    JOIN system_components_link scl ON scl.component_id = sc.id
+                    JOIN systems s ON scl.system_id = s.id
+                    JOIN cabinet_systems cs ON cs.system_id = s.id
+                    WHERE scm.material_id = pm.material_id
+                      AND cs.cabinet_id = pm.cabinet_id
+                      AND pm.linked = true
+                    LIMIT 1) AS component_name
             FROM project_materials pm
             JOIN materials m ON pm.material_id = m.id
-            LEFT JOIN system_component_materials scm ON scm.material_id = m.id
-            LEFT JOIN system_components sc ON scm.system_component_id = sc.id
-            LEFT JOIN system_components_link scl ON scl.component_id = sc.id
-            LEFT JOIN systems s ON scl.system_id = s.id
-            LEFT JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = pm.cabinet_id
             WHERE pm.cabinet_id = $1
             ORDER BY pm.id
         `, [req.params.cabinetId]);
@@ -195,8 +208,8 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
         } else {
             html = '<div class="table-container"><table class="data-table"><thead><tr><th>Система</th><th>Компонент системы</th><th>Артикул</th><th>Название</th><th>Ед. изм.</th><th>Цена</th><th>Кол-во</th><th>Действия</th></tr></thead><tbody>';
             result.rows.forEach(row => {
-                const systemName = (row.linked && row.system_name) ? row.system_name : '-';
-                const componentName = (row.linked && row.component_name) ? row.component_name : '-';
+                const systemName = row.linked ? (row.system_name || '-') : '-';
+                const componentName = row.linked ? (row.component_name || '-') : '-';
                 html += `<tr>
                     <td>${systemName}</td>
                     <td>${componentName}</td>
@@ -225,27 +238,27 @@ router.post('/cabinet/:cabinetId', auth, isAdmin, async (req, res) => {
     try {
         await client.query('BEGIN');
         const { material_id, quantity } = req.body;
-        
+
         const projectResult = await client.query(
             'SELECT project_id FROM cabinets WHERE id = $1',
             [req.params.cabinetId]
         );
-        
+
         if (projectResult.rows.length === 0) {
             return res.status(404).json({ message: 'Шкаф не найден' });
         }
-        
+
         const project_id = projectResult.rows[0].project_id;
-        
+
         const result = await client.query(
             `INSERT INTO project_materials (cabinet_id, project_id, material_id, quantity, linked)
              VALUES ($1, $2, $3, $4, FALSE)
-             ON CONFLICT (cabinet_id, material_id, linked) 
+             ON CONFLICT (cabinet_id, material_id, linked)
              DO UPDATE SET quantity = EXCLUDED.quantity
              RETURNING *`,
             [req.params.cabinetId, project_id, material_id, quantity || 1]
         );
-        
+
         await client.query('COMMIT');
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -299,13 +312,13 @@ router.get('/export', auth, async (req, res) => {
         const ws = XLSX.utils.json_to_sheet(result.rows);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Материалы');
-        
+
         const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        
+
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename=materials.xlsx');
         res.setHeader('Content-Length', buffer.length);
-        
+
         res.send(buffer);
     } catch (err) {
         console.error('❌ Ошибка экспорта:', err);
