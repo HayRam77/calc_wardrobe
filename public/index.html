@@ -179,49 +179,53 @@ function loadModuleComponents() {
     if (window._modulesLoaded) return;
     window._modulesLoaded = true;
 
-    fetch('/components/block-template-modal.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
+    // Последовательная загрузка всех компонентов без дублирования
+    fetch('/components/block-template-modal.html?_=' + Date.now())
+      .then(r => r.text())
+      .then(html => {
         var div = document.createElement('div'); div.innerHTML = html;
-        div.querySelectorAll('script').forEach(function(s){
-            var ns = document.createElement('script');
-            ns.textContent = s.textContent; document.body.appendChild(ns);
+        div.querySelectorAll('script').forEach(s => {
+          var ns = document.createElement('script');
+          ns.textContent = s.textContent; document.body.appendChild(ns);
         });
-    });
-
-    fetch('/components/system-comp-edit.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
+        return fetch('/components/system-comp-edit.html?_=' + Date.now());
+      })
+      .then(r => r.text())
+      .then(html => {
         var div = document.createElement('div'); div.innerHTML = html;
-        div.querySelectorAll('script').forEach(function(s){
-            var ns = document.createElement('script');
-            ns.textContent = s.textContent; document.body.appendChild(ns);
+        div.querySelectorAll('script').forEach(s => {
+          var ns = document.createElement('script');
+          ns.textContent = s.textContent; document.body.appendChild(ns);
         });
-    });
-
-    fetch('/components/system-comp-form.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
+        return fetch('/components/system-comp-form.html?_=' + Date.now());
+      })
+      .then(r => r.text())
+      .then(html => {
         var div = document.createElement('div'); div.innerHTML = html;
-        div.querySelectorAll('script').forEach(function(s){
-            var ns = document.createElement('script');
-            ns.textContent = s.textContent; document.body.appendChild(ns);
+        div.querySelectorAll('script').forEach(s => {
+          var ns = document.createElement('script');
+          ns.textContent = s.textContent; document.body.appendChild(ns);
         });
-    });
-
-    fetch('/components/system-comp-modal.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
-    fetch("/components/material-modal.html?_="+Date.now()).then(function(r){return r.text();}).then(function(html){var div=document.createElement("div");div.innerHTML=html;div.querySelectorAll("script").forEach(function(s){var ns=document.createElement("script");ns.textContent=s.textContent;document.body.appendChild(ns);});});
+        return fetch('/components/system-comp-modal.html?_=' + Date.now());
+      })
+      .then(r => r.text())
+      .then(html => {
         var div = document.createElement('div'); div.innerHTML = html;
-        div.querySelectorAll('script').forEach(function(s){
-            var ns = document.createElement('script');
-            ns.textContent = s.textContent; document.body.appendChild(ns);
+        div.querySelectorAll('script').forEach(s => {
+          var ns = document.createElement('script');
+          ns.textContent = s.textContent; document.body.appendChild(ns);
         });
-    });
-
-    fetch('/components/material-modal.html?_='+Date.now()).then(function(r){return r.text();}).then(function(html){
+        return fetch('/components/material-modal.html?_=' + Date.now());
+      })
+      .then(r => r.text())
+      .then(html => {
         var div = document.createElement('div'); div.innerHTML = html;
-        div.querySelectorAll('script').forEach(function(s){
-            var ns = document.createElement('script');
-            ns.textContent = s.textContent; document.body.appendChild(ns);
+        div.querySelectorAll('script').forEach(s => {
+          var ns = document.createElement('script');
+          ns.textContent = s.textContent; document.body.appendChild(ns);
         });
-    });
-
-
-var page = window.location.pathname;
+      })
+      .catch(e => console.error('Ошибка загрузки компонентов:', e));
 }
 
 window.addEventListener('popstate', function() { loadPage(location.pathname || '/'); });
