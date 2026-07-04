@@ -80,19 +80,24 @@
             }
             var html = '<div class="table-container"><table class="data-table"><thead><tr>' +
                 '<th>ID</th><th>Артикул</th><th>Название</th><th>Производитель</th>' +
-                '<th>Описание</th><th>Ед. изм.</th><th>Цена, руб.</th>';
+                '<th>Описание</th><th>Ссылка</th><th>Ед. изм.</th><th>Цена, руб.</th>';
             if (isAdmin) html += '<th>Действия</th>';
             html += '</tr></thead><tbody>';
 
             data.forEach(function(item) {
                 var price = formatPrice(item.price);
                 var manufacturerName = getManufacturerName(item.manufacturer_id);
+                var linkHtml = '';
+                if (item.manufacturer_url) {
+                    linkHtml = '<a href="' + esc(item.manufacturer_url) + '" target="_blank">🔗</a>';
+                }
                 html += '<tr>' +
                     '<td>' + item.id + '</td>' +
                     '<td>' + esc(item.article || '') + '</td>' +
                     '<td>' + esc(item.name) + '</td>' +
                     '<td>' + esc(manufacturerName) + '</td>' +
                     '<td>' + esc(item.description || '') + '</td>' +
+                    '<td>' + linkHtml + '</td>' +
                     '<td>' + esc(item.unit || '') + '</td>' +
                     '<td>' + price + '</td>';
                 if (isAdmin) {

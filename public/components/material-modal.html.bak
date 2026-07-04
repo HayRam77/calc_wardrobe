@@ -25,7 +25,6 @@ window.MaterialModal = {
                 '<div class="form-group"><label>Название *</label><input type="text" id="materialName" required></div>' +
                 '<div class="form-group"><label>Производитель</label><select id="materialManufacturer"><option value="">-- без производителя --</option></select></div>' +
                 '<div class="form-group"><label>Описание</label><textarea id="materialDescription" rows="2"></textarea></div>' +
-                '<div class="form-group"><label>Ссылка на сайт производителя</label><input type="url" id="materialManufacturerUrl" placeholder="https://example.com"></div>' +
                 '<div class="form-row" style="display:flex;gap:10px;">' +
                 '<div class="form-group" style="flex:1;"><label>Ед. изм.</label><input type="text" id="materialUnit" placeholder="шт, м, кг..."></div>' +
                 '<div class="form-group" style="flex:1;"><label>Цена, руб.</label><input type="number" id="materialPrice" step="0.01"></div>' +
@@ -95,7 +94,6 @@ window.MaterialModal = {
             document.getElementById('materialDescription').value = material.description || '';
             document.getElementById('materialUnit').value = material.unit || '';
             document.getElementById('materialPrice').value = material.price || '';
-            document.getElementById('materialManufacturerUrl').value = material.manufacturer_url || '';
             if (material.manufacturer_id) {
                 document.getElementById('materialManufacturer').value = material.manufacturer_id;
             }
@@ -109,7 +107,6 @@ window.MaterialModal = {
             document.getElementById('materialDescription').value = '';
             document.getElementById('materialUnit').value = '';
             document.getElementById('materialPrice').value = '';
-            document.getElementById('materialManufacturerUrl').value = '';
             document.getElementById('materialManufacturer').value = '';
             errorDiv.style.display = 'none';
         }
@@ -184,8 +181,7 @@ window.MaterialModal = {
                 manufacturer_id: document.getElementById('materialManufacturer').value || null,
                 description: document.getElementById('materialDescription').value.trim() || null,
                 unit: document.getElementById('materialUnit').value.trim() || null,
-                price: parseFloat(document.getElementById('materialPrice').value) || null,
-                manufacturer_url: document.getElementById('materialManufacturerUrl').value.trim() || null
+                price: parseFloat(document.getElementById('materialPrice').value) || null
             };
 
             var materialId = document.getElementById('materialId').value;

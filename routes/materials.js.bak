@@ -44,14 +44,12 @@ router.get('/:id', auth, async (req, res) => {
 
 router.post('/', auth, isAdmin, async (req, res) => {
     try {
-        const { article, name, manufacturer_id, description, unit, price, manufacturer_url } = req.body;
-    console.log("📦 PUT materials, manufacturer_url:", manufacturer_url);
-    console.log("📦 POST materials, manufacturer_url:", manufacturer_url);
+        const { article, name, manufacturer_id, description, unit, price } = req.body;
         const result = await pool.query(
-            `INSERT INTO materials (article, name, manufacturer_id, description, unit, price, manufacturer_url)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO materials (article, name, manufacturer_id, description, unit, price)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING *`,
-            [article || null, name, manufacturer_id || null, description || null, unit || null, price || null, manufacturer_url || null]
+            [article || null, name, manufacturer_id || null, description || null, unit || null, price || null]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -62,16 +60,14 @@ router.post('/', auth, isAdmin, async (req, res) => {
 
 router.put('/:id', auth, isAdmin, async (req, res) => {
     try {
-        const { article, name, manufacturer_id, description, unit, price, manufacturer_url } = req.body;
-    console.log("📦 PUT materials, manufacturer_url:", manufacturer_url);
-    console.log("📦 POST materials, manufacturer_url:", manufacturer_url);
+        const { article, name, manufacturer_id, description, unit, price } = req.body;
         const result = await pool.query(
             `UPDATE materials
              SET article = $1, name = $2, manufacturer_id = $3, description = $4,
-                 unit = $5, price = $6, manufacturer_url = $7, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $8
+                 unit = $5, price = $6, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $7
              RETURNING *`,
-            [article || null, name, manufacturer_id || null, description || null, unit || null, price || null, manufacturer_url || null, req.params.id]
+            [article || null, name, manufacturer_id || null, description || null, unit || null, price || null, req.params.id]
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Материал не найден' });
@@ -130,6 +126,9 @@ router.post('/system-component/:id', auth, isAdmin, async (req, res) => {
             [req.params.id, material_id, quantity || 1]
         );
 
+        // Синхронизация с project_materials (суммирование) не требуется,
+        // т.к. теперь материалы отображаются напрямую из system_component_materials
+
         await client.query('COMMIT');
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -173,8 +172,10 @@ router.delete('/system-component/:componentId/:materialId', auth, isAdmin, async
 
 // ==================== МАТЕРИАЛЫ ШКАФА ====================
 
+// Новый HTML-фрагмент: раздельное отображение по компонентам
 router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
     try {
+        // Часть 1: прямые материалы (linked = false)
         const direct = await pool.query(`
             SELECT pm.id, pm.material_id, pm.quantity, pm.linked,
                    m.article, m.name AS material_name, m.unit, m.price,
@@ -184,6 +185,7 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
             WHERE pm.cabinet_id = $1 AND pm.linked = false
         `, [req.params.cabinetId]);
 
+        // Часть 2: материалы от компонентов систем (linked = true)
         const systemMaterials = await pool.query(`
             SELECT scm.id, scm.material_id, scm.quantity, TRUE AS linked,
                    m.article, m.name AS material_name, m.unit, m.price,
@@ -204,6 +206,7 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
         } else {
             html = '<div class="table-container"><table class="data-table"><thead><tr><th>Система</th><th>Компонент системы</th><th>Артикул</th><th>Название</th><th>Ед. изм.</th><th>Цена</th><th>Кол-во</th><th>Действия</th></tr></thead><tbody>';
 
+            // Прямые материалы
             direct.rows.forEach(row => {
                 html += `<tr>
                     <td>${row.system_name}</td>
@@ -220,8 +223,9 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
                 </tr>`;
             });
 
+            // Системные материалы (используем отрицательный id, чтобы отличать)
             systemMaterials.rows.forEach(row => {
-                const virtualId = -row.id;
+                const virtualId = -row.id; // отрицательный, уникальный в пределах scm.id
                 html += `<tr>
                     <td>${row.system_name || ''}</td>
                     <td>${row.component_name || ''}</td>
@@ -246,6 +250,7 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
     }
 });
 
+// Прямые материалы шкафа (добавление вручную)
 router.post('/cabinet/:cabinetId', auth, isAdmin, async (req, res) => {
     const client = await pool.connect();
     try {
@@ -283,10 +288,12 @@ router.post('/cabinet/:cabinetId', auth, isAdmin, async (req, res) => {
     }
 });
 
+// Обновление количества материала (общее для прямых, системные не трогаем)
 router.put('/cabinet/:cabinetId/:materialId', auth, isAdmin, async (req, res) => {
     const materialId = parseInt(req.params.materialId);
     const { quantity } = req.body;
 
+    // Если id отрицательный, это системный материал, обновляем в system_component_materials
     if (materialId < 0) {
         const realId = -materialId;
         try {
@@ -304,6 +311,7 @@ router.put('/cabinet/:cabinetId/:materialId', auth, isAdmin, async (req, res) =>
         }
     }
 
+    // Иначе прямой материал
     try {
         const result = await pool.query(
             'UPDATE project_materials SET quantity = $1, updated_at = CURRENT_TIMESTAMP WHERE cabinet_id = $2 AND id = $3 RETURNING *',
@@ -319,10 +327,12 @@ router.put('/cabinet/:cabinetId/:materialId', auth, isAdmin, async (req, res) =>
     }
 });
 
+// Удаление материала (прямого или системного)
 router.delete('/cabinet/:cabinetId/:materialId', auth, isAdmin, async (req, res) => {
     const materialId = parseInt(req.params.materialId);
 
     if (materialId < 0) {
+        // Системный материал: удаляем связь в system_component_materials
         const realId = -materialId;
         try {
             await pool.query('DELETE FROM system_component_materials WHERE id = $1', [realId]);
@@ -334,6 +344,7 @@ router.delete('/cabinet/:cabinetId/:materialId', auth, isAdmin, async (req, res)
         return;
     }
 
+    // Прямой материал
     try {
         await pool.query(
             'DELETE FROM project_materials WHERE cabinet_id = $1 AND id = $2',
@@ -351,7 +362,7 @@ router.delete('/cabinet/:cabinetId/:materialId', auth, isAdmin, async (req, res)
 router.get('/export', auth, async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT m.id, m.article, m.name, m.description, m.unit, m.price, m.manufacturer_url
+            SELECT m.id, m.article, m.name, m.description, m.unit, m.price
             FROM materials m
             ORDER BY m.name
         `);
@@ -390,11 +401,10 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
                     }
                 }
                 await pool.query(
-                    `INSERT INTO materials (article, name, manufacturer_id, description, unit, price, manufacturer_url)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                    `INSERT INTO materials (article, name, manufacturer_id, description, unit, price)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
                     [row['артикул'] || null, row['название'], manufacturerId,
-                     row['описание'] || null, row['Ед.изм.'] || null, row['цена'] || null,
-                     row['ссылка на производителя'] || null]
+                     row['описание'] || null, row['Ед.изм.'] || null, row['цена'] || null]
                 );
                 imported++;
             } catch (e) { console.error(e); }
