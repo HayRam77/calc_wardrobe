@@ -206,6 +206,8 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
 
         const rows = result.rows;
         let totalQuantity = 0;
+        let totalLn = 0;
+        let totalTm = 0;
         let totalPrice = 0;
         let html = '';
         if (rows.length === 0) {
@@ -217,6 +219,8 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
             rows.forEach(row => {
                 totalQuantity += Number(row.total_quantity);
                 totalPrice += Number(row.total_price);
+            totalLn += Number(row.ln) || 0;
+            totalTm += Number(row.tm) || 0;
                 html += '<tr>' +
                     '<td>' + row.id + '</td>' +
                     '<td>' + (row.article || '') + '</td>' +
@@ -230,12 +234,7 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
             });
 
             // Итоговая строка
-            html += '<tr class="total-row" style="font-weight:bold; background:#f0f0f0;">' +
-                '<td colspan="5">Итого</td>' +
-                '<td>' + totalQuantity + '</td>' +
-                '<td></td>' +
-                '<td>' + totalPrice.toFixed(2) + '</td>' +
-                '</tr>';
+            html += '<tr class="total-row" style="font-weight:bold; background:#f0f0f0;">' +'<td colspan="3">Итого</td>' +'<td>' + totalLn + '</td>' +'<td>' + totalTm + '</td>' +'<td></td>' +'<td></td>' +'<td>' + totalPrice.toFixed(2) + '</td>' +'</tr>';
             html += '</tbody></table></div>';
             html += '<span id="cabinetTotalPrice" data-total-price="' + totalPrice.toFixed(2) + '" style="display:none;"></span>';
         }
