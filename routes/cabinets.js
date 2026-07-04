@@ -1,3 +1,4 @@
+function esc(str) { if (!str) return ""; return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
@@ -292,10 +293,6 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       ORDER BY pb.id
     `, [req.params.id]);
 
-    if (blocksResult.rows.length === 0) {
-      return res.send('<p>Нет компонентов</p>');
-    }
-
     const linksResult = await pool.query(`
       SELECT sbl.block_template_id, sc.name as component_name, s.name as system_name
       FROM system_block_links sbl
@@ -312,28 +309,57 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       linkMap[row.block_template_id].push({ system_name: row.system_name, component_name: row.component_name });
     });
 
+    // Добавляем виртуальные блоки для системных компонентов
+    const existingTemplateIds = new Set(blocksResult.rows.map(r => r.template_id));
+    for (const [templateId, links] of Object.entries(linkMap)) {
+      if (!existingTemplateIds.has(parseInt(templateId))) {
+        const btRes = await pool.query("SELECT id, name, ln, tm, type_id FROM block_templates WHERE id = $1", [templateId]);
+        if (btRes.rows.length > 0) {
+          const bt = btRes.rows[0];
+          const ctRes = await pool.query("SELECT name FROM component_types WHERE id = $1", [bt.type_id]);
+          const blockType = ctRes.rows.length > 0 ? ctRes.rows[0].name : "";
+          blocksResult.rows.push({
+            id: -bt.id,
+            template_id: bt.id,
+            linked: true,
+            block_name: bt.name,
+            ln: bt.ln,
+            tm: bt.tm,
+            block_type: blockType,
+            system_name: links[0].system_name,
+            component_name: links[0].component_name
+          });
+        }
+      }
+    }
+
+    if (blocksResult.rows.length === 0) {
+      return res.send('<p>Нет компонентов</p>');
+    }
+
     let html = '<div class="table-container"><table class="data-table"><thead><tr><th>Система</th><th>Компонент системы</th><th>Тип комп. шкафа</th><th>Название</th><th>LN</th><th>TM</th><th>Действия</th></tr></thead><tbody>';
 
     for (const block of blocksResult.rows) {
       const links = linkMap[block.template_id] || [];
       const hasLink = block.linked === true && links.length > 0;
-      const systemName = hasLink ? links[0].system_name : '-';
-      const componentName = hasLink ? links[0].component_name : '-';
-
-      html += `<tr>
-        <td>${systemName}</td>
-        <td>${componentName}</td>
-        <td>${block.block_type || ''}</td>
-        <td>${block.block_name}</td>
-        <td>${block.ln || ''}</td>
-        <td>${block.tm || ''}</td>
-        <td>
-          <button class="btn btn-sm btn-edit" onclick="openBlockModalWithId(${block.id}, ${block.template_id})">✏️</button>
-          <button class="btn btn-sm btn-delete" onclick="delBlock(${block.id})">🗑️</button>
-        </td>
-      </tr>`;
+      const systemName = hasLink ? links[0].system_name : (block.system_name || '-');
+      const componentName = hasLink ? links[0].component_name : (block.component_name || '-');
+      const isVirtual = block.id < 0;
+      html += '<tr>' +
+        '<td>' + esc(systemName) + '</td>' +
+        '<td>' + esc(componentName) + '</td>' +
+        '<td>' + esc(block.block_type || '') + '</td>' +
+        '<td>' + esc(block.block_name) + '</td>' +
+        '<td>' + esc(block.ln || '') + '</td>' +
+        '<td>' + esc(block.tm || '') + '</td>' +
+        '<td>' +
+          (isVirtual ?
+            '<button class="btn btn-sm btn-delete" onclick="delBlock(' + block.id + ')">🗑️</button>' :
+            '<button class="btn btn-sm btn-edit" onclick="openBlockModalWithId(' + block.id + ', ' + block.template_id + ')">✏️</button> ' +
+            '<button class="btn btn-sm btn-delete" onclick="delBlock(' + block.id + ')">🗑️</button>') +
+        '</td>' +
+        '</tr>';
     }
-
     html += '</tbody></table></div>';
     res.send(html);
   } catch (err) {
@@ -344,6 +370,15 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
 
 router.delete('/:id/blocks/:blockId', auth, isAdmin, async (req, res) => {
   try {
+    const blockId = parseInt(req.params.blockId);
+    if (blockId < 0) {
+      const templateId = -blockId;
+      await pool.query(
+        'DELETE FROM system_block_links WHERE block_template_id = $1 AND id IN (SELECT sbl.id FROM system_block_links sbl JOIN system_components_link scl ON sbl.system_component_id = scl.component_id JOIN cabinet_systems cs ON cs.system_id = scl.system_id WHERE cs.cabinet_id = $2 AND sbl.block_template_id = $1)',
+        [templateId, req.params.id]
+      );
+      return res.json({ message: 'Связь удалена' });
+    }
     await pool.query('DELETE FROM project_blocks WHERE id=$1 AND cabinet_id=$2', [req.params.blockId, req.params.id]);
     res.json({ message: 'Удалён' });
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
