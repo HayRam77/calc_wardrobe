@@ -1,5 +1,4 @@
 <script>
-// Универсальное модальное окно для добавления/редактирования материала
 window.MaterialModal = {
     _cb: null,
     _modal: null,
@@ -9,7 +8,6 @@ window.MaterialModal = {
         var self = this;
         var isEdit = !!preselectedId;
 
-        // Создаём модальное окно если его нет
         if (!this._modal) {
             var m = document.createElement('div');
             m.className = 'modal';
@@ -19,7 +17,7 @@ window.MaterialModal = {
                 '<h3 id="materialModalTitle">Добавить материал</h3>' +
                 '<form id="materialForm">' +
                 '<input type="hidden" id="materialId">' +
-                '<div class="form-group"><label>Существующий материал</label><select id="existingMaterialSelect" style="width:100%;"><option value="">-- выберите или создайте новый --</option></select></div>' +
+                '<div class="form-group"><label>Сществующий материал</label><select id="existingMaterialSelect" style="width:100%;"><option value="">-- выберите или создайте новый --</option></select></div>' +
                 '<hr style="margin:15px 0;">' +
                 '<div class="form-group"><label>Артикул</label><input type="text" id="materialArticle"></div>' +
                 '<div class="form-group"><label>Название *</label><input type="text" id="materialName" required></div>' +
@@ -27,7 +25,11 @@ window.MaterialModal = {
                 '<div class="form-group"><label>Описание</label><textarea id="materialDescription" rows="2"></textarea></div>' +
                 '<div class="form-group"><label>Ссылка на сайт производителя</label><input type="url" id="materialManufacturerUrl" placeholder="https://example.com"></div>' +
                 '<div class="form-row" style="display:flex;gap:10px;">' +
-                '<div class="form-group" style="flex:1;"><label>Ед. изм.</label><input type="text" id="materialUnit" placeholder="шт, м, кг..."></div>' +
+                '<div class="form-group" style="flex:1;"><label>LN</label><input type="text" id="materialLn"></div>' +
+                '<div class="form-group" style="flex:1;"><label>TM</label><input type="text" id="materialTm"></div>' +
+                '</div>' +
+                '<div class="form-row" style="display:flex;gap:10px;">' +
+                '<div class="form-group" style="flex:1;"><label>Ед. изм.</label><input type="text" id="materialUnit" placeholder="штт, м, кг..."></div>' +
                 '<div class="form-group" style="flex:1;"><label>Цена, руб.</label><input type="number" id="materialPrice" step="0.01"></div>' +
                 '</div>' +
                 '<div id="materialError" class="error-message" style="display:none;"></div>' +
@@ -50,7 +52,6 @@ window.MaterialModal = {
         var errorDiv = document.getElementById('materialError');
         var existingSelect = document.getElementById('existingMaterialSelect');
 
-        // Загружаем производителей
         function loadManufacturers(selectedId) {
             return fetch('/api/manufacturers')
                 .then(function(r) { return r.json(); })
@@ -65,7 +66,6 @@ window.MaterialModal = {
                 });
         }
 
-        // Загружаем существующие материалы
         function loadExistingMaterials(selectedId) {
             return fetch('/api/materials')
                 .then(function(r) { return r.json(); })
@@ -86,7 +86,6 @@ window.MaterialModal = {
                 });
         }
 
-        // Заполняем форму данными материала
         function fillMaterialData(material) {
             if (!material) return;
             document.getElementById('materialId').value = material.id || '';
@@ -96,12 +95,13 @@ window.MaterialModal = {
             document.getElementById('materialUnit').value = material.unit || '';
             document.getElementById('materialPrice').value = material.price || '';
             document.getElementById('materialManufacturerUrl').value = material.manufacturer_url || '';
+            document.getElementById('materialLn').value = material.ln || '';
+            document.getElementById('materialTm').value = material.tm || '';
             if (material.manufacturer_id) {
                 document.getElementById('materialManufacturer').value = material.manufacturer_id;
             }
         }
 
-        // Очистка формы
         function clearForm() {
             document.getElementById('materialId').value = '';
             document.getElementById('materialArticle').value = '';
@@ -110,16 +110,17 @@ window.MaterialModal = {
             document.getElementById('materialUnit').value = '';
             document.getElementById('materialPrice').value = '';
             document.getElementById('materialManufacturerUrl').value = '';
+            document.getElementById('materialLn').value = '';
+            document.getElementById('materialTm').value = '';
             document.getElementById('materialManufacturer').value = '';
+            document.getElementById('existingMaterialSelect').value = '';
             errorDiv.style.display = 'none';
         }
 
-        // Загружаем все данные
         Promise.all([
             loadManufacturers(),
             loadExistingMaterials(isEdit ? preselectedId : null)
         ]).then(function() {
-            // Если редактирование и есть ID — загружаем данные
             if (isEdit && preselectedId) {
                 fetch('/api/materials/' + preselectedId)
                     .then(function(r) { return r.json(); })
@@ -133,19 +134,18 @@ window.MaterialModal = {
                         errorDiv.style.display = 'block';
                     });
             } else {
-                title.textContent = 'Добавить материал';
+                title.textContent = 'Добавить материала';
                 clearForm();
             }
         });
 
-        // Обработчик выбора существующего материала
         existingSelect.addEventListener('change', function() {
             if (this.value) {
                 fetch('/api/materials/' + this.value)
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         fillMaterialData(data);
-                        title.textContent = 'Редактировать материал';
+                        title.textContent = 'Редактировать материала';
                         document.getElementById('materialName').focus();
                     })
                     .catch(function(err) {
@@ -155,12 +155,11 @@ window.MaterialModal = {
                     });
             } else {
                 clearForm();
-                title.textContent = 'Добавить материал';
+                title.textContent = 'Добавить материала';
                 document.getElementById('materialName').focus();
             }
         });
 
-        // Обработка отправки формы
         form.onsubmit = function(e) {
             e.preventDefault();
             var name = document.getElementById('materialName').value.trim();
@@ -170,9 +169,9 @@ window.MaterialModal = {
                 return;
             }
 
+            var materialId = document.getElementById('materialId').value;
             var existingId = document.getElementById('existingMaterialSelect').value;
-            if (existingId) {
-                // Выбран существующий материал — возвращаем его ID
+            if (!materialId && existingId) {
                 self._modal.style.display = 'none';
                 if (self._cb) self._cb(parseInt(existingId));
                 return;
@@ -185,16 +184,17 @@ window.MaterialModal = {
                 description: document.getElementById('materialDescription').value.trim() || null,
                 unit: document.getElementById('materialUnit').value.trim() || null,
                 price: parseFloat(document.getElementById('materialPrice').value) || null,
-                manufacturer_url: document.getElementById('materialManufacturerUrl').value.trim() || null
+                manufacturer_url: document.getElementById('materialManufacturerUrl').value.trim() || null,
+                ln: document.getElementById('materialLn').value.trim() || null,
+                tm: document.getElementById('materialTm').value.trim() || null
             };
 
-            var materialId = document.getElementById('materialId').value;
             var url = materialId ? '/api/materials/' + materialId : '/api/materials';
             var method = materialId ? 'PUT' : 'POST';
 
             fetch(url, {
                 method: method,
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
                 body: JSON.stringify(body)
             })
             .then(function(r){
@@ -204,7 +204,6 @@ window.MaterialModal = {
             .then(function(data){
                 self._modal.style.display = 'none';
                 if (self._cb) self._cb(data.id);
-                // Обновляем список существующих материалов
                 loadExistingMaterials(data.id);
             })
             .catch(function(err){
@@ -214,7 +213,6 @@ window.MaterialModal = {
         };
     },
 
-    // Вспомогательный метод для выбора материала (возвращает ID)
     select: function(callback) {
         this.open(function(id) {
             if (callback) callback(id);
