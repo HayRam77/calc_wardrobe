@@ -173,71 +173,71 @@ router.delete('/system-component/:componentId/:materialId', auth, isAdmin, async
 
 // ==================== МАТЕРИАЛЫ ШКАФА ====================
 
+// ================ КАЛЬКУЛЯЦИЯ ШКАФА (агрегировано по артикулю) ================
+// Для хранения итоговой стоимости шкафа рекомендуется создать таблицу cabinet_totals
+// с полями cabinet_id, total_quantity, total_price, updated_at и обновлять её
+// при каждом изменении состава материалов шкафа.
 router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
     try {
-        const direct = await pool.query(`
-            SELECT pm.id, pm.material_id, pm.quantity, pm.linked,
-                   m.article, m.name AS material_name, m.unit, m.price,
-                   '-' AS system_name, '-' AS component_name
-            FROM project_materials pm
-            JOIN materials m ON pm.material_id = m.id
-            WHERE pm.cabinet_id = $1 AND pm.linked = false
-        `, [req.params.cabinetId]);
+        const { cabinetId } = req.params;
+        const result = await pool.query(`
+            SELECT
+                MIN(m.id) as id,
+                m.article,
+                m.name,
+                m.ln,
+                m.tm,
+                SUM(COALESCE(pm.quantity, scm.quantity)) as total_quantity,
+                MIN(m.price) as unit_price,
+                SUM(COALESCE(pm.quantity, scm.quantity) * COALESCE(m.price, 0)) as total_price
+            FROM materials m
+            LEFT JOIN project_materials pm ON pm.material_id = m.id AND pm.cabinet_id = $1
+            LEFT JOIN system_component_materials scm ON scm.material_id = m.id
+            LEFT JOIN system_components sc ON scm.system_component_id = sc.id
+            LEFT JOIN system_components_link scl ON scl.component_id = sc.id
+            LEFT JOIN systems s ON scl.system_id = s.id
+            LEFT JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
+            WHERE (pm.cabinet_id = $1 OR cs.cabinet_id = $1)
+              AND m.article IS NOT NULL
+            
+            GROUP BY m.article, m.name, m.ln, m.tm
+            ORDER BY m.article
+        `, [cabinetId]);
 
-        const systemMaterials = await pool.query(`
-            SELECT scm.id, scm.material_id, scm.quantity, TRUE AS linked,
-                   m.article, m.name AS material_name, m.unit, m.price,
-                   s.name AS system_name, sc.name AS component_name
-            FROM system_component_materials scm
-            JOIN system_components sc ON scm.system_component_id = sc.id
-            JOIN system_components_link scl ON scl.component_id = sc.id
-            JOIN systems s ON scl.system_id = s.id
-            JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
-            JOIN materials m ON scm.material_id = m.id
-            WHERE cs.cabinet_id = $1
-            ORDER BY sc.name, m.name
-        `, [req.params.cabinetId]);
-
+        const rows = result.rows;
+        let totalQuantity = 0;
+        let totalPrice = 0;
         let html = '';
-        if (direct.rows.length === 0 && systemMaterials.rows.length === 0) {
-            html = '<p>Нет материалов</p>';
+        if (rows.length === 0) {
+            html = '<p>Нет материалов для калькуляции</p>';
         } else {
-            html = '<div class="table-container"><table class="data-table"><thead><tr><th>Система</th><th>Компонент системы</th><th>Артикул</th><th>Название</th><th>Ед. изм.</th><th>Цена</th><th>Кол-во</th><th>Действия</th></tr></thead><tbody>';
+            html = '<div class="table-container"><table class="data-table"><thead><tr>' +
+                '<th>ID</th><th>Артикул</th><th>Название</th><th>LN</th><th>TM</th><th>Кол-во</th><th>Цена ед.</th><th>Цена всего</th></tr></thead><tbody>';
 
-            direct.rows.forEach(row => {
-                html += `<tr>
-                    <td>${row.system_name}</td>
-                    <td>${row.component_name}</td>
-                    <td>${row.article || ''}</td>
-                    <td>${row.material_name}</td>
-                    <td>${row.unit || ''}</td>
-                    <td>${row.price || ''}</td>
-                    <td>${row.quantity}</td>
-                    <td>
-                        <button class="btn btn-sm btn-edit" onclick="editMaterialQuantity(${row.id})">✏️</button>
-                        <button class="btn btn-sm btn-delete" onclick="delMaterial(${row.id})">🗑️</button>
-                    </td>
-                </tr>`;
+            rows.forEach(row => {
+                totalQuantity += Number(row.total_quantity);
+                totalPrice += Number(row.total_price);
+                html += '<tr>' +
+                    '<td>' + row.id + '</td>' +
+                    '<td>' + (row.article || '') + '</td>' +
+                    '<td>' + (row.name || '') + '</td>' +
+                    '<td>' + (row.ln || '') + '</td>' +
+                    '<td>' + (row.tm || '') + '</td>' +
+                    '<td>' + row.total_quantity + '</td>' +
+                    '<td>' + (row.unit_price !== null ? parseFloat(row.unit_price).toFixed(2) : '') + '</td>' +
+                    '<td>' + parseFloat(row.total_price).toFixed(2) + '</td>' +
+                    '</tr>';
             });
 
-            systemMaterials.rows.forEach(row => {
-                const virtualId = -row.id;
-                html += `<tr>
-                    <td>${row.system_name || ''}</td>
-                    <td>${row.component_name || ''}</td>
-                    <td>${row.article || ''}</td>
-                    <td>${row.material_name}</td>
-                    <td>${row.unit || ''}</td>
-                    <td>${row.price || ''}</td>
-                    <td>${row.quantity}</td>
-                    <td>
-                        <button class="btn btn-sm btn-edit" onclick="editMaterialQuantity(${virtualId})">✏️</button>
-                        <button class="btn btn-sm btn-delete" onclick="delMaterial(${virtualId})">🗑️</button>
-                    </td>
-                </tr>`;
-            });
-
+            // Итоговая строка
+            html += '<tr class="total-row" style="font-weight:bold; background:#f0f0f0;">' +
+                '<td colspan="5">Итого</td>' +
+                '<td>' + totalQuantity + '</td>' +
+                '<td></td>' +
+                '<td>' + totalPrice.toFixed(2) + '</td>' +
+                '</tr>';
             html += '</tbody></table></div>';
+            html += '<span id="cabinetTotalPrice" data-total-price="' + totalPrice.toFixed(2) + '" style="display:none;"></span>';
         }
         res.send(html);
     } catch (err) {
