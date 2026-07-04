@@ -44,14 +44,14 @@ router.get('/:id', auth, async (req, res) => {
 
 router.post('/', auth, isAdmin, async (req, res) => {
     try {
-        const { article, name, manufacturer_id, description, unit, price, manufacturer_url } = req.body;
+        const { article, name, manufacturer_id, description, unit, price, manufacturer_url, ln, tm } = req.body;
     console.log("📦 PUT materials, manufacturer_url:", manufacturer_url);
     console.log("📦 POST materials, manufacturer_url:", manufacturer_url);
         const result = await pool.query(
-            `INSERT INTO materials (article, name, manufacturer_id, description, unit, price, manufacturer_url)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO materials (article, name, manufacturer_id, description, unit, price, manufacturer_url, ln, tm)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              RETURNING *`,
-            [article || null, name, manufacturer_id || null, description || null, unit || null, price || null, manufacturer_url || null]
+            [article || null, name, manufacturer_id || null, description || null, unit || null, price || null, manufacturer_url || null, ln || null, tm || null]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -62,16 +62,16 @@ router.post('/', auth, isAdmin, async (req, res) => {
 
 router.put('/:id', auth, isAdmin, async (req, res) => {
     try {
-        const { article, name, manufacturer_id, description, unit, price, manufacturer_url } = req.body;
+        const { article, name, manufacturer_id, description, unit, price, manufacturer_url, ln, tm } = req.body;
     console.log("📦 PUT materials, manufacturer_url:", manufacturer_url);
     console.log("📦 POST materials, manufacturer_url:", manufacturer_url);
         const result = await pool.query(
             `UPDATE materials
              SET article = $1, name = $2, manufacturer_id = $3, description = $4,
-                 unit = $5, price = $6, manufacturer_url = $7, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $8
+                 unit = $5, price = $6, manufacturer_url = $7, ln = $8, tm = $9, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $10
              RETURNING *`,
-            [article || null, name, manufacturer_id || null, description || null, unit || null, price || null, manufacturer_url || null, req.params.id]
+            [article || null, name, manufacturer_id || null, description || null, unit || null, price || null, manufacturer_url || null, ln || null, tm || null, req.params.id]
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Материал не найден' });
@@ -351,7 +351,7 @@ router.delete('/cabinet/:cabinetId/:materialId', auth, isAdmin, async (req, res)
 router.get('/export', auth, async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT m.id, m.article, m.name, m.description, m.unit, m.price, m.manufacturer_url
+            SELECT m.id, m.article, m.name, m.description, m.unit, m.price, m.manufacturer_url, m.ln, m.tm
             FROM materials m
             ORDER BY m.name
         `);
@@ -390,11 +390,11 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
                     }
                 }
                 await pool.query(
-                    `INSERT INTO materials (article, name, manufacturer_id, description, unit, price, manufacturer_url)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                    `INSERT INTO materials (article, name, manufacturer_id, description, unit, price, manufacturer_url, ln, tm)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
                     [row['артикул'] || null, row['название'], manufacturerId,
                      row['описание'] || null, row['Ед.изм.'] || null, row['цена'] || null,
-                     row['ссылка на производителя'] || null]
+                     row['ссылка на производителя'] || null, row['ln'] || null, row['tm'] || null]
                 );
                 imported++;
             } catch (e) { console.error(e); }

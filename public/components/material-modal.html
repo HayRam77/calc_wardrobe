@@ -171,17 +171,13 @@ window.MaterialModal = {
             }
 
             var existingId = document.getElementById('existingMaterialSelect').value;
-            var materialId = document.getElementById('materialId').value;
-
-            // Если это НЕ редактирование (materialId пуст) и выбран существующий материал,
-            // просто возвращаем этот ID (режим быстрого выбора)
-            if (!materialId && existingId) {
+            if (existingId) {
+                // Выбран существующий материал — возвращаем его ID
                 self._modal.style.display = 'none';
                 if (self._cb) self._cb(parseInt(existingId));
                 return;
             }
 
-            // Собираем данные для POST/PUT
             var body = {
                 article: document.getElementById('materialArticle').value.trim() || null,
                 name: name,
@@ -192,8 +188,7 @@ window.MaterialModal = {
                 manufacturer_url: document.getElementById('materialManufacturerUrl').value.trim() || null
             };
 
-            console.log('Отправляемые данные:', body); // логирование
-
+            var materialId = document.getElementById('materialId').value;
             var url = materialId ? '/api/materials/' + materialId : '/api/materials';
             var method = materialId ? 'PUT' : 'POST';
 
