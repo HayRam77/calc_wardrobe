@@ -34,7 +34,7 @@
         <div class="table-container">
             <table class="data-table">
                 <thead><tr><th>ID</th><th>Название</th><th>Описание</th>
-                        <th>LN</th><th>TM</th><th id="typesActionsCol" style="display:none;">Действия</th></tr></thead>
+                        <th id="typesActionsCol" style="display:none;">Действия</th></tr></thead>
                 <tbody id="typesBody"><tr><td colspan="4" class="loading">Загрузка...</td></tr></tbody>
             </table>
         </div>
@@ -238,7 +238,7 @@
                     var html = '';
                     data.forEach(function(item){
                         html += '<tr><td>' + item.id + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.description || '') + '</td>'
-                        html += '<td>' + esc(item.ln || '') + '</td><td>' + esc(item.tm || '') + '</td>';;
+                        ;
                         if (isAdmin) {
                             html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemComponentType(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponentType(' + item.id + ')">🗑️</button></td>';
                         }
