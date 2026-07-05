@@ -1,0 +1,152 @@
+<div id="tab-params" class="tab-content">
+  <div style="margin-bottom:10px;">
+    <button id="addParamBtn" class="btn btn-primary" style="display:none;">Добавить параметр КОМПОНЕНТА СИСТЕМЫ</button>
+    <button id="exportParamsBtn" class="btn btn-secondary" style="display:none;">Экспорт выгрузка</button>
+    <input type="file" id="importParamsFile" style="display:none" accept=".xlsx,.xls">
+    <button id="importParamsBtn" class="btn btn-secondary" style="display:none;">Импорт выгрузка</button>
+  </div>
+  <div class="table-container">
+    <table class="data-table">
+      <thead><tr><th>ID</th><th>Название</th><th>Тип</th><th>Описание</th>
+              <th>LN</th><th>TM</th><th id="paramsActionsCol" style="display:none;">Действия</th></tr></thead>
+      <tbody id="paramsBody"><tr><td colspan="7" class="loading">Загрузка...</td></tr></tbody>
+    </table>
+  </div>
+  <div id="paramsEmpty" class="empty-state" style="display:none;"><p>Параметров нет</p></div>
+</div>
+<script>
+(function() {
+ var currentUser=JSON.parse(localStorage.getItem('user') || 'null');
+ var isAdmin=currentUser && currentUser.role==='admin';
+ function applyPermissions(){
+  var btns=['addParamBtn','exportParamsBtn','importParamsBtn'];
+  btns.forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display=isAdmin?'':'none'; });
+  var col=document.getElementById('paramsActionsCol');
+  if(col) col.style.display=isAdmin?'':'none';
+ }
+ function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+ function loadParams(){
+  var tbody=document.getElementById('paramsBody');
+  if(!tbody) return;
+  fetch('/api/system-parameters').then(function(r){ if(!r.ok) throw new Error('Ошибка'); return r.json(); })
+  .then(function(data){
+   var empty=document.getElementById('paramsEmpty');
+   if(!data.length){
+    if(empty) empty.style.display='';
+    tbody.innerHTML='';
+   }else{
+    if(empty) empty.style.display='none';
+    var html='';
+    data.forEach(function(item){
+     html+='<tr><td>'+item.id+'</td><td>'+esc(item.name)+'</td><td>'+esc(item.type || '')+'</td><td>'+esc(item.description || '')+'</td><td>'+esc(item.ln)+'</td><td>'+esc(item.tm)+'</td>';
+     if(isAdmin){
+      html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemParameter('+item.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemParameter('+item.id+')">🗑️</button></td>';
+     }
+     html+='</tr>';
+    });
+    tbody.innerHTML=html;
+   }
+  }).catch(function(err){
+   console.error(err);
+   tbody.innerHTML='<tr><td colspan="7" class="error">Ошибка загрузки</td></tr>';
+  });
+ }
+ document.getElementById('addParamBtn').addEventListener('click', function(){
+  var modal=document.getElementById('modal');
+  if(modal) modal.style.display='flex';
+  var title=document.getElementById('modalTitle');
+  if(title) title.textContent='Добавить параметр';
+  fetch('/pages/components-systems-tabs/modals/params-modal.html')
+   .then(function(r){ return r.text(); })
+   .then(function(html){
+    var form=document.getElementById('modalForm');
+    if(form) form.innerHTML=html;
+    var formEl=document.getElementById('paramForm');
+    if(formEl){
+     formEl.onsubmit=function(e){
+      e.preventDefault();
+      var name=document.getElementById('paramName').value.trim();
+      if(!name){ alert('Введите название'); return; }
+      fetch('/api/system-parameters', {
+       method:'POST',
+       headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({
+         name: name,
+         type: document.getElementById('paramType').value.trim(),
+         description: document.getElementById('paramDescription').value.trim()
+       })
+      }).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message || 'Ошибка'); }); })
+      .then(function(){
+       var modal=document.getElementById('modal');
+       if(modal) modal.style.display='none';
+       loadParams();
+      }).catch(function(e){ alert(e.message); });
+     };
+    }
+   });
+ });
+ window.editSystemParameter=function(id){
+  fetch('/api/system-parameters/'+id).then(function(r){ return r.json(); })
+  .then(function(p){
+   var modal=document.getElementById('modal');
+   if(modal) modal.style.display='flex';
+   var title=document.getElementById('modalTitle');
+   if(title) title.textContent='Редактировать параметр';
+   fetch('/pages/components-systems-tabs/modals/params-modal.html')
+    .then(function(r){ return r.text(); })
+    .then(function(html){
+     var form=document.getElementById('modalForm');
+     if(form) form.innerHTML=html;
+     document.getElementById('paramName').value=p.name;
+     document.getElementById('paramType').value=p.type || '';
+     document.getElementById('paramDescription').value=p.description || '';
+     var formEl=document.getElementById('paramForm');
+     if(formEl){
+      formEl.onsubmit=function(e){
+       e.preventDefault();
+       fetch('/api/system-parameters/'+id, {
+         method:'PUT',
+         headers:{'Content-Type':'application/json'},
+         body:JSON.stringify({
+           name: document.getElementById('paramName').value.trim(),
+           type: document.getElementById('paramType').value.trim(),
+           description: document.getElementById('paramDescription').value.trim()
+         })
+       }).then(function(){
+         var modal=document.getElementById('modal');
+         if(modal) modal.style.display='none';
+         loadParams();
+       }).catch(function(e){ alert(e.message); });
+      };
+     }
+    });
+  });
+ };
+ window.deleteSystemParameter=function(id){
+  if(!confirm('Удалить?')) return;
+  fetch('/api/system-parameters/'+id, { method:'DELETE' })
+  .then(loadParams)
+  .catch(function(e){ alert(e.message); });
+ };
+ document.getElementById('exportParamsBtn').addEventListener('click', async function(){
+  var r=await fetch('/api/system-parameters/export');
+  var b=await r.blob();
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(b);
+  a.download='system_parameters.xlsx';
+  a.click();
+ });
+ document.getElementById('importParamsBtn').addEventListener('click', function(){
+  document.getElementById('importParamsFile').click();
+ });
+ document.getElementById('importParamsFile').addEventListener('change', async function(){
+  var fd=new FormData();
+  fd.append('file', this.files[0]);
+  await fetch('/api/system-parameters/import', { method:'POST', body:fd });
+  loadParams();
+  this.value='';
+ });
+ applyPermissions();
+ loadParams();
+})();
+</script>
