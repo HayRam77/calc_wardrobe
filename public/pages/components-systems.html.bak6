@@ -69,7 +69,7 @@
         <div class="table-container">
             <table class="data-table">
                 <thead><tr><th>ID</th><th>Название</th><th>Описание</th>
-                        <th id="modulesActionsCol" style="display:none;">Действия</th></tr></thead>
+                        <th>LN</th><th>TM</th><th id="modulesActionsCol" style="display:none;">Действия</th></tr></thead>
                 <tbody id="modulesBody"><tr><td colspan="4" class="loading">Загрузка...</td></tr></tbody>
             </table>
         </div>
@@ -185,7 +185,7 @@
                                 return esc(p.name) + (p.type ? ' (' + esc(p.type) + ')' : '') + ': ' + esc(p.value);
                             }).join('<br>');
                         }
-                        html += '<tr><td>' + item.id + '</td><td>' + esc(item.type_name || '') + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.manufacturer_name || '') + '</td><td>' + esc(item.article || '') + '</td><td>' + esc(item.description || '') + '</td><td>' + esc(item.ln || '') + '</td><td>' + esc(item.tm || '') + '</td><td>' + paramsHtml + '</td>';
+                        html += '<tr><td>' + item.id + '</td><td>' + esc(item.type_name || '') + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.manufacturer_name || '') + '</td><td>' + esc(item.article || '') + '</td><td>' + esc(item.description || '') + '</td><td>' + paramsHtml + '</td>';
                         if (isAdmin) {
                             html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent(' + item.id + ')">🗑️</button></td>';
                         }
@@ -322,8 +322,8 @@
                     if (empty) empty.style.display = 'none';
                     var html = '';
                     data.forEach(function(item){
-                        html += '<tr><td>' + item.id + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.type || '') + '</td><td>' + esc(item.description || '') + '</td><td>' + esc(item.ln || '') + '</td><td>' + esc(item.tm || '') + '</td>'
-                        
+                        html += '<tr><td>' + item.id + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.type || '') + '</td><td>' + esc(item.description || '') + '</td>'
+                        html += '<td>' + esc(item.ln || '') + '</td><td>' + esc(item.tm || '') + '</td>';;
                         if (isAdmin) {
                             html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemParameter(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemParameter(' + item.id + ')">🗑️</button></td>';
                         }
@@ -343,6 +343,7 @@
             '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="paramName" required></div>' +
             '<div class="form-group"><label>Тип:</label><input type="text" id="paramType"></div>' +
             '<div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3"></textarea></div>' +
+            '<div class="form-row"><div class="form-group"><label>LN</label><input type="text" id="paramLn" value=""></div><div class="form-group"><label>TM</label><input type="text" id="paramTm" value=""></div></div>' +
             '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>'
         );
         modalForm.onsubmit = function(e) {
@@ -416,7 +417,7 @@
                     var html = '';
                     data.forEach(function(item){
                         html += '<tr><td>' + item.id + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.description || '') + '</td>'
-                        
+                        html += '<td>' + esc(item.ln || '') + '</td><td>' + esc(item.tm || '') + '</td>';;
                         if (isAdmin) {
                             html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemModule(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemModule(' + item.id + ')">🗑️</button></td>';
                         }

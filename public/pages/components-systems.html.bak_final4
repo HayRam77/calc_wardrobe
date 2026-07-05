@@ -185,7 +185,7 @@
                                 return esc(p.name) + (p.type ? ' (' + esc(p.type) + ')' : '') + ': ' + esc(p.value);
                             }).join('<br>');
                         }
-                        html += '<tr><td>' + item.id + '</td><td>' + esc(item.type_name || '') + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.manufacturer_name || '') + '</td><td>' + esc(item.article || '') + '</td><td>' + esc(item.description || '') + '</td><td>' + esc(item.ln || '') + '</td><td>' + esc(item.tm || '') + '</td><td>' + paramsHtml + '</td>';
+                        html += '<tr><td>' + item.id + '</td><td>' + esc(item.type_name || '') + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.manufacturer_name || '') + '</td><td>' + esc(item.article || '') + '</td><td>' + esc(item.description || '') + '</td><td>' + paramsHtml + '</td>';
                         if (isAdmin) {
                             html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent(' + item.id + ')">🗑️</button></td>';
                         }
@@ -343,6 +343,7 @@
             '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="paramName" required></div>' +
             '<div class="form-group"><label>Тип:</label><input type="text" id="paramType"></div>' +
             '<div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3"></textarea></div>' +
+            '<div class="form-row"><div class="form-group"><label>LN</label><input type="text" id="paramLn" value=""></div><div class="form-group"><label>TM</label><input type="text" id="paramTm" value=""></div></div>' +
             '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>'
         );
         modalForm.onsubmit = function(e) {
@@ -355,7 +356,9 @@
                 body: JSON.stringify({
                     name: n,
                     type: document.getElementById('paramType').value.trim(),
-                    description: document.getElementById('paramDescription').value.trim()
+                    description: document.getElementById('paramDescription').value.trim(),
+                    ln: document.getElementById('paramLn').value.trim() || null,
+                    tm: document.getElementById('paramTm').value.trim() || null
                 })
             })
             .then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message || 'Ошибка'); }); closeModal(); loadParams(); })
@@ -371,6 +374,7 @@
                     '<div class="form-group"><label>Название:</label><input type="text" id="paramName" value="' + esc(p.name) + '" required></div>' +
                     '<div class="form-group"><label>Тип:</label><input type="text" id="paramType" value="' + esc(p.type || '') + '"></div>' +
                     '<div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3">' + esc(p.description || '') + '</textarea></div>' +
+                    '<div class="form-row"><div class="form-group"><label>LN</label><input type="text" id="paramLn" value="' + esc(p.ln || '') + '"></div><div class="form-group"><label>TM</label><input type="text" id="paramTm" value="' + esc(p.tm || '') + '"></div></div>' +
                     '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>'
                 );
                 modalForm.onsubmit = function(e) {
@@ -381,9 +385,7 @@
                         body: JSON.stringify({
                             name: document.getElementById('paramName').value.trim(),
                             type: document.getElementById('paramType').value.trim(),
-                            description: document.getElementById('paramDescription').value.trim(),
-                            ln: document.getElementById('paramLn').value.trim() || null,
-                            tm: document.getElementById('paramTm').value.trim() || null
+                            description: document.getElementById('paramDescription').value.trim()
                         })
                     })
                     .then(function(){ closeModal(); loadParams(); })
