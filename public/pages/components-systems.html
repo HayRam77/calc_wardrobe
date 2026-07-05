@@ -17,8 +17,6 @@
 <script>
 (function() {
     var tabContainer = document.getElementById('tab-content-container');
-    var currentActiveTab = null;
-
     function executeScripts(container) {
         var scripts = container.querySelectorAll('script');
         scripts.forEach(function(oldScript) {
@@ -32,29 +30,21 @@
             oldScript.parentNode.replaceChild(newScript, oldScript);
         });
     }
-
     function loadTab(tab) {
         if (!tabContainer) return;
-        // деактивируем текущий таб
         var prevActive = tabContainer.querySelector('.tab-content.active');
         if (prevActive) prevActive.classList.remove('active');
-
         var file = tab === 'components' ? 'components-tab.html' :
                    tab === 'types' ? 'types-tab.html' :
                    tab === 'params' ? 'params-tab.html' :
                    tab === 'modules' ? 'modules-tab.html' : null;
         if (!file) return;
-
-        // Показываем загрузку
         tabContainer.innerHTML = '<p>Загрузка...</p>';
-
-        fetch('/pages/components-systems-tabs/' + file)
+        fetch('/pages/components-systems-tabs/' + file + '?_=' + Date.now())
             .then(function(r) { return r.text(); })
             .then(function(html) {
                 tabContainer.innerHTML = html;
-                // выполняем скрипты внутри загруженного HTML
                 executeScripts(tabContainer);
-                // активируем вкладку
                 var tabContent = tabContainer.querySelector('.tab-content');
                 if (tabContent) tabContent.classList.add('active');
             })
@@ -63,17 +53,13 @@
                 tabContainer.innerHTML = '<p>Ошибка загрузки</p>';
             });
     }
-
     document.querySelectorAll('.tab-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
             document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
             btn.classList.add('active');
-            var tab = btn.dataset.tab;
-            loadTab(tab);
+            loadTab(btn.dataset.tab);
         });
     });
-
-    // модальное окно
     var modal = document.getElementById('modal');
     document.querySelector('.close-modal').addEventListener('click', function() {
         if (modal) modal.style.display = 'none';
@@ -81,8 +67,6 @@
     window.addEventListener('click', function(e) {
         if (e.target === modal) modal.style.display = 'none';
     });
-
-    // загрузка первой вкладки
     loadTab('components');
 })();
 </script>

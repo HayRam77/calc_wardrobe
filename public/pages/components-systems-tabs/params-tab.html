@@ -18,17 +18,20 @@
 (function() {
  var currentUser=JSON.parse(localStorage.getItem('user') || 'null');
  var isAdmin=currentUser && currentUser.role==='admin';
+
  function applyPermissions(){
   var btns=['addParamBtn','exportParamsBtn','importParamsBtn'];
   btns.forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display=isAdmin?'':'none'; });
   var col=document.getElementById('paramsActionsCol');
   if(col) col.style.display=isAdmin?'':'none';
  }
+
  function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
  function loadParams(){
   var tbody=document.getElementById('paramsBody');
   if(!tbody) return;
-  fetch('/api/system-parameters').then(function(r){ if(!r.ok) throw new Error('Ошибка'); return r.json(); })
+  fetch('/api/system-parameters?_='+Date.now()).then(function(r){ if(!r.ok) throw new Error('Ошибка'); return r.json(); })
   .then(function(data){
    var empty=document.getElementById('paramsEmpty');
    if(!data.length){
@@ -51,83 +54,89 @@
    tbody.innerHTML='<tr><td colspan="7" class="error">Ошибка загрузки</td></tr>';
   });
  }
- document.getElementById('addParamBtn').addEventListener('click', function(){
-  var modal=document.getElementById('modal');
-  if(modal) modal.style.display='flex';
-  var title=document.getElementById('modalTitle');
-  if(title) title.textContent='Добавить параметр';
-  fetch('/pages/components-systems-tabs/modals/params-modal.html')
-   .then(function(r){ return r.text(); })
-   .then(function(html){
-    var form=document.getElementById('modalForm');
-    if(form) form.innerHTML=html;
-    var formEl=document.getElementById('paramForm');
-    if(formEl){
-     formEl.onsubmit=function(e){
-      e.preventDefault();
-      var name=document.getElementById('paramName').value.trim();
-      if(!name){ alert('Введите название'); return; }
-      fetch('/api/system-parameters', {
-       method:'POST',
-       headers:{'Content-Type':'application/json'},
-       body:JSON.stringify({
-         name: name,
-         type: document.getElementById('paramType').value.trim(),
-         description: document.getElementById('paramDescription').value.trim()
-       })
-      }).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message || 'Ошибка'); }); })
-      .then(function(){
-       var modal=document.getElementById('modal');
-       if(modal) modal.style.display='none';
-       loadParams();
-      }).catch(function(e){ alert(e.message); });
+
+ // ====== ИЗОЛИРОВАННОЕ МОДАЛЬНОЕ ОКНО ПАРАМЕТРА ======
+ function openParamModal(id, callback) {
+   var isEdit = !!id;
+   var m = document.createElement('div');
+   m.className = 'modal';
+   m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:5000;';
+   m.innerHTML = '<div class="modal-content" style="max-width:500px;max-height:90vh;overflow-y:auto;">' +
+     '<span class="modal-close">&times;</span>' +
+     '<h3>'+(isEdit?'Редактировать параметр':'Добавить параметр')+'</h3>' +
+     '<form id="paramForm">' +
+       '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="paramName" required></div>' +
+       '<div class="form-group"><label>Тип:</label><input type="text" id="paramType"></div>' +
+       '<div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3"></textarea></div>' +
+       '<div class="form-row" style="display:flex;gap:10px;">' +
+         '<div class="form-group" style="flex:1;"><label>LN</label><input type="text" id="paramLn"></div>' +
+         '<div class="form-group" style="flex:1;"><label>TM</label><input type="text" id="paramTm"></div>' +
+       '</div>' +
+       '<div class="form-actions">' +
+         '<button type="submit" class="btn btn-primary">Сохранить</button>' +
+         '<button type="button" class="btn btn-secondary cancel-param-btn">Отмена</button>' +
+       '</div>' +
+     '</form>' +
+   '</div>';
+   document.body.appendChild(m);
+
+   function closeModal() { m.remove(); }
+   m.querySelector('.modal-close').addEventListener('click', closeModal);
+   m.querySelector('.cancel-param-btn').addEventListener('click', closeModal);
+   m.addEventListener('click', function(e) { if(e.target === m) closeModal(); });
+
+   var form = m.querySelector('#paramForm');
+   if (isEdit) {
+     fetch('/api/system-parameters/'+id).then(function(r){ return r.json(); }).then(function(p){
+       form.paramName.value = p.name;
+       form.paramType.value = p.type || '';
+       form.paramDescription.value = p.description || '';
+       form.paramLn.value = p.ln || '';
+       form.paramTm.value = p.tm || '';
+     }).catch(function(e){ alert('Ошибка загрузки данных'); closeModal(); });
+   }
+
+   form.addEventListener('submit', function(e){
+     e.preventDefault();
+     var name = form.paramName.value.trim();
+     if (!name) { alert('Введите название'); return; }
+     var body = {
+       name: name,
+       type: form.paramType.value.trim(),
+       description: form.paramDescription.value.trim(),
+       ln: form.paramLn.value.trim() || null,
+       tm: form.paramTm.value.trim() || null
      };
-    }
+     var url = isEdit ? '/api/system-parameters/'+id : '/api/system-parameters';
+     var method = isEdit ? 'PUT' : 'POST';
+     fetch(url, {
+       method: method,
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify(body)
+     }).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message); }); })
+     .then(function(){
+       closeModal();
+       loadParams();
+       if (callback) callback();
+     }).catch(function(e){ alert(e.message); });
    });
+ }
+
+ document.getElementById('addParamBtn').addEventListener('click', function(){
+   openParamModal(null);
  });
- window.editSystemParameter=function(id){
-  fetch('/api/system-parameters/'+id).then(function(r){ return r.json(); })
-  .then(function(p){
-   var modal=document.getElementById('modal');
-   if(modal) modal.style.display='flex';
-   var title=document.getElementById('modalTitle');
-   if(title) title.textContent='Редактировать параметр';
-   fetch('/pages/components-systems-tabs/modals/params-modal.html')
-    .then(function(r){ return r.text(); })
-    .then(function(html){
-     var form=document.getElementById('modalForm');
-     if(form) form.innerHTML=html;
-     document.getElementById('paramName').value=p.name;
-     document.getElementById('paramType').value=p.type || '';
-     document.getElementById('paramDescription').value=p.description || '';
-     var formEl=document.getElementById('paramForm');
-     if(formEl){
-      formEl.onsubmit=function(e){
-       e.preventDefault();
-       fetch('/api/system-parameters/'+id, {
-         method:'PUT',
-         headers:{'Content-Type':'application/json'},
-         body:JSON.stringify({
-           name: document.getElementById('paramName').value.trim(),
-           type: document.getElementById('paramType').value.trim(),
-           description: document.getElementById('paramDescription').value.trim()
-         })
-       }).then(function(){
-         var modal=document.getElementById('modal');
-         if(modal) modal.style.display='none';
-         loadParams();
-       }).catch(function(e){ alert(e.message); });
-      };
-     }
-    });
-  });
+
+ window.editSystemParameter = function(id){
+   openParamModal(id);
  };
- window.deleteSystemParameter=function(id){
+
+ window.deleteSystemParameter = function(id){
   if(!confirm('Удалить?')) return;
   fetch('/api/system-parameters/'+id, { method:'DELETE' })
   .then(loadParams)
   .catch(function(e){ alert(e.message); });
  };
+
  document.getElementById('exportParamsBtn').addEventListener('click', async function(){
   var r=await fetch('/api/system-parameters/export');
   var b=await r.blob();
@@ -136,9 +145,11 @@
   a.download='system_parameters.xlsx';
   a.click();
  });
+
  document.getElementById('importParamsBtn').addEventListener('click', function(){
   document.getElementById('importParamsFile').click();
  });
+
  document.getElementById('importParamsFile').addEventListener('change', async function(){
   var fd=new FormData();
   fd.append('file', this.files[0]);
@@ -146,6 +157,7 @@
   loadParams();
   this.value='';
  });
+
  applyPermissions();
  loadParams();
 })();
