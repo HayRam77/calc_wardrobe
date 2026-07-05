@@ -173,6 +173,59 @@ router.delete('/system-component/:componentId/:materialId', auth, isAdmin, async
 
 // ==================== МАТЕРИАЛЫ ШКАФА ====================
 
+
+// ================ МАТЕРИАЛЫ ШКАФА (JSON для таблицы с действиями) ================
+router.get('/cabinet/:cabinetId/items', auth, async (req, res) => {
+    try {
+        const { cabinetId } = req.params;
+        const result = await pool.query(`
+            SELECT
+                pm.id as link_id,
+                pm.material_id,
+                m.article,
+                m.name,
+                man.name as manufacturer_name,
+                m.unit,
+                m.price,
+                pm.quantity,
+                m.ln,
+                m.tm,
+                FALSE as is_component_material
+            FROM project_materials pm
+            JOIN materials m ON pm.material_id = m.id
+            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
+            WHERE pm.cabinet_id = $1
+
+            UNION ALL
+
+            SELECT
+                -scm.id as link_id,
+                scm.material_id,
+                m.article,
+                m.name,
+                man.name as manufacturer_name,
+                m.unit,
+                m.price,
+                scm.quantity,
+                m.ln,
+                m.tm,
+                TRUE as is_component_material
+            FROM system_component_materials scm
+            JOIN materials m ON scm.material_id = m.id
+            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
+            JOIN system_components sc ON scm.system_component_id = sc.id
+            JOIN system_components_link scl ON scl.component_id = sc.id
+            JOIN cabinet_systems cs ON cs.system_id = scl.system_id AND cs.cabinet_id = $1
+
+            ORDER BY article, name
+        `, [cabinetId]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Ошибка получения списка материалов шкафа' });
+    }
+});
+
 // ================ КАЛЬКУЛЯЦИЯ ШКАФА (агрегировано по артикулю) ================
 // Для хранения итоговой стоимости шкафа рекомендуется создать таблицу cabinet_totals
 // с полями cabinet_id, total_quantity, total_price, updated_at и обновлять её

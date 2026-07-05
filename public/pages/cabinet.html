@@ -451,9 +451,35 @@
     window.loadCabinetMaterials = function() {
         var container = document.getElementById('cabinetMaterials');
         if (!container) return;
-        fetch('/api/materials/cabinet/' + cabinetId + '/html')
-            .then(function(r){ return r.text(); })
-            .then(function(html){ container.innerHTML = html; })
+        fetch('/api/materials/cabinet/' + cabinetId + '/items')
+            .then(function(r){ return r.json(); })
+            .then(function(items){
+                if (!items.length) {
+                    container.innerHTML = '<p>Нет материалов</p>';
+                    return;
+                }
+                var html = '<div class="table-container"><table class="data-table"><thead><tr>' +
+                    '<th>ID</th><th>Артикул</th><th>Название</th><th>Производитель</th><th>Ед.</th><th>Цена</th><th>Кол-во</th><th>LN</th><th>TM</th><th>Действия</th></tr></thead><tbody>';
+                items.forEach(function(item){
+                    html += '<tr>' +
+                        '<td>' + item.link_id + '</td>' +
+                        '<td>' + (item.article || '') + '</td>' +
+                        '<td>' + (item.name || '') + '</td>' +
+                        '<td>' + (item.manufacturer_name || '') + '</td>' +
+                        '<td>' + (item.unit || '') + '</td>' +
+                        '<td>' + (item.price !== null ? parseFloat(item.price).toFixed(2) : '') + '</td>' +
+                        '<td>' + item.quantity + '</td>' +
+                        '<td>' + (item.ln || '') + '</td>' +
+                        '<td>' + (item.tm || '') + '</td>' +
+                        '<td>' +
+                            '<button class="btn btn-sm btn-edit" onclick="editCabinetMaterialLink(' + item.link_id + ', ' + item.material_id + ')">✏️</button> ' +
+                            '<button class="btn btn-sm btn-delete" onclick="delCabinetMaterialLink(' + item.link_id + ')">🗑️</button>' +
+                        '</td>' +
+                    '</tr>';
+                });
+                html += '</tbody></table></div>';
+                container.innerHTML = html;
+            })
             .catch(function(e){ console.error(e); container.innerHTML = '<p style="color:red;">Ошибка загрузки материалов</p>'; });
     };
 
@@ -512,7 +538,30 @@
             .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
+    
+    window.editCabinetMaterialLink = function(linkId, materialId) {
+        if (typeof MaterialModal !== 'undefined') {
+            MaterialModal.open(function() {
+                window.loadCabinetMaterials();
+                loadCabinetCalculation();
+            }, materialId);
+        } else {
+            alert('Модальное окно материалов не загружено');
+        }
+    };
+
+    window.delCabinetMaterialLink = function(linkId) {
+        if (!confirm('Удалить материал из шкафа?')) return;
+        fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' })
+            .then(function(){
+                window.loadCabinetMaterials();
+                loadCabinetCalculation();
+            })
+            .catch(function(e){ alert('Ошибка: ' + e.message); });
+    };
+
     window.pageInit = function() {};
+
 })();
 
 // Функция открытия модального окна компонента шкафа для редактирования
