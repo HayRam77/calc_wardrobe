@@ -28,7 +28,7 @@
  function loadModules(){
   var tbody=document.getElementById('modulesBody');
   if(!tbody) return;
-  fetch('/api/system-modules').then(function(r){ if(!r.ok) throw new Error('Ошибка'); return r.json(); })
+  fetch('/api/system-modules?_='+Date.now()).then(function(r){ if(!r.ok) throw new Error('Ошибка'); return r.json(); })
   .then(function(data){
    var empty=document.getElementById('modulesEmpty');
    if(!data.length){
@@ -51,77 +51,78 @@
    tbody.innerHTML='<tr><td colspan="4" class="error">Ошибка загрузки</td></tr>';
   });
  }
- document.getElementById('addModuleBtn').addEventListener('click', function(){
-  var modal=document.getElementById('modal');
-  if(modal) modal.style.display='flex';
-  var title=document.getElementById('modalTitle');
-  if(title) title.textContent='Добавить модуль системы';
-  fetch('/pages/components-systems-tabs/modals/modules-modal.html')
-   .then(function(r){ return r.text(); })
-   .then(function(html){
-    var form=document.getElementById('modalForm');
-    if(form) form.innerHTML=html;
-    var formEl=document.getElementById('moduleForm');
-    if(formEl){
-     formEl.onsubmit=function(e){
-      e.preventDefault();
-      var name=document.getElementById('moduleName').value.trim();
-      if(!name){ alert('Введите название'); return; }
-      fetch('/api/system-modules', {
-       method:'POST',
-       headers:{'Content-Type':'application/json'},
-       body:JSON.stringify({name:name, description: document.getElementById('moduleDescription').value.trim()})
-      }).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message || 'Ошибка'); }); })
-      .then(function(){
-       var modal=document.getElementById('modal');
-       if(modal) modal.style.display='none';
-       loadModules();
-      }).catch(function(e){ alert(e.message); });
+
+ // ====== ИЗОЛИРОВАННОЕ МОДАЛЬНОЕ ОКНО МОДУЛЯ ======
+ function openModuleModal(id, callback) {
+   var isEdit = !!id;
+   var m = document.createElement('div');
+   m.className = 'modal';
+   m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:5000;';
+   m.innerHTML = '<div class="modal-content" style="max-width:500px;max-height:90vh;overflow-y:auto;">' +
+     '<span class="modal-close">&times;</span>' +
+     '<h3>'+(isEdit?'Редактировать модуль':'Добавить модуль системы')+'</h3>' +
+     '<form id="moduleForm">' +
+       '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="moduleName" required></div>' +
+       '<div class="form-group"><label>Описание:</label><textarea id="moduleDescription" rows="3"></textarea></div>' +
+       '<div class="form-actions">' +
+         '<button type="submit" class="btn btn-primary">Сохранить</button>' +
+         '<button type="button" class="btn btn-secondary cancel-module-btn">Отмена</button>' +
+       '</div>' +
+     '</form>' +
+   '</div>';
+   document.body.appendChild(m);
+
+   function closeModal() { m.remove(); }
+   m.querySelector('.modal-close').addEventListener('click', closeModal);
+   m.querySelector('.cancel-module-btn').addEventListener('click', closeModal);
+   m.addEventListener('click', function(e) { if(e.target === m) closeModal(); });
+
+   var form = m.querySelector('#moduleForm');
+   if (isEdit) {
+     fetch('/api/system-modules/'+id).then(function(r){ return r.json(); }).then(function(item){
+       form.moduleName.value = item.name;
+       form.moduleDescription.value = item.description || '';
+     }).catch(function(e){ alert('Ошибка загрузки данных'); closeModal(); });
+   }
+
+   form.addEventListener('submit', function(e){
+     e.preventDefault();
+     var name = form.moduleName.value.trim();
+     if (!name) { alert('Введите название'); return; }
+     var body = {
+       name: name,
+       description: form.moduleDescription.value.trim()
      };
-    }
+     var url = isEdit ? '/api/system-modules/'+id : '/api/system-modules';
+     var method = isEdit ? 'PUT' : 'POST';
+     fetch(url, {
+       method: method,
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify(body)
+     }).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message); }); })
+     .then(function(){
+       closeModal();
+       loadModules();
+       if (callback) callback();
+     }).catch(function(e){ alert(e.message); });
    });
+ }
+
+ document.getElementById('addModuleBtn').addEventListener('click', function(){
+   openModuleModal(null);
  });
- window.editSystemModule=function(id){
-  fetch('/api/system-modules/'+id).then(function(r){ return r.json(); })
-  .then(function(item){
-   var modal=document.getElementById('modal');
-   if(modal) modal.style.display='flex';
-   var title=document.getElementById('modalTitle');
-   if(title) title.textContent='Редактировать модуль';
-   fetch('/pages/components-systems-tabs/modals/modules-modal.html')
-    .then(function(r){ return r.text(); })
-    .then(function(html){
-     var form=document.getElementById('modalForm');
-     if(form) form.innerHTML=html;
-     document.getElementById('moduleName').value=item.name;
-     document.getElementById('moduleDescription').value=item.description || '';
-     var formEl=document.getElementById('moduleForm');
-     if(formEl){
-      formEl.onsubmit=function(e){
-       e.preventDefault();
-       fetch('/api/system-modules/'+id, {
-         method:'PUT',
-         headers:{'Content-Type':'application/json'},
-         body:JSON.stringify({
-           name: document.getElementById('moduleName').value.trim(),
-           description: document.getElementById('moduleDescription').value.trim()
-         })
-       }).then(function(){
-         var modal=document.getElementById('modal');
-         if(modal) modal.style.display='none';
-         loadModules();
-       }).catch(function(e){ alert(e.message); });
-      };
-     }
-    });
-  });
+
+ window.editSystemModule = function(id){
+   openModuleModal(id);
  };
- window.deleteSystemModule=function(id){
+
+ window.deleteSystemModule = function(id){
   if(!confirm('Удалить модуль?')) return;
   fetch('/api/system-modules/'+id, { method:'DELETE' })
   .then(loadModules)
   .catch(function(e){ alert(e.message); });
  };
+
  document.getElementById('exportModulesBtn').addEventListener('click', async function(){
   var r=await fetch('/api/system-modules/export');
   var b=await r.blob();
@@ -130,9 +131,11 @@
   a.download='system_modules.xlsx';
   a.click();
  });
+
  document.getElementById('importModulesBtn').addEventListener('click', function(){
   document.getElementById('importModulesFile').click();
  });
+
  document.getElementById('importModulesFile').addEventListener('change', async function(){
   var fd=new FormData();
   fd.append('file', this.files[0]);
@@ -140,6 +143,7 @@
   loadModules();
   this.value='';
  });
+
  applyPermissions();
  loadModules();
 })();
