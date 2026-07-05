@@ -185,7 +185,7 @@
                                 return esc(p.name) + (p.type ? ' (' + esc(p.type) + ')' : '') + ': ' + esc(p.value);
                             }).join('<br>');
                         }
-                        html += '<tr><td>' + item.id + '</td><td>' + esc(item.type_name || '') + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.manufacturer_name || '') + '</td><td>' + esc(item.article || '') + '</td><td>' + esc(item.description || '') + '</td><td>' + esc(item.ln || '') + '</td><td>' + esc(item.tm || '') + '</td><td>' + paramsHtml + '</td>';
+                        html += '<tr><td>' + item.id + '</td><td>' + esc(item.type_name || '') + '</td><td>' + esc(item.name) + '</td><td>' + esc(item.manufacturer_name || '') + '</td><td>' + esc(item.article || '') + '</td><td>' + esc(item.description || '') + '</td><td>' + paramsHtml + '</td>';
                         if (isAdmin) {
                             html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent(' + item.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent(' + item.id + ')">🗑️</button></td>';
                         }
