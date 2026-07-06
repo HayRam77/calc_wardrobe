@@ -24,7 +24,8 @@ window.SystemCompModal = {
         var loadData = [
             fetch('/api/system-parameters').then(function(r){ return r.json(); }),
             fetch('/api/system-component-types').then(function(r){ return r.json(); }),
-            fetch('/api/system-modules').then(function(r){ return r.json(); })
+            fetch('/api/system-modules').then(function(r){ return r.json(); }),
+            fetch('/api/system-parameter-types').then(function(r){ return r.json(); })
         ];
         if (isEdit) {
             loadData.push(fetch('/api/system-components/' + compId).then(function(r){ return r.json(); }));
@@ -37,8 +38,9 @@ window.SystemCompModal = {
             var params = results[0] || [];
             var types = results[1] || [];
             var modules = results[2] || [];
-            var comp = isEdit ? results[3] : null;
-            var systems = (isCabinetMode && cabinetIdParam && results.length > 4) ? results[4] : [];
+            var paramTypes = results[3] || [];
+            var comp = isEdit ? results[4] : null;
+            var systems = (isCabinetMode && cabinetIdParam && results.length > 5) ? results[5] : [];
             
             console.log('✅ Данные загружены:', { 
                 params: params.length, 
@@ -49,14 +51,14 @@ window.SystemCompModal = {
                 systems: systems.length
             });
             
-            self._buildForm(m, comp, params, types, modules, callback, isCabinetMode, systems, cabinetIdParam);
+            self._buildForm(m, comp, params, types, modules, paramTypes, callback, isCabinetMode, systems, cabinetIdParam);
         }).catch(function(err){
             console.error('❌ Ошибка загрузки данных:', err);
             alert('Ошибка загрузки данных. Проверьте подключение к серверу.');
         });
     },
 
-    _buildForm: function(m, comp, params, types, modules, callback, isCabinetMode, systems, cabinetId) {
+    _buildForm: function(m, comp, params, types, modules, paramTypes, callback, isCabinetMode, systems, cabinetId) {
         var self = this;
         var isEdit = !!comp;
 
@@ -205,12 +207,35 @@ window.SystemCompModal = {
             vi.placeholder = 'Значение';
             vi.style.flex = '1';
             if (val) vi.value = val;
-            var ti = document.createElement('input');
-            ti.type = 'text';
+            var ti = document.createElement('select');
             ti.className = 'param-type';
-            ti.placeholder = 'Тип';
             ti.style.flex = '0.7';
-            if (typeVal) ti.value = typeVal;
+            ti.innerHTML = '<option value="">-- тип --</option>';
+            if (paramTypes && paramTypes.length) {
+                paramTypes.forEach(function(pt){
+                    var sel = (typeVal && pt.name === typeVal) ? ' selected' : '';
+                    ti.innerHTML += '<option value="' + pt.name + '"' + sel + '>' + pt.name + '</option>';
+                });
+            }
+            ti.innerHTML += '<option value="__other__">Другое...</option>';
+            var otherTypeInput = document.createElement('input');
+            otherTypeInput.type = 'text';
+            otherTypeInput.className = 'param-type-other';
+            otherTypeInput.placeholder = 'Введите тип';
+            otherTypeInput.style.cssText = 'flex:0.7;display:none;';
+            if (typeVal && !paramTypes.some(function(pt){ return pt.name === typeVal; })) {
+                ti.value = '__other__';
+                otherTypeInput.style.display = '';
+                otherTypeInput.value = typeVal;
+            }
+            ti.addEventListener('change', function(){
+                if (ti.value === '__other__') {
+                    otherTypeInput.style.display = '';
+                } else {
+                    otherTypeInput.style.display = 'none';
+                    otherTypeInput.value = '';
+                }
+            });
             var ni = document.createElement('input');
             ni.type = 'text';
             ni.className = 'new-param-name';
@@ -229,21 +254,30 @@ window.SystemCompModal = {
                 ni.style.display = '';
                 sv.style.display = '';
             }
-            // При выборе существующего параметра подгружаем его тип
+            // При выборе существующего параметра подгружаем его тип из справочника
             s.addEventListener('change', function(){
                 ni.style.display = sv.style.display = s.value === '__new__' ? '' : 'none';
-                // Если выбран существующий параметр — подгружаем его тип
                 if (s.value && s.value !== '__new__') {
                     var selectedParam = params.find(function(p) { return p.id == s.value; });
                     if (selectedParam && selectedParam.type) {
-                        ti.value = selectedParam.type;
+                        // Ищем этот тип в paramTypes
+                        var found = paramTypes.find(function(pt){ return pt.name === selectedParam.type; });
+                        if (found) {
+                            ti.value = found.name;
+                            otherTypeInput.style.display = 'none';
+                            otherTypeInput.value = '';
+                        } else {
+                            ti.value = '__other__';
+                            otherTypeInput.style.display = '';
+                            otherTypeInput.value = selectedParam.type;
+                        }
                     }
                 }
             });
             sv.addEventListener('click', function(){
                 var n = ni.value.trim();
                 if (!n) { alert('Введите название'); return; }
-                fetch('/api/system-parameters', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, type:ti.value.trim()})})
+                fetch('/api/system-parameters', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, type: (ti.value === '__other__' ? otherTypeInput.value : ti.value).trim()})})
                 .then(function(r){ return r.json(); })
                 .then(function(np){
                     s.innerHTML += '<option value="'+np.id+'" selected>'+np.name+'</option>';
@@ -258,6 +292,7 @@ window.SystemCompModal = {
             row.appendChild(s);
             row.appendChild(vi);
             row.appendChild(ti);
+            row.appendChild(otherTypeInput);
             row.appendChild(ni);
             row.appendChild(sv);
             row.appendChild(dl);
@@ -380,8 +415,10 @@ window.SystemCompModal = {
                 var s = row.querySelector('.param-select');
                 var v = row.querySelector('.param-value');
                 var t = row.querySelector('.param-type');
+                var otherT = row.querySelector('.param-type-other');
                 if (s.value && s.value !== '__new__') {
-                    paramsArr.push({ parameter_id: parseInt(s.value), value: v.value, type: t.value });
+                    var typeValue = t.value === '__other__' ? (otherT ? otherT.value : '') : t.value;
+                    paramsArr.push({ parameter_id: parseInt(s.value), value: v.value, type: typeValue });
                 }
             });
             var body = {
