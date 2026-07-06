@@ -62,17 +62,23 @@ router.post('/', auth, isAdmin, async (req, res) => {
 
 router.put('/:id', auth, isAdmin, async (req, res) => {
     try {
-        const { article, name, manufacturer_id, description, unit, price, manufacturer_url, ln, tm } = req.body;
-    console.log("📦 PUT materials, manufacturer_url:", manufacturer_url);
-    console.log("📦 POST materials, manufacturer_url:", manufacturer_url);
-        const result = await pool.query(
-            `UPDATE materials
-             SET article = $1, name = $2, manufacturer_id = $3, description = $4,
-                 unit = $5, price = $6, manufacturer_url = $7, ln = $8, tm = $9, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $10
-             RETURNING *`,
-            [article || null, name, manufacturer_id || null, description || null, unit || null, price || null, manufacturer_url || null, ln || null, tm || null, req.params.id]
-        );
+        const allowedFields = ['article', 'name', 'manufacturer_id', 'description', 'unit', 'price', 'manufacturer_url', 'ln', 'tm'];
+        const updates = [];
+        const values = [];
+        let idx = 1;
+        allowedFields.forEach(field => {
+            if (req.body[field] !== undefined) {
+                updates.push(`${field} = $${idx++}`);
+                values.push(req.body[field]);
+            }
+        });
+        if (updates.length === 0) {
+            return res.status(400).json({ message: 'Нет данных для обновления' });
+        }
+        updates.push(`updated_at = CURRENT_TIMESTAMP`);
+        values.push(req.params.id);
+        const query = `UPDATE materials SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`;
+        const result = await pool.query(query, values);
         if (result.rows.length === 0) {
             return res.status(404).json({ message: 'Материал не найден' });
         }
@@ -190,7 +196,9 @@ router.get('/cabinet/:cabinetId/items', auth, async (req, res) => {
                 pm.quantity,
                 m.ln,
                 m.tm,
-                FALSE as is_component_material
+                FALSE as is_component_material,
+                '-' as system_name,
+                '-' as component_name
             FROM project_materials pm
             JOIN materials m ON pm.material_id = m.id
             LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
@@ -209,13 +217,16 @@ router.get('/cabinet/:cabinetId/items', auth, async (req, res) => {
                 scm.quantity,
                 m.ln,
                 m.tm,
-                TRUE as is_component_material
+                TRUE as is_component_material,
+                COALESCE(s.name, '-') as system_name,
+                COALESCE(sc.name, '-') as component_name
             FROM system_component_materials scm
             JOIN materials m ON scm.material_id = m.id
             LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
             JOIN system_components sc ON scm.system_component_id = sc.id
             JOIN system_components_link scl ON scl.component_id = sc.id
-            JOIN cabinet_systems cs ON cs.system_id = scl.system_id AND cs.cabinet_id = $1
+            JOIN systems s ON scl.system_id = s.id
+            JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
 
             ORDER BY article, name
         `, [cabinetId]);
