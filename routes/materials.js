@@ -244,8 +244,11 @@ router.get('/cabinet/:cabinetId/items', auth, async (req, res) => {
 router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
     try {
         const { cabinetId } = req.params;
-        const result = await pool.query(`
+
+        // Материалы (агрегированные)
+        const matResult = await pool.query(`
             SELECT
+                'material' as type,
                 MIN(m.id) as id,
                 m.article,
                 m.name,
@@ -263,19 +266,44 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
             LEFT JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
             WHERE (pm.cabinet_id = $1 OR cs.cabinet_id = $1)
               AND m.article IS NOT NULL
-            
             GROUP BY m.article, m.name, m.ln, m.tm
-            ORDER BY m.article
         `, [cabinetId]);
 
-        const rows = result.rows;
+        // Компоненты шкафа (агрегированные)
+        const blockResult = await pool.query(`
+            SELECT
+                'block' as type,
+                MIN(bt.id) as id,
+                bt.article,
+                bt.name,
+                bt.ln,
+                bt.tm,
+                SUM(COALESCE(pb.quantity, sbl.quantity)) as total_quantity,
+                MIN(bt.price) as unit_price,
+                SUM(COALESCE(pb.quantity, sbl.quantity) * COALESCE(bt.price, 0)) as total_price
+            FROM block_templates bt
+            LEFT JOIN project_blocks pb ON pb.template_id = bt.id AND pb.cabinet_id = $1
+            LEFT JOIN system_block_links sbl ON sbl.block_template_id = bt.id
+            LEFT JOIN system_components sc ON sbl.system_component_id = sc.id
+            LEFT JOIN system_components_link scl ON scl.component_id = sc.id
+            LEFT JOIN systems s ON scl.system_id = s.id
+            LEFT JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
+            WHERE (pb.cabinet_id = $1 OR cs.cabinet_id = $1)
+              AND bt.article IS NOT NULL
+            GROUP BY bt.article, bt.name, bt.ln, bt.tm
+        `, [cabinetId]);
+
+        // Объединяем и сортируем
+        const rows = [...matResult.rows, ...blockResult.rows]
+            .sort((a, b) => (a.article || '').localeCompare(b.article || ''));
+
         let totalQuantity = 0;
         let totalLn = 0;
         let totalTm = 0;
         let totalPrice = 0;
         let html = '';
         if (rows.length === 0) {
-            html = '<p>Нет материалов для калькуляции</p>';
+            html = '<p>Нет материалов и компонентов для калькуляции</p>';
         } else {
             html = '<div class="table-container"><table class="data-table"><thead><tr>' +
                 '<th>ID</th><th>Артикул</th><th>Название</th><th>LN</th><th>TM</th><th>Кол-во</th><th>Цена ед.</th><th>Цена всего</th></tr></thead><tbody>';
@@ -283,8 +311,8 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
             rows.forEach(row => {
                 totalQuantity += Number(row.total_quantity);
                 totalPrice += Number(row.total_price);
-            totalLn += Number(row.ln) || 0;
-            totalTm += Number(row.tm) || 0;
+                totalLn += Number(row.ln) || 0;
+                totalTm += Number(row.tm) || 0;
                 html += '<tr>' +
                     '<td>' + row.id + '</td>' +
                     '<td>' + (row.article || '') + '</td>' +
@@ -298,7 +326,14 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
             });
 
             // Итоговая строка
-            html += '<tr class="total-row" style="font-weight:bold; background:#f0f0f0;">' +'<td colspan="3">Итого</td>' +'<td>' + totalLn + '</td>' +'<td>' + totalTm + '</td>' +'<td></td>' +'<td></td>' +'<td>' + totalPrice.toFixed(2) + '</td>' +'</tr>';
+            html += '<tr class="total-row" style="font-weight:bold; background:#f0f0f0;">' +
+                '<td colspan="3">Итого</td>' +
+                '<td>' + totalLn + '</td>' +
+                '<td>' + totalTm + '</td>' +
+                '<td></td>' +
+                '<td></td>' +
+                '<td>' + totalPrice.toFixed(2) + '</td>' +
+                '</tr>';
             html += '</tbody></table></div>';
             html += '<span id="cabinetTotalPrice" data-total-price="' + totalPrice.toFixed(2) + '" style="display:none;"></span>';
         }
