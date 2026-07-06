@@ -4,6 +4,7 @@
         <button class="tab-btn" data-tab="types">Типы компонентов систем</button>
         <button class="tab-btn" data-tab="params">Параметры компонентов систем</button>
         <button class="tab-btn" data-tab="modules">Модули системы</button>
+        <button class="tab-btn" data-tab="param-types">Тип параметра компонента систем</button>
     </div>
     <div id="tab-content-container"></div>
     <div id="modal" class="modal" style="display:none;">
@@ -37,7 +38,8 @@
         var file = tab === 'components' ? 'components-tab.html' :
                    tab === 'types' ? 'types-tab.html' :
                    tab === 'params' ? 'params-tab.html' :
-                   tab === 'modules' ? 'modules-tab.html' : null;
+                   tab === 'modules' ? 'modules-tab.html' :
+                   tab === 'param-types' ? 'param-types-tab.html' : null;
         if (!file) return;
         tabContainer.innerHTML = '<p>Загрузка...</p>';
         fetch('/pages/components-systems-tabs/' + file + '?_=' + Date.now())
