@@ -63,6 +63,23 @@
     </div>
 </div>
 
+<div id="copySystemModal" class="modal" style="display:none;">
+  <div class="modal-content" style="max-width:500px;">
+    <span class="modal-close" onclick="document.getElementById('copySystemModal').style.display='none'">&times;</span>
+    <h3>Копировать компонент в другую систему</h3>
+    <form id="copySystemForm">
+      <div class="form-group">
+        <label for="copySystemSelect">Целевая система *</label>
+        <select id="copySystemSelect" required><option value="">-- выберите --</option></select>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('copySystemModal').style.display='none'">Отмена</button>
+        <button type="submit" class="btn btn-primary">Копировать</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 (function() {
     var cabinetId = window.pageParam;
@@ -139,9 +156,9 @@
                     c.innerHTML = '<p>Нет систем</p>';
                     return;
                 }
-                var h = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th>Действия</th></tr>';
+                var h = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th>Описание</th><th>Действия</th></tr>';
                 data.forEach(function(s){
-                    h += '<tr><td>' + esc(s.system_name || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="delSystem(' + s.id + ')">🗑️</button></td></tr>';
+                    h += '<tr><td>' + esc(s.system_name || '') + '</td><td>' + esc(s.system_description || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="delSystem(' + s.id + ')">🗑️</button></td></tr>';
                 });
                 h += '</table></div>';
                 c.innerHTML = h;
@@ -252,7 +269,7 @@
                                 html += '<div class="table-container"><table class="data-table"><thead><tr><th>Модуль</th><th>Компонент</th><th>Тип</th><th>Артикул</th><th>LN</th><th>TM</th><th>Действия</th></tr></thead><tbody>';
                                 sysData.components.forEach(function(c){
                                     var moduleName = c.module_name || '-';
-                                    html += '<tr><td>' + esc(moduleName) + '</td><td>' + esc(c.name) + '</td><td>' + esc(c.type_name || '') + '</td><td>' + esc(c.article || '') + '</td><td>' + esc(c.ln || '') + '</td><td>' + esc(c.tm || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editSysComp(' + c.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="unlinkSysComp(' + c.link_id + ')">🗑️</button></td></tr>';
+                                    html += '<tr><td>' + esc(moduleName) + '</td><td>' + esc(c.name) + '</td><td>' + esc(c.type_name || '') + '</td><td>' + esc(c.article || '') + '</td><td>' + esc(c.ln || '') + '</td><td>' + esc(c.tm || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editSysComp(' + c.id + ')">✏️</button> <button class="btn btn-sm btn-copy" onclick="copyComponentToSystem(' + c.id + ')">📋</button> <button class="btn btn-sm btn-delete" onclick="unlinkSysComp(' + c.link_id + ')">🗑️</button></td></tr>';
                                 });
                                 html += '</tbody></table></div>';
                             } else {
@@ -447,7 +464,7 @@
             .catch(function(e){ console.error(e); });
     };
 
-    // ==================== МАТЕРИАЛЫ ШКАФА ====================
+    // ==================== МАТЕРИАЛЫ ШКАФА (исправлено: без ID, с Система/Компонент) ====================
     window.loadCabinetMaterials = function() {
         var container = document.getElementById('cabinetMaterials');
         if (!container) return;
@@ -459,10 +476,11 @@
                     return;
                 }
                 var html = '<div class="table-container"><table class="data-table"><thead><tr>' +
-                    '<th>ID</th><th>Артикул</th><th>Название</th><th>Производитель</th><th>Ед.</th><th>Цена</th><th>Кол-во</th><th>LN</th><th>TM</th><th>Действия</th></tr></thead><tbody>';
+                    '<th>Система</th><th>Компонент системы</th><th>Артикул</th><th>Название</th><th>Производитель</th><th>Ед.</th><th>Цена</th><th>Кол-во</th><th>LN</th><th>TM</th><th>Действия</th></tr></thead><tbody>';
                 items.forEach(function(item){
                     html += '<tr>' +
-                        '<td>' + item.link_id + '</td>' +
+                        '<td>' + (item.system_name || '-') + '</td>' +
+                        '<td>' + (item.component_name || '-') + '</td>' +
                         '<td>' + (item.article || '') + '</td>' +
                         '<td>' + (item.name || '') + '</td>' +
                         '<td>' + (item.manufacturer_name || '') + '</td>' +
@@ -538,7 +556,6 @@
             .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
-    
     window.editCabinetMaterialLink = function(linkId, materialId) {
         if (typeof MaterialModal !== 'undefined') {
             MaterialModal.open(function() {
@@ -560,12 +577,53 @@
             .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
+    // ==================== КОПИРОВАНИЕ КОМПОНЕНТА В СИСТЕМУ ====================
+    window.copyComponentToSystem = function(componentId) {
+      fetch('/api/systems')
+        .then(function(r){ return r.json(); })
+        .then(function(systems){
+          var sel = document.getElementById('copySystemSelect');
+          sel.innerHTML = '<option value="">-- выберите --</option>';
+          systems.forEach(function(s){
+            sel.innerHTML += '<option value="' + s.id + '">' + esc(s.name) + '</option>';
+          });
+          document.getElementById('copySystemForm').onsubmit = function(e){
+            e.preventDefault();
+            var targetId = sel.value;
+            if (!targetId) { alert('Выберите целевую систему'); return; }
+            fetch('/api/system-components/' + componentId + '/copy-to-system/' + targetId, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ cabinetId: cabinetId })
+            })
+              .then(function(r){
+                if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+                return r.json();
+              })
+              .then(function(data){
+                alert('✅ ' + data.message);
+                document.getElementById('copySystemModal').style.display = 'none';
+                loadSystemComponents();
+                if (typeof window.loadBlocks === 'function') { window.loadBlocks(); }
+                if (typeof window.loadCabinetMaterials === 'function') { window.loadCabinetMaterials(); }
+                loadCabinetCalculation();
+                // Дополнительное обновление
+                setTimeout(function() {
+                    if (typeof window.loadCabinetMaterials === 'function') window.loadCabinetMaterials();
+                    loadCabinetCalculation();
+                }, 500);
+              })
+              .catch(function(e){ alert('Ошибка: ' + e.message); });
+          };
+          document.getElementById('copySystemModal').style.display = 'flex';
+        });
+    };
+
     window.pageInit = function() {};
 
 })();
 
 // Функция открытия модального окна компонента шкафа для редактирования
-// blockId - ID в project_blocks (не используется для загрузки), templateId - ID шаблона
 window.openBlockModalWithId = function(blockId, templateId) {
     if (typeof BlockTemplateModal !== "undefined") {
         BlockTemplateModal.open(function(updatedId) {
