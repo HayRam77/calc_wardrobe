@@ -236,7 +236,7 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
 router.get('/:id/systems', auth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT cs.*, s.name as system_name, s.description as system_description
+      SELECT cs.*, s.name as system_name, cs.description
       FROM cabinet_systems cs
       JOIN systems s ON cs.system_id = s.id
       WHERE cs.cabinet_id = $1
@@ -268,8 +268,15 @@ router.post('/:id/systems', auth, isAdmin, async (req, res) => {
 
 router.put('/:id/systems/:systemId', auth, isAdmin, async (req, res) => {
   try {
-    const { name } = req.body;
-    await pool.query('UPDATE cabinet_systems SET name=$1 WHERE id=$2', [name, req.params.systemId]);
+    const { name, description } = req.body;
+    const fields = [];
+    const values = [];
+    if (name !== undefined) { fields.push('name=$' + (fields.length+1)); values.push(name); }
+    if (description !== undefined) { fields.push('description=$' + (fields.length+1)); values.push(description); }
+    if (fields.length > 0) {
+      values.push(req.params.systemId);
+      await pool.query(`UPDATE cabinet_systems SET ${fields.join(', ')} WHERE id=$${fields.length+1}`, values);
+    }
     res.json({ message: 'Обновлено' });
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
@@ -284,67 +291,62 @@ router.delete('/:id/systems/:systemId', auth, isAdmin, async (req, res) => {
 // ==================== HTML ФРАГМЕНТ (с TM) ====================
 router.get('/:id/blocks/html', auth, async (req, res) => {
   try {
-    const blocksResult = await pool.query(`
-      SELECT pb.id, pb.template_id, pb.linked, bt.name AS block_name, bt.ln, bt.tm, ct.name AS block_type
+    const cabinetId = req.params.id;
+    const result = await pool.query(`
+      SELECT
+        pb.id, pb.template_id, pb.linked, pb.quantity,
+        bt.name AS block_name,
+        COALESCE(ln.value, '') AS ln,
+        COALESCE(tm.value, '') AS tm,
+        ct.name AS block_type,
+        '' as system_name,
+        '' as component_name,
+        FALSE as is_system
       FROM project_blocks pb
       JOIN block_templates bt ON pb.template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
+      LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
       WHERE pb.cabinet_id = $1
-      ORDER BY pb.id
-    `, [req.params.id]);
 
-    const linksResult = await pool.query(`
-      SELECT sbl.block_template_id, sc.name as component_name, s.name as system_name
+      UNION ALL
+
+      SELECT
+        -sbl.id as id,
+        sbl.block_template_id,
+        true as linked,
+        sbl.quantity,
+        bt.name AS block_name,
+        COALESCE(ln.value, '') AS ln,
+        COALESCE(tm.value, '') AS tm,
+        ct.name AS block_type,
+        COALESCE(s.name, '') as system_name,
+        COALESCE(sc.name, '') as component_name,
+        TRUE as is_system
       FROM system_block_links sbl
+      JOIN block_templates bt ON sbl.block_template_id = bt.id
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
+      LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
       JOIN system_components sc ON sbl.system_component_id = sc.id
       JOIN system_components_link scl ON scl.component_id = sc.id
       JOIN systems s ON scl.system_id = s.id
       JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
-      WHERE cs.cabinet_id = $1
-    `, [req.params.id]);
 
-    const linkMap = {};
-    linksResult.rows.forEach(row => {
-      if (!linkMap[row.block_template_id]) linkMap[row.block_template_id] = [];
-      linkMap[row.block_template_id].push({ system_name: row.system_name, component_name: row.component_name });
-    });
+      ORDER BY block_name
+    `, [cabinetId]);
 
-    // Добавляем виртуальные блоки для системных компонентов
-    const existingTemplateIds = new Set(blocksResult.rows.map(r => r.template_id));
-    for (const [templateId, links] of Object.entries(linkMap)) {
-      if (!existingTemplateIds.has(parseInt(templateId))) {
-        const btRes = await pool.query("SELECT id, name, ln, tm, type_id FROM block_templates WHERE id = $1", [templateId]);
-        if (btRes.rows.length > 0) {
-          const bt = btRes.rows[0];
-          const ctRes = await pool.query("SELECT name FROM component_types WHERE id = $1", [bt.type_id]);
-          const blockType = ctRes.rows.length > 0 ? ctRes.rows[0].name : "";
-          blocksResult.rows.push({
-            id: -bt.id,
-            template_id: bt.id,
-            linked: true,
-            block_name: bt.name,
-            ln: bt.ln,
-            tm: bt.tm,
-            block_type: blockType,
-            system_name: links[0].system_name,
-            component_name: links[0].component_name
-          });
-        }
-      }
-    }
-
-    if (blocksResult.rows.length === 0) {
+    if (result.rows.length === 0) {
       return res.send('<p>Нет компонентов</p>');
     }
 
-    let html = '<div class="table-container"><table class="data-table"><thead><tr><th>Система</th><th>Компонент системы</th><th>Тип комп. шкафа</th><th>Название</th><th>LN</th><th>TM</th><th>Действия</th></tr></thead><tbody>';
+    let html = '<div class="table-container"><table class="data-table"><thead><tr><th>Система</th><th>Компонент системы</th><th>Тип комп. шкафа</th><th>Название</th><th>LN</th><th>TM</th><th>Кол-во</th><th>Действия</th></tr></thead><tbody>';
 
-    for (const block of blocksResult.rows) {
-      const links = linkMap[block.template_id] || [];
-      const hasLink = block.linked === true && links.length > 0;
-      const systemName = hasLink ? links[0].system_name : (block.system_name || '-');
-      const componentName = hasLink ? links[0].component_name : (block.component_name || '-');
-      const isVirtual = block.id < 0;
+    for (const block of result.rows) {
+      const isSystem = block.is_system === true;
+      const systemName = block.system_name || '-';
+      const componentName = block.component_name || '-';
+      const blockId = block.id;
       html += '<tr>' +
         '<td>' + esc(systemName) + '</td>' +
         '<td>' + esc(componentName) + '</td>' +
@@ -352,11 +354,12 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         '<td>' + esc(block.block_name) + '</td>' +
         '<td>' + esc(block.ln || '') + '</td>' +
         '<td>' + esc(block.tm || '') + '</td>' +
+        '<td>' + (block.quantity || 1) + '</td>' +
         '<td>' +
-          (isVirtual ?
-            '<button class="btn btn-sm btn-delete" onclick="delBlock(' + block.id + ')">🗑️</button>' :
-            '<button class="btn btn-sm btn-edit" onclick="openBlockModalWithId(' + block.id + ', ' + block.template_id + ')">✏️</button> ' +
-            '<button class="btn btn-sm btn-delete" onclick="delBlock(' + block.id + ')">🗑️</button>') +
+          (isSystem ?
+            '<button class="btn btn-sm btn-delete" onclick="delBlock(' + blockId + ')">🗑️</button>' :
+            '<button class="btn btn-sm btn-edit" onclick="openBlockModalWithId(' + blockId + ', ' + block.template_id + ')">✏️</button> ' +
+            '<button class="btn btn-sm btn-delete" onclick="delBlock(' + blockId + ')">🗑️</button>') +
         '</td>' +
         '</tr>';
     }

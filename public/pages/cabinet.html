@@ -17,6 +17,10 @@
                     <button type="button" class="btn btn-sm btn-primary save-new-system-btn">✓</button>
                 </div>
             </div>
+            <div class="form-group">
+                <label for="systemDescription">Описание</label>
+                <textarea id="systemDescription" rows="2" placeholder="Описание системы в шкафу"></textarea>
+            </div>
             <div id="systemError" class="error-message" style="display:none;"></div>
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="document.getElementById('systemModal').style.display='none'">Отмена</button>
@@ -38,7 +42,6 @@
     </div>
 </div>
 
-<!-- Модальное окно для привязки существующего компонента -->
 <div id="attachComponentModal" class="modal" style="display:none;">
     <div class="modal-content" style="max-width:95vw;">
         <span class="modal-close" onclick="document.getElementById('attachComponentModal').style.display='none'">&times;</span>
@@ -158,7 +161,7 @@
                 }
                 var h = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th>Описание</th><th>Действия</th></tr>';
                 data.forEach(function(s){
-                    h += '<tr><td>' + esc(s.system_name || '') + '</td><td>' + esc(s.system_description || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="delSystem(' + s.id + ')">🗑️</button></td></tr>';
+                    h += '<tr><td>' + esc(s.system_name || '') + '</td><td>' + esc(s.description || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="delSystem(' + s.id + ')">🗑️</button></td></tr>';
                 });
                 h += '</table></div>';
                 c.innerHTML = h;
@@ -166,6 +169,8 @@
     }
 
     function openSystemModal(sysId) {
+        // Очищаем поле описания
+        document.getElementById('systemDescription').value = '';
         fetch('/api/systems')
             .then(function(r){ return r.json(); })
             .then(function(data){
@@ -186,7 +191,10 @@
                         .then(function(r){ return r.json(); })
                         .then(function(sysData){
                             var sys = sysData.find(function(s){ return s.id === sysId; });
-                            if (sys) sel.value = sys.system_id;
+                            if (sys) {
+                                sel.value = sys.system_id;
+                                document.getElementById('systemDescription').value = sys.description || '';
+                            }
                             document.getElementById('systemForm').dataset.editId = sysId;
                         });
                 }
@@ -223,11 +231,12 @@
             return;
         }
         var editId = document.getElementById('systemForm').dataset.editId;
+        var description = document.getElementById('systemDescription').value.trim();
         var url = editId ? '/api/cabinets/' + cabinetId + '/systems/' + editId : '/api/cabinets/' + cabinetId + '/systems';
         fetch(url, {
             method: editId ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ system_id: parseInt(system_id) })
+            body: JSON.stringify({ system_id: parseInt(system_id), description: description || null })
         })
         .then(function(r){
             if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
@@ -464,7 +473,7 @@
             .catch(function(e){ console.error(e); });
     };
 
-    // ==================== МАТЕРИАЛЫ ШКАФА (исправлено: без ID, с Система/Компонент) ====================
+    // ==================== МАТЕРИАЛЫ ШКАФА (без ID) ====================
     window.loadCabinetMaterials = function() {
         var container = document.getElementById('cabinetMaterials');
         if (!container) return;
@@ -607,7 +616,6 @@
                 if (typeof window.loadBlocks === 'function') { window.loadBlocks(); }
                 if (typeof window.loadCabinetMaterials === 'function') { window.loadCabinetMaterials(); }
                 loadCabinetCalculation();
-                // Дополнительное обновление
                 setTimeout(function() {
                     if (typeof window.loadCabinetMaterials === 'function') window.loadCabinetMaterials();
                     loadCabinetCalculation();
@@ -623,7 +631,6 @@
 
 })();
 
-// Функция открытия модального окна компонента шкафа для редактирования
 window.openBlockModalWithId = function(blockId, templateId) {
     if (typeof BlockTemplateModal !== "undefined") {
         BlockTemplateModal.open(function(updatedId) {
