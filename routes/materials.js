@@ -242,106 +242,170 @@ router.get('/cabinet/:cabinetId/items', auth, async (req, res) => {
 // с полями cabinet_id, total_quantity, total_price, updated_at и обновлять её
 // при каждом изменении состава материалов шкафа.
 router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
-    try {
-        const { cabinetId } = req.params;
+  try {
+    const { cabinetId } = req.params;
 
-        // Материалы (агрегированные)
-        const matResult = await pool.query(`
-            SELECT
-                'material' as type,
-                MIN(m.id) as id,
-                m.article,
-                m.name,
-                m.ln,
-                m.tm,
-                SUM(COALESCE(pm.quantity, scm.quantity)) as total_quantity,
-                MIN(m.price) as unit_price,
-                SUM(COALESCE(pm.quantity, scm.quantity) * COALESCE(m.price, 0)) as total_price
-            FROM materials m
-            LEFT JOIN project_materials pm ON pm.material_id = m.id AND pm.cabinet_id = $1
-            LEFT JOIN system_component_materials scm ON scm.material_id = m.id
-            LEFT JOIN system_components sc ON scm.system_component_id = sc.id
-            LEFT JOIN system_components_link scl ON scl.component_id = sc.id
-            LEFT JOIN systems s ON scl.system_id = s.id
-            LEFT JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
-            WHERE (pm.cabinet_id = $1 OR cs.cabinet_id = $1)
-              AND m.article IS NOT NULL
-            GROUP BY m.article, m.name, m.ln, m.tm
-        `, [cabinetId]);
+    // ------------------ Компоненты шкафа ------------------
+    const blockResult = await pool.query(`
+      SELECT
+        'block' as type,
+        MIN(bt.id) as id,
+        bt.article,
+        bt.name,
+        COALESCE(ln.value, '') AS ln,
+        COALESCE(tm.value, '') AS tm,
+        SUM(COALESCE(pb.quantity, sbl.quantity)) as total_quantity,
+        MIN(bt.price) as unit_price,
+        SUM(COALESCE(pb.quantity, sbl.quantity) * COALESCE(bt.price, 0)) as total_price,
+        STRING_AGG(DISTINCT s.name, ', ') as system_name,
+        STRING_AGG(DISTINCT sc.name, ', ') as component_name
+      FROM block_templates bt
+      LEFT JOIN project_blocks pb ON pb.template_id = bt.id AND pb.cabinet_id = $1
+      LEFT JOIN system_block_links sbl ON sbl.block_template_id = bt.id
+      LEFT JOIN system_components sc ON sbl.system_component_id = sc.id
+      LEFT JOIN system_components_link scl ON scl.component_id = sc.id
+      LEFT JOIN systems s ON scl.system_id = s.id
+      LEFT JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
+      LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
+      LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
+      WHERE (pb.cabinet_id = $1 OR cs.cabinet_id = $1)
+        AND bt.article IS NOT NULL
+      GROUP BY bt.article, bt.name, ln.value, tm.value
+      ORDER BY bt.name
+    `, [cabinetId]);
 
-        // Компоненты шкафа (агрегированные)
-        const blockResult = await pool.query(`
-            SELECT
-                'block' as type,
-                MIN(bt.id) as id,
-                bt.article,
-                bt.name,
-                bt.ln,
-                bt.tm,
-                SUM(COALESCE(pb.quantity, sbl.quantity)) as total_quantity,
-                MIN(bt.price) as unit_price,
-                SUM(COALESCE(pb.quantity, sbl.quantity) * COALESCE(bt.price, 0)) as total_price
-            FROM block_templates bt
-            LEFT JOIN project_blocks pb ON pb.template_id = bt.id AND pb.cabinet_id = $1
-            LEFT JOIN system_block_links sbl ON sbl.block_template_id = bt.id
-            LEFT JOIN system_components sc ON sbl.system_component_id = sc.id
-            LEFT JOIN system_components_link scl ON scl.component_id = sc.id
-            LEFT JOIN systems s ON scl.system_id = s.id
-            LEFT JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
-            WHERE (pb.cabinet_id = $1 OR cs.cabinet_id = $1)
-              AND bt.article IS NOT NULL
-            GROUP BY bt.article, bt.name, bt.ln, bt.tm
-        `, [cabinetId]);
+    // ------------------ Материалы шкафа ------------------
+    const matResult = await pool.query(`
+      SELECT
+        'material' as type,
+        MIN(m.id) as id,
+        m.article,
+        m.name,
+        COALESCE(ln.value, '') AS ln,
+        COALESCE(tm.value, '') AS tm,
+        SUM(COALESCE(pm.quantity, scm.quantity)) as total_quantity,
+        MIN(m.price) as unit_price,
+        SUM(COALESCE(pm.quantity, scm.quantity) * COALESCE(m.price, 0)) as total_price,
+        STRING_AGG(DISTINCT s.name, ', ') as system_name,
+        STRING_AGG(DISTINCT sc.name, ', ') as component_name
+      FROM materials m
+      LEFT JOIN project_materials pm ON pm.material_id = m.id AND pm.cabinet_id = $1
+      LEFT JOIN system_component_materials scm ON scm.material_id = m.id
+      LEFT JOIN system_components sc ON scm.system_component_id = sc.id
+      LEFT JOIN system_components_link scl ON scl.component_id = sc.id
+      LEFT JOIN systems s ON scl.system_id = s.id
+      LEFT JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
+      LEFT JOIN ln_values ln ON ln.entity_type = 'material' AND ln.entity_id = m.id
+      LEFT JOIN tm_values tm ON tm.entity_type = 'material' AND tm.entity_id = m.id
+      WHERE (pm.cabinet_id = $1 OR cs.cabinet_id = $1)
+        AND m.article IS NOT NULL
+      GROUP BY m.article, m.name, ln.value, tm.value
+      ORDER BY m.name
+    `, [cabinetId]);
 
-        // Объединяем и сортируем
-        const rows = [...matResult.rows, ...blockResult.rows]
-            .sort((a, b) => (a.article || '').localeCompare(b.article || ''));
+    // Итоговые переменные
+    let totalLn = 0, totalTm = 0, totalPrice = 0;
+    let html = '';
 
-        let totalQuantity = 0;
-        let totalLn = 0;
-        let totalTm = 0;
-        let totalPrice = 0;
-        let html = '';
-        if (rows.length === 0) {
-            html = '<p>Нет материалов и компонентов для калькуляции</p>';
-        } else {
-            html = '<div class="table-container"><table class="data-table"><thead><tr>' +
-                '<th>ID</th><th>Артикул</th><th>Название</th><th>LN</th><th>TM</th><th>Кол-во</th><th>Цена ед.</th><th>Цена всего</th></tr></thead><tbody>';
-
-            rows.forEach(row => {
-                totalQuantity += Number(row.total_quantity);
-                totalPrice += Number(row.total_price);
-                totalLn += Number(row.ln) || 0;
-                totalTm += Number(row.tm) || 0;
-                html += '<tr>' +
-                    '<td>' + row.id + '</td>' +
-                    '<td>' + (row.article || '') + '</td>' +
-                    '<td>' + (row.name || '') + '</td>' +
-                    '<td>' + (row.ln || '') + '</td>' +
-                    '<td>' + (row.tm || '') + '</td>' +
-                    '<td>' + row.total_quantity + '</td>' +
-                    '<td>' + (row.unit_price !== null ? parseFloat(row.unit_price).toFixed(2) : '') + '</td>' +
-                    '<td>' + parseFloat(row.total_price).toFixed(2) + '</td>' +
-                    '</tr>';
-            });
-
-            // Итоговая строка
-            html += '<tr class="total-row" style="font-weight:bold; background:#f0f0f0;">' +
-                '<td colspan="3">Итого</td>' +
-                '<td>' + totalLn + '</td>' +
-                '<td>' + totalTm + '</td>' +
-                '<td></td>' +
-                '<td></td>' +
-                '<td>' + totalPrice.toFixed(2) + '</td>' +
-                '</tr>';
-            html += '</tbody></table></div>';
-            html += '<span id="cabinetTotalPrice" data-total-price="' + totalPrice.toFixed(2) + '" style="display:none;"></span>';
-        }
-        res.send(html);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Ошибка', error: err.message });
+    // ==== Таблица компонентов ====
+    if (blockResult.rows.length > 0) {
+      html += '<h4 style="margin-top:0;">Компоненты шкафа</h4>';
+      html += '<div class="table-container"><table class="data-table"><thead><tr>';
+      html += '<th>Система</th><th>Компонент системы</th><th>Артикул</th><th>Название</th><th>LN</th><th>TM</th><th>Кол-во</th><th>Цена ед.</th><th>Цена всего</th>';
+      html += '</tr></thead><tbody>';
+      let blockTotalLn = 0, blockTotalTm = 0, blockTotalPrice = 0;
+      blockResult.rows.forEach(row => {
+        blockTotalLn += Number(row.ln) || 0;
+        blockTotalTm += Number(row.tm) || 0;
+        blockTotalPrice += Number(row.total_price);
+        html += '<tr>' +
+          '<td style="max-width:600px; white-space:normal !important; word-break:break-all;">' + (row.system_name || '-') + '</td>' +
+          '<td style="max-width:600px; white-space:normal !important; word-break:break-all;">' + (row.component_name || '-') + '</td>' +
+          '<td>' + (row.article || '') + '</td>' +
+          '<td>' + (row.name || '') + '</td>' +
+          '<td>' + (row.ln || '') + '</td>' +
+          '<td>' + (row.tm || '') + '</td>' +
+          '<td>' + row.total_quantity + '</td>' +
+          '<td>' + (row.unit_price !== null ? parseFloat(row.unit_price).toFixed(2) : '') + '</td>' +
+          '<td>' + parseFloat(row.total_price).toFixed(2) + '</td>' +
+          '</tr>';
+      });
+      // Итог по компонентам
+      html += '<tr style="font-weight:bold; background:#f9f9f9;">' +
+        '<td colspan="4">Итого компоненты</td>' +
+        '<td>' + blockTotalLn + '</td>' +
+        '<td>' + blockTotalTm + '</td>' +
+        '<td></td>' +
+        '<td></td>' +
+        '<td>' + blockTotalPrice.toFixed(2) + '</td>' +
+        '</tr>';
+      html += '</tbody></table></div><hr style="margin:20px 0; border:1px solid #ccc;">';
+      totalLn += blockTotalLn;
+      totalTm += blockTotalTm;
+      totalPrice += blockTotalPrice;
+    } else {
+      html += '<p>Нет компонентов для калькуляции</p>';
     }
+
+    // ==== Таблица материалов ====
+    if (matResult.rows.length > 0) {
+      html += '<h4>Материалы шкафа</h4>';
+      html += '<div class="table-container"><table class="data-table"><thead><tr>';
+      html += '<th>Система</th><th>Компонент системы</th><th>Артикул</th><th>Название</th><th>LN</th><th>TM</th><th>Кол-во</th><th>Цена ед.</th><th>Цена всего</th>';
+      html += '</tr></thead><tbody>';
+      let matTotalLn = 0, matTotalTm = 0, matTotalPrice = 0;
+      matResult.rows.forEach(row => {
+        matTotalLn += Number(row.ln) || 0;
+        matTotalTm += Number(row.tm) || 0;
+        matTotalPrice += Number(row.total_price);
+        html += '<tr>' +
+          '<td style="max-width:600px; white-space:normal !important; word-break:break-all;">' + (row.system_name || '-') + '</td>' +
+          '<td style="max-width:600px; white-space:normal !important; word-break:break-all;">' + (row.component_name || '-') + '</td>' +
+          '<td>' + (row.article || '') + '</td>' +
+          '<td>' + (row.name || '') + '</td>' +
+          '<td>' + (row.ln || '') + '</td>' +
+          '<td>' + (row.tm || '') + '</td>' +
+          '<td>' + row.total_quantity + '</td>' +
+          '<td>' + (row.unit_price !== null ? parseFloat(row.unit_price).toFixed(2) : '') + '</td>' +
+          '<td>' + parseFloat(row.total_price).toFixed(2) + '</td>' +
+          '</tr>';
+      });
+      html += '<tr style="font-weight:bold; background:#f9f9f9;">' +
+        '<td colspan="4">Итого материалы</td>' +
+        '<td>' + matTotalLn + '</td>' +
+        '<td>' + matTotalTm + '</td>' +
+        '<td></td>' +
+        '<td></td>' +
+        '<td>' + matTotalPrice.toFixed(2) + '</td>' +
+        '</tr>';
+      html += '</tbody></table></div><hr style="margin:20px 0; border:1px solid #ccc;">';
+      totalLn += matTotalLn;
+      totalTm += matTotalTm;
+      totalPrice += matTotalPrice;
+    } else {
+      html += '<p>Нет материалов для калькуляции</p>';
+    }
+
+    // Общий итог
+    if (blockResult.rows.length > 0 || matResult.rows.length > 0) {
+      html += '<div class="table-container"><table class="data-table"><tr style="font-weight:bold; background:#e0e0e0;">' +
+        '<td colspan="4">Общий итог</td>' +
+        '<td>' + totalLn + '</td>' +
+        '<td>' + totalTm + '</td>' +
+        '<td></td>' +
+        '<td></td>' +
+        '<td>' + totalPrice.toFixed(2) + '</td>' +
+        '</tr></table></div>';
+      html += '<span id="cabinetTotalPrice" data-total-price="' + totalPrice.toFixed(2) + '" style="display:none;"></span>';
+    } else {
+      html += '<p>Нет материалов и компонентов для калькуляции</p>';
+    }
+
+    res.send(html);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка', error: err.message });
+  }
 });
 
 router.post('/cabinet/:cabinetId', auth, isAdmin, async (req, res) => {
