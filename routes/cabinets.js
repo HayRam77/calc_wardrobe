@@ -225,18 +225,9 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
   try {
     const template_id = parseInt(req.body.template_id);
     const quantity = parseInt(req.body.quantity) || 1;
-    const cabinetId = req.params.id;
-
-    // Получаем project_id из cabinet
-    const cabResult = await pool.query('SELECT project_id FROM cabinets WHERE id = $1', [cabinetId]);
-    if (cabResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Шкаф не найден' });
-    }
-    const project_id = cabResult.rows[0].project_id;
-
     const result = await pool.query(
-      'INSERT INTO project_blocks (cabinet_id, project_id, template_id, quantity) VALUES ($1, $2, $3, $4) RETURNING *',
-      [cabinetId, project_id, template_id, quantity]
+      'INSERT INTO project_blocks (cabinet_id, template_id, quantity) VALUES ($1, $2, $3) RETURNING *',
+      [req.params.id, template_id, quantity]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
@@ -414,7 +405,6 @@ router.get('/export', auth, async (req, res) => {
     const ws = XLSX.utils.json_to_sheet(result.rows);
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Шкафы');
     res.setHeader('Content-Disposition', 'attachment; filename=cabinets.xlsx');
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка экспорта' }); }
 });

@@ -31,7 +31,6 @@ router.get('/export', auth, async (req, res) => {
     const ws = XLSX.utils.json_to_sheet(result.rows);
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Системы');
     res.setHeader('Content-Disposition', 'attachment; filename=systems.xlsx');
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка экспорта' }); }
 });
