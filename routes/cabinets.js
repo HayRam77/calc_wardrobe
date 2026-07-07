@@ -267,28 +267,57 @@ router.post('/:id/systems', auth, isAdmin, async (req, res) => {
 });
 
 router.put('/:id/systems/:systemId', auth, isAdmin, async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
+    const { name, description, cabinet_id } = req.body;
+    const systemId = req.params.systemId;
+
+    // Если меняем шкаф, переносим запись
+    if (cabinet_id !== undefined && cabinet_id != req.params.id) {
+      // Получаем данные текущей связи
+      const old = await client.query('SELECT * FROM cabinet_systems WHERE id = $1', [systemId]);
+      if (old.rows.length === 0) {
+        return res.status(404).json({ message: 'Связь не найдена' });
+      }
+      const oldData = old.rows[0];
+      // Удаляем старую
+      await client.query('DELETE FROM cabinet_systems WHERE id = $1', [systemId]);
+      // Создаём новую в целевом шкафу
+      const newLink = await client.query(
+        `INSERT INTO cabinet_systems (cabinet_id, system_id, name, description)
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [cabinet_id, oldData.system_id, name || oldData.name, description !== undefined ? description : oldData.description]
+      );
+      await client.query('COMMIT');
+      return res.json({ message: 'Система перенесена', data: newLink.rows[0] });
+    }
+
+    // Иначе просто обновляем поля
     const fields = [];
     const values = [];
     let idx = 1;
-    if (req.body.name !== undefined) {
+    if (name !== undefined) {
       fields.push(`name = $${idx++}`);
-      values.push(req.body.name);
+      values.push(name);
     }
-    if (req.body.description !== undefined) {
+    if (description !== undefined) {
       fields.push(`description = $${idx++}`);
-      values.push(req.body.description);
-    }
-    if (req.body.cabinet_id !== undefined) {
-      fields.push(`cabinet_id = $${idx++}`);
-      values.push(req.body.cabinet_id);
+      values.push(description);
     }
     if (fields.length > 0) {
-      values.push(req.params.systemId);
-      await pool.query(`UPDATE cabinet_systems SET ${fields.join(', ')} WHERE id = $${idx}`, values);
+      values.push(systemId);
+      await client.query(`UPDATE cabinet_systems SET ${fields.join(', ')} WHERE id = $${idx}`, values);
     }
+    await client.query('COMMIT');
     res.json({ message: 'Обновлено' });
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка' });
+  } finally {
+    client.release();
+  }
 });
 
 router.delete('/:id/systems/:systemId', auth, isAdmin, async (req, res) => {
