@@ -94,14 +94,42 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
 
 router.get('/', auth, async (req, res) => {
   try {
-    const result = await pool.query(`SELECT bt.*, ct.name as type_name, m.name as manufacturer_name, COALESCE((SELECT json_agg(json_build_object('id', cpv.id, 'parameter_id', cpv.param_id, 'param_name', p.name, 'param_value', cpv.value)) FROM component_param_values cpv LEFT JOIN parameters p ON cpv.param_id = p.id WHERE cpv.component_id = bt.id), '[]'::json) as parameters FROM block_templates bt LEFT JOIN component_types ct ON bt.type_id = ct.id LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id ORDER BY bt.id`);
+    const result = await pool.query(`
+      SELECT bt.*, ct.name as type_name, m.name as manufacturer_name,
+             COALESCE(ln.value, '') AS ln,
+             COALESCE(tm.value, '') AS tm,
+             COALESCE((SELECT json_agg(json_build_object('id', cpv.id, 'parameter_id', cpv.param_id, 'param_name', p.name, 'param_value', cpv.value))
+                       FROM component_param_values cpv
+                       LEFT JOIN parameters p ON cpv.param_id = p.id
+                       WHERE cpv.component_id = bt.id), '[]'::json) as parameters
+      FROM block_templates bt
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
+      LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
+      LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
+      ORDER BY bt.id
+    `);
     res.json(result.rows);
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
 router.get('/:id', auth, async (req, res) => {
   try {
-    const result = await pool.query(`SELECT bt.*, ct.name as type_name, m.name as manufacturer_name, COALESCE((SELECT json_agg(json_build_object('id', cpv.id, 'parameter_id', cpv.param_id, 'param_name', p.name, 'param_value', cpv.value)) FROM component_param_values cpv LEFT JOIN parameters p ON cpv.param_id = p.id WHERE cpv.component_id = bt.id), '[]'::json) as parameters FROM block_templates bt LEFT JOIN component_types ct ON bt.type_id = ct.id LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id WHERE bt.id = $1`, [req.params.id]);
+    const result = await pool.query(`
+      SELECT bt.*, ct.name as type_name, m.name as manufacturer_name,
+             COALESCE(ln.value, '') AS ln,
+             COALESCE(tm.value, '') AS tm,
+             COALESCE((SELECT json_agg(json_build_object('id', cpv.id, 'parameter_id', cpv.param_id, 'param_name', p.name, 'param_value', cpv.value))
+                       FROM component_param_values cpv
+                       LEFT JOIN parameters p ON cpv.param_id = p.id
+                       WHERE cpv.component_id = bt.id), '[]'::json) as parameters
+      FROM block_templates bt
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
+      LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
+      LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
+      WHERE bt.id = $1
+    `, [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ message: 'Не найден' });
     res.json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
@@ -109,7 +137,7 @@ router.get('/:id', auth, async (req, res) => {
 
 router.post('/', auth, isAdmin, async (req, res) => {
   console.log('POST /api/block-templates body:', JSON.stringify(req.body));
-  const { name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, ln, url, description, parameters } = req.body;
+  const { name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, ln, tm, url, description, parameters } = req.body;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -117,59 +145,124 @@ router.post('/', auth, isAdmin, async (req, res) => {
     const manId = (manufacturer_id != null && manufacturer_id !== '') ? parseInt(manufacturer_id) : null;
     let result;
     if (article) {
-      // Если article указан, проверяем существование и делаем upsert вручную
       const existing = await client.query('SELECT id FROM block_templates WHERE article = $1', [article]);
       if (existing.rows.length > 0) {
         const id = existing.rows[0].id;
         result = await client.query(
-          `UPDATE block_templates SET name=$1, type_id=$2, manufacturer_id=$3, price=$4, labor=$5, weight_grams=$6, power_watts=$7, ln=$8, url=$9, description=$10, updated_at=CURRENT_TIMESTAMP
-           WHERE id=$11 RETURNING *`,
-          [name, typeId, manId, price || null, labor || null, weight_grams || null, power_watts || null, ln || null, url || null, description || null, id]
+          `UPDATE block_templates SET name=$1, type_id=$2, manufacturer_id=$3, price=$4, labor=$5, weight_grams=$6, power_watts=$7, url=$8, description=$9, updated_at=CURRENT_TIMESTAMP
+           WHERE id=$10 RETURNING *`,
+          [name, typeId, manId, price || null, labor || null, weight_grams || null, power_watts || null, url || null, description || null, id]
         );
         console.log(`Обновлён существующий компонент с article=${article}, id=${id}`);
       } else {
         result = await client.query(
-          `INSERT INTO block_templates (name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, ln, url, description)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-          [name, typeId, manId, article, price || null, labor || null, weight_grams || null, power_watts || null, ln || null, url || null, description || null]
+          `INSERT INTO block_templates (name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, url, description)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+          [name, typeId, manId, article, price || null, labor || null, weight_grams || null, power_watts || null, url || null, description || null]
         );
       }
     } else {
       result = await client.query(
-        `INSERT INTO block_templates (name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, ln, url, description)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-        [name, typeId, manId, article || null, price || null, labor || null, weight_grams || null, power_watts || null, ln || null, url || null, description || null]
+        `INSERT INTO block_templates (name, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, url, description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+        [name, typeId, manId, article || null, price || null, labor || null, weight_grams || null, power_watts || null, url || null, description || null]
       );
     }
-    if (parameters && Array.isArray(parameters)) for (const p of parameters) if (p.parameter_id) await client.query('INSERT INTO component_param_values (component_id, param_id, value) VALUES ($1, $2, $3)', [result.rows[0].id, p.parameter_id, p.param_value || p.value || '']);
+
+    const newId = result.rows[0].id;
+
+    if (ln !== undefined) {
+      await client.query(
+        `INSERT INTO ln_values (entity_type, entity_id, value) VALUES ('block_template', $1, $2) ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
+        [newId, ln || null]
+      );
+    }
+    if (tm !== undefined) {
+      await client.query(
+        `INSERT INTO tm_values (entity_type, entity_id, value) VALUES ('block_template', $1, $2) ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
+        [newId, tm || null]
+      );
+    }
+
+    if (parameters && Array.isArray(parameters)) {
+      for (const p of parameters) {
+        if (p.parameter_id) {
+          await client.query(
+            'INSERT INTO component_param_values (component_id, param_id, value) VALUES ($1, $2, $3)',
+            [newId, p.parameter_id, p.param_value || p.value || '']
+          );
+        }
+      }
+    }
+
     await client.query('COMMIT');
     res.status(201).json(result.rows[0]);
-  } catch (err) { await client.query('ROLLBACK'); console.error('Ошибка POST /api/block-templates:', err); res.status(500).json({ message: 'Ошибка', error: err.message }); }
-  finally { client.release(); }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Ошибка POST /api/block-templates:', err);
+    res.status(500).json({ message: 'Ошибка', error: err.message });
+  } finally { client.release(); }
 });
 
 router.put('/:id', auth, isAdmin, async (req, res) => {
-  const { id } = req.params; const { parameters, ...bodyFields } = req.body; const client = await pool.connect();
+  const { id } = req.params;
+  const { parameters, ln, tm, ...bodyFields } = req.body;
+  const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const allowed = ['name', 'type_id', 'manufacturer_id', 'article', 'price', 'labor', 'weight_grams', 'power_watts', 'ln', 'url', 'description'];
-    const fields = []; const values = []; let c = 1;
+    const allowed = ['name', 'type_id', 'manufacturer_id', 'article', 'price', 'labor', 'weight_grams', 'power_watts', 'url', 'description'];
+    const fields = [];
+    const values = [];
+    let c = 1;
     for (const f of allowed) {
       if (bodyFields[f] !== undefined) {
         let val = bodyFields[f];
         if ((f === 'type_id' || f === 'manufacturer_id') && val === '') val = null;
-        fields.push(`${f} = $${c++}`); values.push(val);
+        fields.push(`${f} = $${c++}`);
+        values.push(val);
       }
     }
     let result;
-    if (fields.length > 0) { values.push(id); result = await client.query(`UPDATE block_templates SET ${fields.join(', ')} WHERE id = $${c} RETURNING *`, values); }
-    else { result = await client.query('SELECT * FROM block_templates WHERE id = $1', [id]); }
+    if (fields.length > 0) {
+      values.push(id);
+      result = await client.query(`UPDATE block_templates SET ${fields.join(', ')} WHERE id = $${c} RETURNING *`, values);
+    } else {
+      result = await client.query('SELECT * FROM block_templates WHERE id = $1', [id]);
+    }
+
+    // Сохраняем LN и TM в новые таблицы
+    if (ln !== undefined) {
+      await client.query(
+        `INSERT INTO ln_values (entity_type, entity_id, value) VALUES ('block_template', $1, $2) ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
+        [id, ln || null]
+      );
+    }
+    if (tm !== undefined) {
+      await client.query(
+        `INSERT INTO tm_values (entity_type, entity_id, value) VALUES ('block_template', $1, $2) ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
+        [id, tm || null]
+      );
+    }
+
     await client.query('DELETE FROM component_param_values WHERE component_id = $1', [id]);
-    if (parameters && Array.isArray(parameters)) for (const p of parameters) if (p.parameter_id) await client.query('INSERT INTO component_param_values (component_id, param_id, value) VALUES ($1, $2, $3)', [id, p.parameter_id, p.param_value || p.value || '']);
+    if (parameters && Array.isArray(parameters)) {
+      for (const p of parameters) {
+        if (p.parameter_id) {
+          await client.query(
+            'INSERT INTO component_param_values (component_id, param_id, value) VALUES ($1, $2, $3)',
+            [id, p.parameter_id, p.param_value || p.value || '']
+          );
+        }
+      }
+    }
+
     await client.query('COMMIT');
     res.json(result.rows[0]);
-  } catch (err) { await client.query('ROLLBACK'); console.error(err); res.status(500).json({ message: 'Ошибка' }); }
-  finally { client.release(); }
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка' });
+  } finally { client.release(); }
 });
 
 router.delete('/:id', auth, isAdmin, async (req, res) => {
