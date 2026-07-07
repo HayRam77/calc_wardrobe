@@ -72,3 +72,38 @@
     loadTab('components');
 })();
 </script>
+
+<script>
+(function() {
+  var container = document.getElementById('tab-content-container');
+  if (!container) return;
+  container.addEventListener('click', function(e) {
+    var th = e.target.closest('th');
+    if (!th) return;
+    var table = th.closest('table.data-table');
+    if (!table) return;
+    var tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+    if (rows.length === 0) return;
+    var colIndex = Array.from(th.parentNode.children).indexOf(th);
+    var ascending = !th.classList.contains('sorted-asc');
+    table.querySelectorAll('th').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
+    th.classList.add(ascending ? 'sorted-asc' : 'sorted-desc');
+    rows.sort(function(a, b) {
+      var aVal = (a.children[colIndex]?.textContent || '').trim();
+      var bVal = (b.children[colIndex]?.textContent || '').trim();
+      var aNum = parseFloat(aVal.replace(/,/g, '.'));
+      var bNum = parseFloat(bVal.replace(/,/g, '.'));
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return ascending ? aNum - bNum : bNum - aNum;
+      }
+      return ascending ? aVal.localeCompare(bVal, 'ru') : bVal.localeCompare(aVal, 'ru');
+    });
+    rows.forEach(function(row) { tbody.appendChild(row); });
+  });
+  var style = document.createElement('style');
+  style.textContent = '.sorted-asc::after { content: " ▲"; font-size: 0.8em; } .sorted-desc::after { content: " ▼"; font-size: 0.8em; }';
+  document.head.appendChild(style);
+})();
+</script>
