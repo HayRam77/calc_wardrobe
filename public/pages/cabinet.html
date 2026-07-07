@@ -713,4 +713,24 @@ function exportConfigToPDF() {
   window.print();
 }
 
+window.exportConfigToPDF = function() {
+  var element = document.getElementById('tab-config');
+  html2pdf().set({
+    margin: 10,
+    filename: 'config.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  }).from(element).save();
+};
+window.exportCalcToPDF = function() {
+  var element = document.getElementById('tab-calculation');
+  html2pdf().set({
+    margin: 10,
+    filename: 'calculation.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  }).from(element).save();
+};
 </script>
