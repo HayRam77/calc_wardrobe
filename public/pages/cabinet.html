@@ -161,7 +161,7 @@
                 }
                 var h = '<div class="table-container"><table class="data-table"><tr><th>Система</th><th>Описание</th><th>Действия</th></tr>';
                 data.forEach(function(s){
-                    h += '<tr><td>' + esc(s.system_name || '') + '</td><td>' + esc(s.description || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="delSystem(' + s.id + ')">🗑️</button></td></tr>';
+                    h += '<tr><td>' + esc(s.system_name || '') + '</td><td>' + esc(s.description || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-copy" onclick="copySystemTo(' + s.system_id + ')">📋</button> <button class="btn btn-sm btn-delete" onclick="delSystem(' + s.id + ')">🗑️</button></td></tr>';
                 });
                 h += '</table></div>';
                 c.innerHTML = h;
@@ -627,7 +627,49 @@
         });
     };
 
-    window.pageInit = function() {};
+    window.copySystemTo = function(sourceSystemId) {
+  fetch('/api/systems')
+    .then(function(r){ return r.json(); })
+    .then(function(systems){
+      var sel = document.getElementById('copySystemSelect');
+      sel.innerHTML = '<option value="">-- выберите --</option>';
+      systems.forEach(function(s){
+        if (s.id != sourceSystemId) {
+          sel.innerHTML += '<option value="' + s.id + '">' + esc(s.name) + '</option>';
+        }
+      });
+      document.getElementById('copySystemForm').onsubmit = function(e){
+        e.preventDefault();
+        var targetId = sel.value;
+        if (!targetId) { alert('Выберите целевую систему'); return; }
+        fetch('/api/systems/' + sourceSystemId + '/copy-to/' + targetId, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ cabinetId: cabinetId })
+        })
+        .then(function(r){
+          if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+          return r.json();
+        })
+        .then(function(data){
+          alert('✅ ' + data.message);
+          document.getElementById('copySystemModal').style.display = 'none';
+          loadSystems();
+          loadSystemComponents();
+          if (typeof window.loadBlocks === 'function') { window.loadBlocks(); }
+          if (typeof window.loadCabinetMaterials === 'function') { window.loadCabinetMaterials(); }
+          loadCabinetCalculation();
+          setTimeout(function() {
+            if (typeof window.loadCabinetMaterials === 'function') window.loadCabinetMaterials();
+            loadCabinetCalculation();
+          }, 500);
+        })
+        .catch(function(e){ alert('Ошибка: ' + e.message); });
+      };
+      document.getElementById('copySystemModal').style.display = 'flex';
+    });
+};
+window.pageInit = function() {};
 
 })();
 

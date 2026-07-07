@@ -128,6 +128,62 @@ router.delete('/link/:id', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+
+// Копирование состава системы в другую (привязка компонентов без дублирования)
+router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const sourceId = req.params.sourceId;
+    const targetId = req.params.targetId;
+    const cabinetId = req.body.cabinetId; // опционально
+
+    // Проверка существования систем
+    const sourceSys = await client.query('SELECT id FROM systems WHERE id = $1', [sourceId]);
+    const targetSys = await client.query('SELECT id FROM systems WHERE id = $1', [targetId]);
+    if (sourceSys.rows.length === 0) {
+      return res.status(404).json({ message: 'Исходная система не найдена' });
+    }
+    if (targetSys.rows.length === 0) {
+      return res.status(404).json({ message: 'Целевая система не найдена' });
+    }
+
+    // Копируем связи компонентов (без дублирования самих компонентов)
+    const result = await client.query(
+      `INSERT INTO system_components_link (system_id, component_id, quantity)
+       SELECT $2, component_id, quantity
+       FROM system_components_link
+       WHERE system_id = $1
+       ON CONFLICT (system_id, component_id) DO UPDATE SET quantity = EXCLUDED.quantity`,
+      [sourceId, targetId]
+    );
+
+    // Если передан cabinetId, привязываем целевую систему к шкафу (если ещё нет)
+    if (cabinetId) {
+      const existing = await client.query(
+        'SELECT id FROM cabinet_systems WHERE cabinet_id = $1 AND system_id = $2',
+        [cabinetId, targetId]
+      );
+      if (existing.rows.length === 0) {
+        // Добавляем целевую систему в шкаф
+        await client.query(
+          'INSERT INTO cabinet_systems (cabinet_id, system_id) VALUES ($1, $2) ON CONFLICT (cabinet_id, system_id) DO NOTHING',
+          [cabinetId, targetId]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: 'Состав системы скопирован (добавлено/обновлено связей: ' + result.rowCount + ')' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка копирования' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
 
 // Добавить компонент в систему
