@@ -676,7 +676,7 @@ function exportConfigToPDF() {
     filename: 'config.pdf',
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
   }).from(element).save();
 }
 
@@ -687,7 +687,7 @@ function exportCalcToPDF() {
     filename: 'calculation.pdf',
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
   }).from(element).save();
 }
 
@@ -720,7 +720,7 @@ window.exportConfigToPDF = function() {
     filename: 'config.pdf',
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
   }).from(element).save();
 };
 window.exportCalcToPDF = function() {
@@ -730,7 +730,7 @@ window.exportCalcToPDF = function() {
     filename: 'calculation.pdf',
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
   }).from(element).save();
 };
 </script>
