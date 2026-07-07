@@ -82,6 +82,7 @@ router.get('/export', auth, async (req, res) => {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Типы параметров');
         res.setHeader('Content-Disposition', 'attachment; filename=system_parameter_types.xlsx');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
     } catch (e) {
         console.error(e);
