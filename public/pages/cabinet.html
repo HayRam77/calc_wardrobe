@@ -21,6 +21,10 @@
                 <label for="systemDescription">Описание</label>
                 <textarea id="systemDescription" rows="2" placeholder="Описание системы в шкафу"></textarea>
             </div>
+            <div class="form-group">
+                <label for="cabinetSelect">Шкаф</label>
+                <select id="cabinetSelect"><option value="">-- текущий шкаф --</option></select>
+            </div>
             <div id="systemError" class="error-message" style="display:none;"></div>
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="document.getElementById('systemModal').style.display='none'">Отмена</button>
@@ -114,9 +118,7 @@
             html += '<div class="module-box"><h3>Материалы шкафа</h3><div id="cabinetMaterials">Загрузка...</div><button id="addMaterialToCabinetBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить материал</button></div>';
             html += '</div>';
 
-            html += '<div class="tab-content" id="tab-calculation"><div style="margin-bottom:10px;text-align:right;"><button class="btn btn-primary" onclick="exportCalcToPDF()">📄 Экспорт PDF</button></div>';
-            html += '<div id="cabinetCalculation">Загрузка...</div>'
-            html += '</div>';
+            html += '<div class="tab-content" id="tab-calculation"><div style="margin-bottom:10px;text-align:right;"><button class="btn btn-primary" onclick="exportCalcToPDF()">📄 Экспорт PDF</button></div><div id="cabinetCalculation">Загрузка...</div></div>';
             html += '</div>';
 
             html += '<div class="tab-content" id="tab-pricing">';
@@ -169,8 +171,16 @@
     }
 
     function openSystemModal(sysId) {
-        // Очищаем поле описания
         document.getElementById('systemDescription').value = '';
+        fetch('/api/cabinets?project_id=' + (window.projectId || ''))
+          .then(function(r){ return r.json(); })
+          .then(function(cabinets){
+            var cabSel = document.getElementById('cabinetSelect');
+            cabSel.innerHTML = '<option value="">-- текущий шкаф --</option>';
+            cabinets.forEach(function(cab){
+              cabSel.innerHTML += '<option value="' + cab.id + '">' + esc(cab.name) + '</option>';
+            });
+          });
         fetch('/api/systems')
             .then(function(r){ return r.json(); })
             .then(function(data){
@@ -194,6 +204,7 @@
                             if (sys) {
                                 sel.value = sys.system_id;
                                 document.getElementById('systemDescription').value = sys.description || '';
+                                document.getElementById('cabinetSelect').value = sys.cabinet_id || '';
                             }
                             document.getElementById('systemForm').dataset.editId = sysId;
                         });
@@ -204,15 +215,8 @@
                 };
                 document.querySelector('.save-new-system-btn').onclick = function() {
                     var name = document.querySelector('.new-system-name').value.trim();
-                    if (!name) {
-                        alert('Введите название');
-                        return;
-                    }
-                    fetch('/api/systems', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name: name })
-                    })
+                    if (!name) { alert('Введите название'); return; }
+                    fetch('/api/systems', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
                     .then(function(r){ return r.json(); })
                     .then(function(ns){
                         sel.innerHTML += '<option value="' + ns.id + '" selected>' + esc(ns.name) + '</option>';
@@ -226,17 +230,19 @@
     document.getElementById('systemForm').addEventListener('submit', function(e) {
         e.preventDefault();
         var system_id = document.getElementById('systemSelect').value;
-        if (!system_id || system_id === '__new__') {
-            alert('Выберите или создайте систему');
-            return;
-        }
+        if (!system_id || system_id === '__new__') { alert('Выберите или создайте систему'); return; }
         var editId = document.getElementById('systemForm').dataset.editId;
         var description = document.getElementById('systemDescription').value.trim();
         var url = editId ? '/api/cabinets/' + cabinetId + '/systems/' + editId : '/api/cabinets/' + cabinetId + '/systems';
+        var bodyData = { system_id: parseInt(system_id), description: description || null };
+        if (editId) {
+          var newCabinetId = document.getElementById('cabinetSelect')?.value;
+          if (newCabinetId) bodyData.cabinet_id = parseInt(newCabinetId);
+        }
         fetch(url, {
             method: editId ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ system_id: parseInt(system_id), description: description || null })
+            body: JSON.stringify(bodyData)
         })
         .then(function(r){
             if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
@@ -290,16 +296,12 @@
                             html += '</div>';
                             html += '</div>';
                             done++;
-                            if (done === totalSystems) {
-                                container.innerHTML = html;
-                            }
+                            if (done === totalSystems) container.innerHTML = html;
                         })
                         .catch(function(err){
                             console.error('Ошибка загрузки компонентов системы:', err);
                             done++;
-                            if (done === totalSystems) {
-                                container.innerHTML = html + '<p style="color:red;">Ошибка загрузки компонентов</p>';
-                            }
+                            if (done === totalSystems) container.innerHTML = html + '<p style="color:red;">Ошибка загрузки компонентов</p>';
                         });
                 });
             })
@@ -346,33 +348,21 @@
             e.preventDefault();
             var componentId = select.value;
             var quantity = parseInt(document.getElementById('attachComponentQuantity').value);
-            if (!componentId) {
-                errorDiv.textContent = 'Выберите компонент';
-                errorDiv.style.display = 'flex';
-                return;
-            }
-            if (!quantity || quantity < 1) {
-                errorDiv.textContent = 'Введите корректное количество';
-                errorDiv.style.display = 'flex';
-                return;
-            }
+            if (!componentId) { errorDiv.textContent = 'Выберите компонент'; errorDiv.style.display = 'flex'; return; }
+            if (!quantity || quantity < 1) { errorDiv.textContent = 'Введите корректное количество'; errorDiv.style.display = 'flex'; return; }
             errorDiv.style.display = 'none';
             fetch('/api/systems/' + systemId + '/components', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ component_id: parseInt(componentId), quantity: quantity })
             })
             .then(function(r){
                 if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
                 modal.style.display = 'none';
                 loadSystemComponents(); window.loadCabinetMaterials();
-            loadCabinetCalculation(); window.loadBlocks();
+                loadCabinetCalculation(); window.loadBlocks();
                 alert('✅ Компонент успешно привязан к системе!');
             })
-            .catch(function(e){
-                errorDiv.textContent = 'Ошибка привязки: ' + e.message;
-                errorDiv.style.display = 'flex';
-            });
+            .catch(function(e){ errorDiv.textContent = 'Ошибка привязки: ' + e.message; errorDiv.style.display = 'flex'; });
         };
     };
 
@@ -384,23 +374,20 @@
                     var quantity = prompt('Количество:', '1');
                     if (quantity && !isNaN(quantity) && parseInt(quantity) > 0) {
                         fetch('/api/systems/' + systemId + '/components', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ component_id: compId, quantity: parseInt(quantity) })
                         })
                         .then(function(r){
                             if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
                             loadSystemComponents(); window.loadCabinetMaterials();
-            loadCabinetCalculation(); window.loadBlocks();
+                            loadCabinetCalculation(); window.loadBlocks();
                             alert('✅ Компонент успешно добавлен в систему!');
                         })
                         .catch(function(e){ alert('Ошибка: ' + e.message); });
                     }
                 }
             }, false, null);
-        } else {
-            alert('Модальное окно компонентов систем не загружено');
-        }
+        } else { alert('Модальное окно компонентов систем не загружено'); }
     };
 
     window.editSysComp = function(compId) {
@@ -409,31 +396,23 @@
             SystemCompModal.open(compId, function() {
                 console.log('✅ Компонент обновлён, обновляем список');
                 loadSystemComponents(); window.loadCabinetMaterials();
-            loadCabinetCalculation(); window.loadBlocks();
+                loadCabinetCalculation(); window.loadBlocks();
             });
-        } else {
-            alert('Модальное окно компонентов систем не загружено');
-        }
+        } else { alert('Модальное окно компонентов систем не загружено'); }
     };
 
     window.unlinkSysComp = function(linkId) {
-        if (!linkId) {
-            alert('Ошибка: идентификатор связи не найден');
-            console.error('linkId is undefined');
-            return;
-        }
+        if (!linkId) { alert('Ошибка: идентификатор связи не найден'); console.error('linkId is undefined'); return; }
         if (!confirm('Отвязать компонент от системы?\nКомпонент останется в справочнике.')) return;
         console.log('🔗 Отвязываем компонент linkId:', linkId);
         fetch('/api/systems/link/' + linkId, { method: 'DELETE' })
             .then(function(r){
                 if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
                 loadSystemComponents(); window.loadCabinetMaterials();
-            loadCabinetCalculation(); window.loadBlocks();
+                loadCabinetCalculation(); window.loadBlocks();
                 alert('✅ Компонент отвязан от системы');
             })
-            .catch(function(e){
-                alert('Ошибка: ' + e.message);
-            });
+            .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
     window.openBlockModal = function() {
@@ -441,8 +420,7 @@
             BlockTemplateModal.open(function(blockId){
                 if (blockId) {
                     fetch('/api/cabinets/' + window.cabinetId + '/blocks', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ template_id: blockId, quantity: 1 })
                     })
                     .then(function(r){
@@ -450,14 +428,12 @@
                         console.log('Добавлено, обновляем...');
                         setTimeout(function(){ window.loadBlocks(); }, 500);
                         window.loadCabinetMaterials();
-            loadCabinetCalculation();
+                        loadCabinetCalculation();
                     })
                     .catch(function(e){ alert(e.message); });
                 }
             });
-        } else {
-            setTimeout(function(){ openBlockModal(); }, 200);
-        }
+        } else { setTimeout(function(){ openBlockModal(); }, 200); }
     };
 
     window.delBlock = function(id) {
@@ -473,26 +449,19 @@
             .catch(function(e){ console.error(e); });
     };
 
-    // ==================== МАТЕРИАЛЫ ШКАФА (без ID) ====================
     window.loadCabinetMaterials = function() {
         var container = document.getElementById('cabinetMaterials');
         if (!container) return;
         fetch('/api/materials/cabinet/' + cabinetId + '/items')
             .then(function(r){ return r.json(); })
             .then(function(items){
-                if (!items.length) {
-                    container.innerHTML = '<p>Нет материалов</p>';
-                    return;
-                }
-                var html = '<div class="table-container"><table class="data-table"><thead><tr>' +
-                    '<th>Система</th><th>Компонент системы</th><th>Название</th><th>Ед.</th><th>Цена</th><th>Кол-во</th><th>LN</th><th>TM</th><th>Действия</th></tr></thead><tbody>';
+                if (!items.length) { container.innerHTML = '<p>Нет материалов</p>'; return; }
+                var html = '<div class="table-container"><table class="data-table"><thead><tr><th>Система</th><th>Компонент системы</th><th>Название</th><th>Ед.</th><th>Цена</th><th>Кол-во</th><th>LN</th><th>TM</th><th>Действия</th></tr></thead><tbody>';
                 items.forEach(function(item){
                     html += '<tr>' +
                         '<td>' + (item.system_name || '-') + '</td>' +
                         '<td>' + (item.component_name || '-') + '</td>' +
-                        '' +
                         '<td>' + (item.name || '') + '</td>' +
-                        
                         '<td>' + (item.unit || '') + '</td>' +
                         '<td>' + (item.price !== null ? parseFloat(item.price).toFixed(2) : '') + '</td>' +
                         '<td>' + item.quantity + '</td>' +
@@ -517,31 +486,27 @@
                     var quantity = prompt('Количество:', '1');
                     if (quantity && !isNaN(quantity) && parseInt(quantity) > 0) {
                         fetch('/api/materials/cabinet/' + cabinetId, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ material_id: materialId, quantity: parseInt(quantity) })
                         })
                         .then(function(r){
                             if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
                             window.loadCabinetMaterials();
-            loadCabinetCalculation();
+                            loadCabinetCalculation();
                             alert('✅ Материал добавлен в шкаф!');
                         })
                         .catch(function(e){ alert('Ошибка: ' + e.message); });
                     }
                 }
             });
-        } else {
-            alert('Модальное окно материалов не загружено');
-        }
+        } else { alert('Модальное окно материалов не загружено'); }
     };
 
     window.editMaterialQuantity = function(linkId) {
         var newQty = prompt('Новое количество:');
         if (!newQty || isNaN(newQty) || parseInt(newQty) < 1) return;
         fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ quantity: parseInt(newQty) })
         })
         .then(function(r){
@@ -555,54 +520,38 @@
 
     window.delMaterial = function(linkId) {
         if (!confirm('Удалить материал из шкафа?')) return;
-        if (linkId < 0) { fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' }).then(function(){ window.loadCabinetMaterials();
-            loadCabinetCalculation(); }).catch(function(e){ alert('Ошибка: ' + e.message); }); return; } fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' })
-            .then(function(){
-                window.loadCabinetMaterials();
-            loadCabinetCalculation();
-                console.log('✅ Материал удалён, таблица обновлена');
-            })
+        if (linkId < 0) { fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' }).then(function(){ window.loadCabinetMaterials(); loadCabinetCalculation(); }).catch(function(e){ alert('Ошибка: ' + e.message); }); return; }
+        fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' })
+            .then(function(){ window.loadCabinetMaterials(); loadCabinetCalculation(); console.log('✅ Материал удалён, таблица обновлена'); })
             .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
     window.editCabinetMaterialLink = function(linkId, materialId) {
         if (typeof MaterialModal !== 'undefined') {
-            MaterialModal.open(function() {
-                window.loadCabinetMaterials();
-                loadCabinetCalculation();
-            }, materialId);
-        } else {
-            alert('Модальное окно материалов не загружено');
-        }
+            MaterialModal.open(function() { window.loadCabinetMaterials(); loadCabinetCalculation(); }, materialId);
+        } else { alert('Модальное окно материалов не загружено'); }
     };
 
     window.delCabinetMaterialLink = function(linkId) {
         if (!confirm('Удалить материал из шкафа?')) return;
         fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' })
-            .then(function(){
-                window.loadCabinetMaterials();
-                loadCabinetCalculation();
-            })
+            .then(function(){ window.loadCabinetMaterials(); loadCabinetCalculation(); })
             .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
-    // ==================== КОПИРОВАНИЕ КОМПОНЕНТА В СИСТЕМУ ====================
     window.copyComponentToSystem = function(componentId) {
       fetch('/api/systems')
         .then(function(r){ return r.json(); })
         .then(function(systems){
           var sel = document.getElementById('copySystemSelect');
           sel.innerHTML = '<option value="">-- выберите --</option>';
-          systems.forEach(function(s){
-            sel.innerHTML += '<option value="' + s.id + '">' + esc(s.name) + '</option>';
-          });
+          systems.forEach(function(s){ sel.innerHTML += '<option value="' + s.id + '">' + esc(s.name) + '</option>'; });
           document.getElementById('copySystemForm').onsubmit = function(e){
             e.preventDefault();
             var targetId = sel.value;
             if (!targetId) { alert('Выберите целевую систему'); return; }
             fetch('/api/system-components/' + componentId + '/copy-to-system/' + targetId, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ cabinetId: cabinetId })
             })
               .then(function(r){
@@ -628,70 +577,52 @@
     };
 
     window.copySystemTo = function(sourceSystemId) {
-  fetch('/api/systems')
-    .then(function(r){ return r.json(); })
-    .then(function(systems){
-      var sel = document.getElementById('copySystemSelect');
-      sel.innerHTML = '<option value="">-- выберите --</option>';
-      systems.forEach(function(s){
-        if (s.id != sourceSystemId) {
-          sel.innerHTML += '<option value="' + s.id + '">' + esc(s.name) + '</option>';
-        }
-      });
-      document.getElementById('copySystemForm').onsubmit = function(e){
-        e.preventDefault();
-        var targetId = sel.value;
-        if (!targetId) { alert('Выберите целевую систему'); return; }
-        fetch('/api/systems/' + sourceSystemId + '/copy-to/' + targetId, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ cabinetId: cabinetId })
-        })
-        .then(function(r){
-          if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-          return r.json();
-        })
-        .then(function(data){
-          alert('✅ ' + data.message);
-          document.getElementById('copySystemModal').style.display = 'none';
-          loadSystems();
-          loadSystemComponents();
-          if (typeof window.loadBlocks === 'function') { window.loadBlocks(); }
-          if (typeof window.loadCabinetMaterials === 'function') { window.loadCabinetMaterials(); }
-          loadCabinetCalculation();
-          setTimeout(function() {
-            if (typeof window.loadCabinetMaterials === 'function') window.loadCabinetMaterials();
-            loadCabinetCalculation();
-          }, 500);
-        })
-        .catch(function(e){ alert('Ошибка: ' + e.message); });
-      };
-      document.getElementById('copySystemModal').style.display = 'flex';
-    });
-};
-function exportConfigToPDF() {
-  var element = document.getElementById('tab-config');
-  html2pdf().set({
-    margin: 10,
-    filename: 'config.pdf',
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-  }).from(element).save();
-}
+      fetch('/api/systems')
+        .then(function(r){ return r.json(); })
+        .then(function(systems){
+          var sel = document.getElementById('copySystemSelect');
+          sel.innerHTML = '<option value="">-- выберите --</option>';
+          systems.forEach(function(s){
+            if (s.id != sourceSystemId) sel.innerHTML += '<option value="' + s.id + '">' + esc(s.name) + '</option>';
+          });
+          document.getElementById('copySystemForm').onsubmit = function(e){
+            e.preventDefault();
+            var targetId = sel.value;
+            if (!targetId) { alert('Выберите целевую систему'); return; }
+            fetch('/api/systems/' + sourceSystemId + '/copy-to/' + targetId, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ cabinetId: cabinetId }) })
+              .then(function(r){
+                if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+                return r.json();
+              })
+              .then(function(data){
+                alert('✅ ' + data.message);
+                document.getElementById('copySystemModal').style.display = 'none';
+                loadSystems(); loadSystemComponents();
+                if (typeof window.loadBlocks === 'function') { window.loadBlocks(); }
+                if (typeof window.loadCabinetMaterials === 'function') { window.loadCabinetMaterials(); }
+                loadCabinetCalculation();
+                setTimeout(function() {
+                    if (typeof window.loadCabinetMaterials === 'function') window.loadCabinetMaterials();
+                    loadCabinetCalculation();
+                }, 500);
+              })
+              .catch(function(e){ alert('Ошибка: ' + e.message); });
+          };
+          document.getElementById('copySystemModal').style.display = 'flex';
+        });
+    };
 
-function exportCalcToPDF() {
-  var element = document.getElementById('tab-calculation');
-  html2pdf().set({
-    margin: 10,
-    filename: 'calculation.pdf',
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-  }).from(element).save();
-}
+    window.exportConfigToPDF = function() {
+      var element = document.getElementById('tab-config');
+      html2pdf().set({ margin: 10, filename: 'config.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }).from(element).save();
+    };
 
-window.pageInit = function() {};
+    window.exportCalcToPDF = function() {
+      var element = document.getElementById('tab-calculation');
+      html2pdf().set({ margin: 10, filename: 'calculation.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }).from(element).save();
+    };
+
+    window.pageInit = function() {};
 
 })();
 
@@ -708,99 +639,4 @@ window.openBlockModalWithId = function(blockId, templateId) {
     }
 };
 window.loadCabinetCalculation = function() {    var container = document.getElementById('cabinetCalculation');    container.innerHTML = 'Загрузка...';    fetch('/api/materials/cabinet/' + cabinetId + '/html')        .then(function(r) { return r.text(); })        .then(function(html) {            container.innerHTML = html;        })        .catch(function(e) {            container.innerHTML = '<p style="color:red;">Ошибка загрузки калькуляции</p>';            console.error(e);        });};
-
-function exportConfigToPDF() {
-  window.print();
-}
-
-window.exportConfigToPDF = function() {
-  var element = document.getElementById('tab-config');
-  html2pdf().set({
-    margin: 10,
-    filename: 'config.pdf',
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-  }).from(element).save();
-};
-window.exportCalcToPDF = function() {
-  var element = document.getElementById('tab-calculation');
-  html2pdf().set({
-    margin: 10,
-    filename: 'calculation.pdf',
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2 },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
-  }).from(element).save();
-};
-
-// === Универсальная сортировка таблиц ===
-(function() {
-  document.getElementById('cabinetContent').addEventListener('click', function(e) {
-    var th = e.target.closest('th');
-    if (!th) return;
-    var table = th.closest('table.data-table');
-    if (!table) return;
-    var tbody = table.querySelector('tbody');
-    if (!tbody) return;
-    var rows = Array.from(tbody.querySelectorAll('tr'));
-    if (rows.length === 0) return;
-    var colIndex = Array.from(th.parentNode.children).indexOf(th);
-    var ascending = !th.classList.contains('sorted-asc');
-    // Убираем классы сортировки со всех заголовков этой таблицы
-    table.querySelectorAll('th').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
-    th.classList.add(ascending ? 'sorted-asc' : 'sorted-desc');
-
-    rows.sort(function(a, b) {
-      var aVal = (a.children[colIndex]?.textContent || '').trim();
-      var bVal = (b.children[colIndex]?.textContent || '').trim();
-      var aNum = parseFloat(aVal.replace(/,/g, '.'));
-      var bNum = parseFloat(bVal.replace(/,/g, '.'));
-      if (!isNaN(aNum) && !isNaN(bNum)) {
-        return ascending ? aNum - bNum : bNum - aNum;
-      }
-      return ascending ? aVal.localeCompare(bVal, 'ru') : bVal.localeCompare(aVal, 'ru');
-    });
-    rows.forEach(function(row) { tbody.appendChild(row); });
-  });
-
-  // Стили для указателей сортировки
-  var style = document.createElement('style');
-  style.textContent = '.sorted-asc::after { content: " ▲"; font-size: 0.8em; } .sorted-desc::after { content: " ▼"; font-size: 0.8em; }';
-  document.head.appendChild(style);
-})();
-
-</script>
-
-<script>
-(function() {
-  document.getElementById('cabinetContent').addEventListener('click', function(e) {
-    var th = e.target.closest('th');
-    if (!th) return;
-    var table = th.closest('table.data-table');
-    if (!table) return;
-    var tbody = table.querySelector('tbody');
-    if (!tbody) return;
-    var rows = Array.from(tbody.querySelectorAll('tr'));
-    if (rows.length === 0) return;
-    var colIndex = Array.from(th.parentNode.children).indexOf(th);
-    var ascending = !th.classList.contains('sorted-asc');
-    table.querySelectorAll('th').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
-    th.classList.add(ascending ? 'sorted-asc' : 'sorted-desc');
-    rows.sort(function(a, b) {
-      var aVal = (a.children[colIndex]?.textContent || '').trim();
-      var bVal = (b.children[colIndex]?.textContent || '').trim();
-      var aNum = parseFloat(aVal.replace(/,/g, '.'));
-      var bNum = parseFloat(bVal.replace(/,/g, '.'));
-      if (!isNaN(aNum) && !isNaN(bNum)) {
-        return ascending ? aNum - bNum : bNum - aNum;
-      }
-      return ascending ? aVal.localeCompare(bVal, 'ru') : bVal.localeCompare(aVal, 'ru');
-    });
-    rows.forEach(function(row) { tbody.appendChild(row); });
-  });
-  var style = document.createElement('style');
-  style.textContent = '.sorted-asc::after { content: " ▲"; font-size: 0.8em; } .sorted-desc::after { content: " ▼"; font-size: 0.8em; }';
-  document.head.appendChild(style);
-})();
 </script>
