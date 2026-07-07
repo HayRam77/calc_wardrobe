@@ -27,6 +27,7 @@
  function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
  function loadComponents(){
   var tbody=document.getElementById('componentsBody');
+   window.loadComponents = loadComponents; // экспорт
   if(!tbody) return;
   fetch('/api/system-components')
   .then(function(res){ if(!res.ok) throw new Error('Ошибка'); return res.json(); })
@@ -107,9 +108,11 @@ window.duplicateSystemComponent = function(id) {
     })
     .then(function(data){
       alert('✅ ' + data.message);
-      if (typeof loadComponents === 'function') loadComponents();
+      if (typeof window.loadComponents === 'function') window.loadComponents();
     })
     .catch(function(e){ alert('Ошибка: ' + e.message); });
 };
 
+
+window.loadComponents = loadComponents;
 </script>
