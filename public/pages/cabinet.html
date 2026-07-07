@@ -114,7 +114,7 @@
             html += '<div class="module-box"><h3>Материалы шкафа</h3><div id="cabinetMaterials">Загрузка...</div><button id="addMaterialToCabinetBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить материал</button></div>';
             html += '</div>';
 
-            html += '<div class="tab-content" id="tab-calculation">'
+            html += '<div class="tab-content" id="tab-calculation"><div style="margin-bottom:10px;text-align:right;"><button class="btn btn-primary" onclick="exportCalcToPDF()">📄 Экспорт PDF</button></div>';
             html += '<div id="cabinetCalculation">Загрузка...</div>'
             html += '</div>';
             html += '</div>';
@@ -669,6 +669,28 @@
       document.getElementById('copySystemModal').style.display = 'flex';
     });
 };
+function exportConfigToPDF() {
+  var element = document.getElementById('tab-config');
+  html2pdf().set({
+    margin: 10,
+    filename: 'config.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  }).from(element).save();
+}
+
+function exportCalcToPDF() {
+  var element = document.getElementById('tab-calculation');
+  html2pdf().set({
+    margin: 10,
+    filename: 'calculation.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  }).from(element).save();
+}
+
 window.pageInit = function() {};
 
 })();
