@@ -115,4 +115,96 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
     } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+
+// Привязать существующий компонент к другой системе (без дублирования)
+router.post('/:id/copy-to-system/:systemId', auth, isAdmin, async (req, res) => {
+  try {
+    const componentId = req.params.id;
+    const systemId = req.params.systemId;
+
+    // Проверка существования компонента и системы
+    const comp = await pool.query('SELECT id FROM system_components WHERE id = $1', [componentId]);
+    if (comp.rows.length === 0) {
+      return res.status(404).json({ message: 'Компонент не найден' });
+    }
+    const sys = await pool.query('SELECT id FROM systems WHERE id = $1', [systemId]);
+    if (sys.rows.length === 0) {
+      return res.status(404).json({ message: 'Система не найдена' });
+    }
+
+    // Добавляем связь компонента с системой
+    await pool.query(
+      'INSERT INTO system_components_link (system_id, component_id, quantity) VALUES ($1, $2, 1) ON CONFLICT (system_id, component_id) DO UPDATE SET quantity = EXCLUDED.quantity',
+      [systemId, componentId]
+    );
+    res.json({ message: 'Компонент привязан к системе' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка привязки' });
+  }
+});
+
+// Дублировать компонент системы со всеми связями (параметры, блоки, материалы)
+router.post('/:id/duplicate', auth, isAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const sourceId = req.params.id;
+    const comp = await client.query('SELECT * FROM system_components WHERE id = $1', [sourceId]);
+    if (comp.rows.length === 0) {
+      return res.status(404).json({ message: 'Компонент не найден' });
+    }
+    const c = comp.rows[0];
+
+    // Создаём новый компонент (без article, чтобы избежать конфликта)
+    const newComp = await client.query(
+      `INSERT INTO system_components (name, type_id, module_id, manufacturer_id, description)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [c.name, c.type_id, c.module_id, c.manufacturer_id, c.description]
+    );
+    const newId = newComp.rows[0].id;
+
+    // Копируем LN и TM
+    await client.query(
+      `INSERT INTO ln_values (entity_type, entity_id, value)
+       SELECT 'system_component', $1, value FROM ln_values WHERE entity_type = 'system_component' AND entity_id = $2`,
+      [newId, sourceId]
+    );
+    await client.query(
+      `INSERT INTO tm_values (entity_type, entity_id, value)
+       SELECT 'system_component', $1, value FROM tm_values WHERE entity_type = 'system_component' AND entity_id = $2`,
+      [newId, sourceId]
+    );
+
+    // Копируем параметры
+    await client.query(
+      `INSERT INTO system_component_params (component_id, parameter_id, value, type)
+       SELECT $1, parameter_id, value, type FROM system_component_params WHERE component_id = $2`,
+      [newId, sourceId]
+    );
+
+    // Копируем блоки шкафа
+    await client.query(
+      `INSERT INTO system_block_links (system_component_id, block_template_id, quantity)
+       SELECT $1, block_template_id, quantity FROM system_block_links WHERE system_component_id = $2`,
+      [newId, sourceId]
+    );
+
+    // Копируем материалы
+    await client.query(
+      `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
+       SELECT $1, material_id, quantity FROM system_component_materials WHERE system_component_id = $2`,
+      [newId, sourceId]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json({ id: newId, message: 'Компонент дублирован' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка дублирования' });
+  } finally {
+    client.release();
+  }
+});
 module.exports = router;
