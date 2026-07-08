@@ -67,6 +67,7 @@
      '<form id="typeForm">' +
        '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="typeName" required></div>' +
        '<div class="form-group"><label>Описание:</label><textarea id="typeDescription" rows="3"></textarea></div>' +
+       '<div class="form-group"><label>Материалы типа</label><div id="typeMaterialsList" style="margin-bottom:5px;"></div><button type="button" class="btn btn-sm btn-primary" id="addTypeMaterialBtn">+ Добавить материал</button></div>' +
        '<div class="form-actions">' +
          '<button type="submit" class="btn btn-primary">Сохранить</button>' +
          '<button type="button" class="btn btn-secondary cancel-type-btn">Отмена</button>' +
@@ -85,8 +86,58 @@
      fetch('/api/system-component-types/'+id).then(function(r){ return r.json(); }).then(function(t){
        form.typeName.value = t.name;
        form.typeDescription.value = t.description || '';
+       loadTypeMaterials();
      }).catch(function(e){ alert('Ошибка загрузки данных'); closeModal(); });
+   } else {
+     // Очищаем список материалов
+     var ml = m.querySelector('#typeMaterialsList');
+     if (ml) ml.innerHTML = '';
    }
+
+   function loadTypeMaterials() {
+     var ml = m.querySelector('#typeMaterialsList');
+     if (!ml) return;
+     ml.innerHTML = 'Загрузка...';
+     fetch('/api/system-component-types/'+id+'/materials')
+       .then(function(r){ return r.json(); })
+       .then(function(materials){
+         if (!materials.length) {
+           ml.innerHTML = '<p>Нет материалов</p>';
+           return;
+         }
+         var html = '<table class="data-table"><tr><th>Название</th><th>Кол-во</th><th></th></tr>';
+         materials.forEach(function(mat){
+           html += '<tr><td>'+esc(mat.name)+'</td><td>'+mat.quantity+'</td><td><button class="btn btn-sm btn-delete" onclick="deleteTypeMaterial('+mat.material_id+')">🗑️</button></td></tr>';
+         });
+         html += '</table>';
+         ml.innerHTML = html;
+       });
+   }
+
+   var addBtn = m.querySelector('#addTypeMaterialBtn');
+   if (addBtn) addBtn.addEventListener('click', function(){
+     // Открываем MaterialModal для выбора материала
+     if (typeof MaterialModal !== 'undefined') {
+       MaterialModal.open(function(materialId){
+         if (materialId) {
+           var qty = prompt('Количество:', '1');
+           if (qty && !isNaN(qty) && parseInt(qty) > 0) {
+             fetch('/api/system-component-types/'+id+'/materials', {
+               method: 'POST',
+               headers: {'Content-Type': 'application/json'},
+               body: JSON.stringify({ material_id: materialId, quantity: parseInt(qty) })
+             }).then(function(){ loadTypeMaterials(); });
+           }
+         }
+       });
+     }
+   });
+
+   window.deleteTypeMaterial = function(materialId) {
+     if (!confirm('Удалить материал из типа?')) return;
+     fetch('/api/system-component-types/'+id+'/materials/'+materialId, { method: 'DELETE' })
+       .then(function(){ loadTypeMaterials(); });
+   };
 
    form.addEventListener('submit', function(e){
      e.preventDefault();
