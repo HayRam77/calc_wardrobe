@@ -122,10 +122,6 @@ router.get('/system-component/:id', auth, async (req, res) => {
             JOIN materials m ON sctm.material_id = m.id
             LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
             WHERE sc.id = $1
-            AND NOT EXISTS (
-                SELECT 1 FROM system_component_materials scm2
-                WHERE scm2.system_component_id = sc.id AND scm2.material_id = sctm.material_id
-            )
             ORDER BY m.name
         `, [req.params.id]);
 
@@ -146,8 +142,6 @@ router.post('/system-component/:id', auth, isAdmin, async (req, res) => {
         const result = await client.query(
             `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
              VALUES ($1, $2, $3)
-             ON CONFLICT (system_component_id, material_id)
-             DO UPDATE SET quantity = EXCLUDED.quantity
              RETURNING *`,
             [req.params.id, material_id, quantity || 1]
         );

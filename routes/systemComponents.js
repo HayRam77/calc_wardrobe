@@ -270,10 +270,6 @@ router.get('/:id/blocks', auth, async (req, res) => {
              LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
              LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
              WHERE sc.id = $1
-             AND NOT EXISTS (
-               SELECT 1 FROM system_block_links sbl2
-               WHERE sbl2.system_component_id = sc.id AND sbl2.block_template_id = sctb.block_template_id
-             )
              ORDER BY bt.name`,
             [req.params.id]
         );
@@ -289,7 +285,6 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
         const result = await pool.query(
             `INSERT INTO system_block_links (system_component_id, block_template_id, quantity)
              VALUES ($1,$2,$3)
-             ON CONFLICT (system_component_id, block_template_id) DO UPDATE SET quantity=EXCLUDED.quantity
              RETURNING *`,
             [req.params.id, block_template_id, quantity||1]
         );
