@@ -61,13 +61,14 @@
    var m = document.createElement('div');
    m.className = 'modal';
    m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:5000;';
-   m.innerHTML = '<div class="modal-content" style="max-width:500px;max-height:90vh;overflow-y:auto;">' +
+   m.innerHTML = '<div class="modal-content" style="max-width:600px;max-height:90vh;overflow-y:auto;">' +
      '<span class="modal-close">&times;</span>' +
      '<h3>'+(isEdit?'Редактировать тип':'Добавить тип')+'</h3>' +
      '<form id="typeForm">' +
        '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="typeName" required></div>' +
        '<div class="form-group"><label>Описание:</label><textarea id="typeDescription" rows="3"></textarea></div>' +
        '<div class="form-group"><label>Материалы типа</label><div id="typeMaterialsList" style="margin-bottom:5px;"></div><button type="button" class="btn btn-sm btn-primary" id="addTypeMaterialBtn">+ Добавить материал</button></div>' +
+       '<div class="form-group"><label>Компоненты шкафа типа</label><div id="typeBlocksList" style="margin-bottom:5px;"></div><button type="button" class="btn btn-sm btn-primary" id="addTypeBlockBtn">+ Добавить компонент шкафа</button></div>' +
        '<div class="form-actions">' +
          '<button type="submit" class="btn btn-primary">Сохранить</button>' +
          '<button type="button" class="btn btn-secondary cancel-type-btn">Отмена</button>' +
@@ -87,11 +88,13 @@
        form.typeName.value = t.name;
        form.typeDescription.value = t.description || '';
        loadTypeMaterials();
+       loadTypeBlocks();
      }).catch(function(e){ alert('Ошибка загрузки данных'); closeModal(); });
    } else {
-     // Очищаем список материалов
      var ml = m.querySelector('#typeMaterialsList');
      if (ml) ml.innerHTML = '';
+     var bl = m.querySelector('#typeBlocksList');
+     if (bl) bl.innerHTML = '';
    }
 
    function loadTypeMaterials() {
@@ -114,9 +117,40 @@
        });
    }
 
-   var addBtn = m.querySelector('#addTypeMaterialBtn');
-   if (addBtn) addBtn.addEventListener('click', function(){
-     // Открываем MaterialModal для выбора материала
+   function loadTypeBlocks() {
+     var bl = m.querySelector('#typeBlocksList');
+     if (!bl) return;
+     bl.innerHTML = 'Загрузка...';
+     fetch('/api/system-component-types/'+id+'/blocks')
+       .then(function(r){ return r.json(); })
+       .then(function(blocks){
+         if (!blocks.length) {
+           bl.innerHTML = '<p>Нет компонентов шкафа</p>';
+           return;
+         }
+         var html = '<table class="data-table"><tr><th>Название</th><th>Артикул</th><th>Кол-во</th><th></th></tr>';
+         blocks.forEach(function(b){
+           html += '<tr><td>'+esc(b.name)+'</td><td>'+esc(b.article || '')+'</td><td>'+b.quantity+'</td><td><button class="btn btn-sm btn-delete" onclick="deleteTypeBlock('+b.block_template_id+')">🗑️</button></td></tr>';
+         });
+         html += '</table>';
+         bl.innerHTML = html;
+       });
+   }
+
+   window.deleteTypeMaterial = function(materialId) {
+     if (!confirm('Удалить материал из типа?')) return;
+     fetch('/api/system-component-types/'+id+'/materials/'+materialId, { method: 'DELETE' })
+       .then(function(){ loadTypeMaterials(); });
+   };
+
+   window.deleteTypeBlock = function(blockTemplateId) {
+     if (!confirm('Удалить компонент шкафа из типа?')) return;
+     fetch('/api/system-component-types/'+id+'/blocks/'+blockTemplateId, { method: 'DELETE' })
+       .then(function(){ loadTypeBlocks(); });
+   };
+
+   var addMaterialBtn = m.querySelector('#addTypeMaterialBtn');
+   if (addMaterialBtn) addMaterialBtn.addEventListener('click', function(){
      if (typeof MaterialModal !== 'undefined') {
        MaterialModal.open(function(materialId){
          if (materialId) {
@@ -130,14 +164,30 @@
            }
          }
        });
+     } else {
+       alert('Модальное окно материалов не загружено');
      }
    });
 
-   window.deleteTypeMaterial = function(materialId) {
-     if (!confirm('Удалить материал из типа?')) return;
-     fetch('/api/system-component-types/'+id+'/materials/'+materialId, { method: 'DELETE' })
-       .then(function(){ loadTypeMaterials(); });
-   };
+   var addBlockBtn = m.querySelector('#addTypeBlockBtn');
+   if (addBlockBtn) addBlockBtn.addEventListener('click', function(){
+     if (typeof BlockTemplateModal !== 'undefined') {
+       BlockTemplateModal.open(function(blockId){
+         if (blockId) {
+           var qty = prompt('Количество:', '1');
+           if (qty && !isNaN(qty) && parseInt(qty) > 0) {
+             fetch('/api/system-component-types/'+id+'/blocks', {
+               method: 'POST',
+               headers: {'Content-Type': 'application/json'},
+               body: JSON.stringify({ block_template_id: blockId, quantity: parseInt(qty) })
+             }).then(function(){ loadTypeBlocks(); });
+           }
+         }
+       });
+     } else {
+       alert('Модальное окно компонентов шкафа не загружено');
+     }
+   });
 
    form.addEventListener('submit', function(e){
      e.preventDefault();

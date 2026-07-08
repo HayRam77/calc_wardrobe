@@ -123,6 +123,27 @@ router.post('/', auth, isAdmin, async (req, res) => {
                 );
             }
         }
+
+        // Авто-подтягивание материалов и блоков из типа
+        if (type_id) {
+            try {
+                await client.query(
+                    `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
+                     SELECT $1, material_id, quantity FROM system_component_type_materials WHERE type_id = $2
+                     ON CONFLICT (system_component_id, material_id) DO NOTHING`,
+                    [newComp.id, type_id]
+                );
+                await client.query(
+                    `INSERT INTO system_block_links (system_component_id, block_template_id, quantity)
+                     SELECT $1, block_template_id, quantity FROM system_component_type_blocks WHERE type_id = $2
+                     ON CONFLICT (system_component_id, block_template_id) DO NOTHING`,
+                    [newComp.id, type_id]
+                );
+            } catch (inheritErr) {
+                console.error('Auto-inherit error on create:', inheritErr);
+            }
+        }
+
         await client.query('COMMIT');
         res.status(201).json(newComp);
     } catch (err) {
@@ -172,6 +193,27 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
                 );
             }
         }
+
+        // Авто-подтягивание материалов и блоков из типа (только новые, не дублируем существующие)
+        if (type_id) {
+            try {
+                await client.query(
+                    `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
+                     SELECT $1, material_id, quantity FROM system_component_type_materials WHERE type_id = $2
+                     ON CONFLICT (system_component_id, material_id) DO NOTHING`,
+                    [req.params.id, type_id]
+                );
+                await client.query(
+                    `INSERT INTO system_block_links (system_component_id, block_template_id, quantity)
+                     SELECT $1, block_template_id, quantity FROM system_component_type_blocks WHERE type_id = $2
+                     ON CONFLICT (system_component_id, block_template_id) DO NOTHING`,
+                    [req.params.id, type_id]
+                );
+            } catch (inheritErr) {
+                console.error('Auto-inherit error on update:', inheritErr);
+            }
+        }
+
         await client.query('COMMIT');
         res.json(result.rows[0]);
     } catch (err) {
@@ -195,11 +237,13 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 
 router.get('/:id/blocks', auth, async (req, res) => {
     try {
-        const result = await pool.query(
+        // Прямые связи
+        const direct = await pool.query(
             `SELECT sbl.*, bt.name, bt.article,
                     COALESCE(ln.value, '') AS ln,
                     COALESCE(tm.value, '') AS tm,
-                    ct.name as type_name, m.name as manufacturer_name
+                    ct.name as type_name, m.name as manufacturer_name,
+                    false as inherited
              FROM system_block_links sbl
              JOIN block_templates bt ON sbl.block_template_id = bt.id
              LEFT JOIN component_types ct ON bt.type_id = ct.id
@@ -210,7 +254,32 @@ router.get('/:id/blocks', auth, async (req, res) => {
              ORDER BY bt.name`,
             [req.params.id]
         );
-        res.json(result.rows);
+
+        // Унаследованные от типа (исключая прямые)
+        const inherited = await pool.query(
+            `SELECT sctb.block_template_id as id, sctb.quantity, bt.name, bt.article,
+                    COALESCE(ln.value, '') AS ln,
+                    COALESCE(tm.value, '') AS tm,
+                    ct.name as type_name, m.name as manufacturer_name,
+                    true as inherited
+             FROM system_components sc
+             JOIN system_component_type_blocks sctb ON sc.type_id = sctb.type_id
+             JOIN block_templates bt ON sctb.block_template_id = bt.id
+             LEFT JOIN component_types ct ON bt.type_id = ct.id
+             LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
+             LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
+             LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
+             WHERE sc.id = $1
+             AND NOT EXISTS (
+               SELECT 1 FROM system_block_links sbl2
+               WHERE sbl2.system_component_id = sc.id AND sbl2.block_template_id = sctb.block_template_id
+             )
+             ORDER BY bt.name`,
+            [req.params.id]
+        );
+
+        const all = [...direct.rows, ...inherited.rows];
+        res.json(all);
     } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 

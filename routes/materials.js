@@ -106,15 +106,31 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 
 router.get('/system-component/:id', auth, async (req, res) => {
     try {
-        const result = await pool.query(`
-            SELECT scm.*, m.*, man.name as manufacturer_name
+        const direct = await pool.query(`
+            SELECT scm.*, m.*, man.name as manufacturer_name, false as inherited
             FROM system_component_materials scm
             JOIN materials m ON scm.material_id = m.id
             LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
             WHERE scm.system_component_id = $1
             ORDER BY m.name
         `, [req.params.id]);
-        res.json(result.rows);
+
+        const inherited = await pool.query(`
+            SELECT sctm.material_id, sctm.quantity, m.*, man.name as manufacturer_name, true as inherited
+            FROM system_components sc
+            JOIN system_component_type_materials sctm ON sc.type_id = sctm.type_id
+            JOIN materials m ON sctm.material_id = m.id
+            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
+            WHERE sc.id = $1
+            AND NOT EXISTS (
+                SELECT 1 FROM system_component_materials scm2
+                WHERE scm2.system_component_id = sc.id AND scm2.material_id = sctm.material_id
+            )
+            ORDER BY m.name
+        `, [req.params.id]);
+
+        const all = [...direct.rows, ...inherited.rows];
+        res.json(all);
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Ошибка получения материалов компонента системы' });
@@ -524,6 +540,7 @@ router.get('/export', auth, async (req, res) => {
         const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename=materials.xlsx');
         res.setHeader('Content-Length', buffer.length);
 

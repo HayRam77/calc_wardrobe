@@ -35,4 +35,130 @@ router.post('/', auth, isAdmin, async (req, res) => { try { const r = await pool
 router.put('/:id', auth, isAdmin, async (req, res) => { try { const r = await pool.query('UPDATE system_component_types SET name=$1, description=$2 WHERE id=$3 RETURNING *', [req.body.name, req.body.description || null, req.params.id]); res.json(r.rows[0]); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
 router.delete('/:id', auth, isAdmin, async (req, res) => { try { await pool.query('DELETE FROM system_component_types WHERE id = $1', [req.params.id]); res.json({ message: 'Удалён' }); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
 
+
+// ========== МАТЕРИАЛЫ ТИПА ==========
+router.get('/:id/materials', auth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT scm.*, m.name, m.article, m.unit, m.price,
+                    COALESCE(ln.value, '') AS ln, COALESCE(tm.value, '') AS tm
+             FROM system_component_type_materials scm
+             JOIN materials m ON scm.material_id = m.id
+             LEFT JOIN ln_values ln ON ln.entity_type = 'material' AND ln.entity_id = m.id
+             LEFT JOIN tm_values tm ON tm.entity_type = 'material' AND tm.entity_id = m.id
+             WHERE scm.type_id = $1 ORDER BY m.name`,
+            [req.params.id]
+        );
+        res.json(result.rows);
+    } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+router.post('/:id/materials', auth, isAdmin, async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const { material_id, quantity } = req.body;
+        const typeId = req.params.id;
+        const qty = quantity || 1;
+
+        // Добавляем в тип
+        const result = await client.query(
+            `INSERT INTO system_component_type_materials (type_id, material_id, quantity)
+             VALUES ($1, $2, $3) ON CONFLICT (type_id, material_id) DO UPDATE SET quantity = EXCLUDED.quantity RETURNING *`,
+            [typeId, material_id, qty]
+        );
+
+        // Авто-подтягивание всем компонентам этого типа
+        await client.query(
+            `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
+             SELECT sc.id, $2, $3
+             FROM system_components sc
+             WHERE sc.type_id = $1
+             ON CONFLICT (system_component_id, material_id) DO NOTHING`,
+            [typeId, material_id, qty]
+        );
+
+        await client.query('COMMIT');
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ message: 'Ошибка' });
+    } finally {
+        client.release();
+    }
+});
+
+router.delete('/:typeId/materials/:materialId', auth, isAdmin, async (req, res) => {
+    try {
+        await pool.query('DELETE FROM system_component_type_materials WHERE type_id=$1 AND material_id=$2',
+            [req.params.typeId, req.params.materialId]);
+        res.json({ message: 'Материал удалён из типа' });
+    } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+
+// ========== КОМПОНЕНТЫ ШКАФА ТИПА ==========
+router.get('/:id/blocks', auth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT sbl.*, bt.name, bt.article,
+                    COALESCE(ln.value, '') AS ln, COALESCE(tm.value, '') AS tm
+             FROM system_component_type_blocks sbl
+             JOIN block_templates bt ON sbl.block_template_id = bt.id
+             LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
+             LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
+             WHERE sbl.type_id = $1 ORDER BY bt.name`,
+            [req.params.id]
+        );
+        res.json(result.rows);
+    } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const { block_template_id, quantity } = req.body;
+        const typeId = req.params.id;
+        const qty = quantity || 1;
+
+        // Добавляем в тип
+        const result = await client.query(
+            `INSERT INTO system_component_type_blocks (type_id, block_template_id, quantity)
+             VALUES ($1, $2, $3) ON CONFLICT (type_id, block_template_id) DO UPDATE SET quantity = EXCLUDED.quantity RETURNING *`,
+            [typeId, block_template_id, qty]
+        );
+
+        // Авто-подтягивание всем компонентам этого типа
+        await client.query(
+            `INSERT INTO system_block_links (system_component_id, block_template_id, quantity)
+             SELECT sc.id, $2, $3
+             FROM system_components sc
+             WHERE sc.type_id = $1
+             ON CONFLICT (system_component_id, block_template_id) DO NOTHING`,
+            [typeId, block_template_id, qty]
+        );
+
+        await client.query('COMMIT');
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ message: 'Ошибка' });
+    } finally {
+        client.release();
+    }
+});
+
+router.delete('/:typeId/blocks/:blockId', auth, isAdmin, async (req, res) => {
+    try {
+        await pool.query('DELETE FROM system_component_type_blocks WHERE type_id=$1 AND block_template_id=$2',
+            [req.params.typeId, req.params.blockId]);
+        res.json({ message: 'Компонент шкафа удалён из типа' });
+    } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+
 module.exports = router;
+

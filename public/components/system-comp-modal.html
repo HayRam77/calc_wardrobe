@@ -321,17 +321,18 @@ window.SystemCompModal = {
                     } else {
                         var h2 = '<table class="data-table"><thead><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Производитель</th><th>LN</th><th>TM</th><th>Кол-во</th><th></th></tr></thead><tbody>';
                         data.forEach(function(l){
-                            h2 += '<tr>' +
+                            var isInherited = l.inherited === true;
+                            h2 += '<tr style="'+(isInherited ? 'opacity:0.7;background:#f9f9f9;' : '')+'">' +
                                 '<td>'+self._esc(l.type_name||'')+'</td>' +
-                                '<td>'+self._esc(l.name)+'</td>' +
+                                '<td>'+self._esc(l.name)+(isInherited ? ' <span style="font-size:10px;color:#888;">(тип)</span>' : '')+'</td>' +
                                 '<td>'+self._esc(l.article||'')+'</td>' +
                                 '<td>'+self._esc(l.manufacturer_name||'')+'</td>' +
                                 '<td><input type="text" value="'+self._esc(l.ln||'')+'" data-block-id="'+l.block_template_id+'" data-field="ln" style="width:60px;" onchange="updateBlockField(this)"></td>' +
                                 '<td><input type="text" value="'+self._esc(l.tm||'')+'" data-block-id="'+l.block_template_id+'" data-field="tm" style="width:60px;" onchange="updateBlockField(this)"></td>' +
-                                '<td><input type="number" value="'+l.quantity+'" data-link-id="'+l.id+'" style="width:60px;" onchange="updateBlockQuantity(this)"></td>' +
+                                '<td>'+(isInherited ? l.quantity : '<input type="number" value="'+l.quantity+'" data-link-id="'+l.id+'" style="width:60px;" onchange="updateBlockQuantity(this)">')+'</td>' +
                                 '<td>' +
                                     '<button class="btn btn-sm btn-edit" onclick="window.BlockTemplateModal.open(function(){ location.reload(); }, '+l.block_template_id+')">✏️</button> ' +
-                                    '<button class="btn btn-sm btn-delete" onclick="this.closest(\'tr\').remove();fetch(\'/api/system-components/'+comp.id+'/blocks/'+l.id+'\',{method:\'DELETE\'})">×</button>' +
+                                    (isInherited ? '<span style="font-size:10px;color:#888;">тип</span>' : '<button class="btn btn-sm btn-delete" onclick="this.closest(\'tr\').remove();fetch(\'/api/system-components/'+comp.id+'/blocks/'+l.id+'\',{method:\'DELETE\'})">×</button>') +
                                 '</td>' +
                             '</tr>';
                         });
@@ -379,16 +380,17 @@ window.SystemCompModal = {
                     } else {
                         var h3 = '<table class="data-table"><thead><tr><th>Артикул</th><th>Название</th><th>Ед.изм.</th><th>LN</th><th>TM</th><th>Кол-во</th><th></th></tr></thead><tbody>';
                         data.forEach(function(item){
-                            h3 += '<tr>' +
+                            var isInherited = item.inherited === true;
+                            h3 += '<tr style="'+(isInherited ? 'opacity:0.7;background:#f9f9f9;' : '')+'">' +
                                 '<td>'+self._esc(item.article||'')+'</td>' +
-                                '<td>'+self._esc(item.name)+'</td>' +
+                                '<td>'+self._esc(item.name)+(isInherited ? ' <span style="font-size:10px;color:#888;">(тип)</span>' : '')+'</td>' +
                                 '<td>'+self._esc(item.unit||'')+'</td>' +
                                 '<td><input type="text" value="'+self._esc(item.ln||'')+'" data-material-id="'+item.material_id+'" data-field="ln" style="width:60px;" onchange="updateMaterialField(this)"></td>' +
                                 '<td><input type="text" value="'+self._esc(item.tm||'')+'" data-material-id="'+item.material_id+'" data-field="tm" style="width:60px;" onchange="updateMaterialField(this)"></td>' +
-                                '<td><input type="number" value="'+item.quantity+'" data-link-id="'+item.material_id+'" style="width:60px;" onchange="updateMaterialQuantity('+comp.id+', this)"></td>' +
+                                '<td>'+(isInherited ? item.quantity : '<input type="number" value="'+item.quantity+'" data-link-id="'+item.material_id+'" style="width:60px;" onchange="updateMaterialQuantity('+comp.id+', this)">')+'</td>' +
                                 '<td>' +
                                     '<button class="btn btn-sm btn-edit" onclick="window.MaterialModal.open(function(){ location.reload(); }, '+item.material_id+')">✏️</button> ' +
-                                    '<button class="btn btn-sm btn-delete" onclick="this.closest(\'tr\').remove();fetch(\'/api/materials/system-component/'+comp.id+'/'+item.material_id+'\',{method:\'DELETE\'})">×</button>' +
+                                    (isInherited ? '<span style="font-size:10px;color:#888;">тип</span>' : '<button class="btn btn-sm btn-delete" onclick="this.closest(\'tr\').remove();fetch(\'/api/materials/system-component/'+comp.id+'/'+item.material_id+'\',{method:\'DELETE\'})">×</button>') +
                                 '</td>' +
                             '</tr>';
                         });
