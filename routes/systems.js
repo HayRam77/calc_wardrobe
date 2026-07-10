@@ -148,13 +148,18 @@ router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
       return res.status(404).json({ message: 'Целевая система не найдена' });
     }
 
-    // Копируем связи компонентов (без дублирования самих компонентов)
+    // Удаляем все существующие компоненты в целевой системе
+    await client.query(
+      'DELETE FROM system_components_link WHERE system_id = $1',
+      [targetId]
+    );
+
+    // Копируем связи компонентов из исходной системы
     const result = await client.query(
-      `INSERT INTO system_components_link (system_id, component_id, quantity)
-       SELECT $2, component_id, quantity
+      `INSERT INTO system_components_link (system_id, component_id, quantity, position)
+       SELECT $2, component_id, quantity, position
        FROM system_components_link
-       WHERE system_id = $1
-       ON CONFLICT (system_id, component_id) DO UPDATE SET quantity = EXCLUDED.quantity`,
+       WHERE system_id = $1`,
       [sourceId, targetId]
     );
 
@@ -184,7 +189,20 @@ router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
   }
 });
 
+// ========== ОЧИСТКА ВСЕХ КОМПОНЕНТОВ СИСТЕМЫ ==========
+router.delete('/:id/components', auth, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM system_components_link WHERE system_id = $1', [id]);
+    res.json({ message: 'Система очищена, удалено связей: ' + result.rowCount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка очистки системы' });
+  }
+});
+
 module.exports = router;
+
 
 // Добавить компонент в систему
 router.post('/:id/components', auth, isAdmin, async (req, res) => {
