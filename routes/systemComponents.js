@@ -348,4 +348,74 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
     } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+router.post('/:id/duplicate', auth, isAdmin, async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const { id } = req.params;
+
+        // Копируем компонент
+        const comp = await client.query('SELECT * FROM system_components WHERE id = $1', [id]);
+        if (comp.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Компонент не найден' });
+        }
+        const src = comp.rows[0];
+
+        const newComp = await client.query(
+            `INSERT INTO system_components (name, type_id, module_id, manufacturer_id, article, description)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+            [src.name + ' (копия)', src.type_id, src.module_id, src.manufacturer_id, src.article, src.description]
+        );
+        const newId = newComp.rows[0].id;
+
+        // Копируем параметры
+        await client.query(
+            `INSERT INTO system_component_params (component_id, parameter_id, value, type)
+             SELECT $1, parameter_id, value, type FROM system_component_params WHERE component_id = $2`,
+            [newId, id]
+        );
+
+        // Копируем LN/TM
+        const ln = await client.query("SELECT value FROM ln_values WHERE entity_type = 'system_component' AND entity_id = $1", [id]);
+        if (ln.rows.length) {
+            await client.query(
+                "INSERT INTO ln_values (entity_type, entity_id, value) VALUES ('system_component', $1, $2) ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value",
+                [newId, ln.rows[0].value]
+            );
+        }
+        const tm = await client.query("SELECT value FROM tm_values WHERE entity_type = 'system_component' AND entity_id = $1", [id]);
+        if (tm.rows.length) {
+            await client.query(
+                "INSERT INTO tm_values (entity_type, entity_id, value) VALUES ('system_component', $1, $2) ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value",
+                [newId, tm.rows[0].value]
+            );
+        }
+
+        // Копируем материалы
+        await client.query(
+            `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
+             SELECT $1, material_id, quantity FROM system_component_materials WHERE system_component_id = $2`,
+            [newId, id]
+        );
+
+        // Копируем блоки
+        await client.query(
+            `INSERT INTO system_block_links (system_component_id, block_template_id, quantity)
+             SELECT $1, block_template_id, quantity FROM system_block_links WHERE system_component_id = $2`,
+            [newId, id]
+        );
+
+        await client.query('COMMIT');
+        res.json({ message: 'Компонент скопирован (ID: ' + newId + ')' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ message: 'Ошибка копирования' });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
+
