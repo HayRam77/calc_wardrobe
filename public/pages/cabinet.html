@@ -449,7 +449,25 @@
         fetch('/api/cabinets/' + window.cabinetId + '/blocks/html')
             .then(function(r){ return r.text(); })
             .then(function(html){ container.innerHTML = html;
-                setTimeout(function(){ makeDraggable(container.querySelector('table'), 'system_component_materials'); }, 0); })
+                // Добавляем drag-handle и data-id в строки таблицы компонентов шкафа
+                var table = container.querySelector('table');
+                if (table) {
+                    var thead = table.querySelector('thead tr');
+                    if (thead && !thead.querySelector('.drag-handle')) {
+                        var th = document.createElement('th'); th.style.width = '1%'; thead.insertBefore(th, thead.firstChild);
+                    }
+                    var tbody = table.querySelector('tbody');
+                    if (tbody) {
+                        tbody.querySelectorAll('tr').forEach(function(tr, idx) {
+                            if (!tr.querySelector('.drag-handle')) {
+                                var td = document.createElement('td'); td.className = 'drag-handle'; td.draggable = true; td.textContent = '⠿';
+                                tr.insertBefore(td, tr.firstChild);
+                            }
+                            if (!tr.dataset.id) tr.dataset.id = 'block_' + idx;
+                        });
+                    }
+                }
+                setTimeout(function(){ makeDraggable(container.querySelector('table'), 'system_block_links'); }, 0); })
             .catch(function(e){ console.error(e); });
     };
 
