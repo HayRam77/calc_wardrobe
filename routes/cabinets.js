@@ -135,6 +135,36 @@ router.post('/', auth, validate([
   }
 });
 
+
+router.put('/sort-order', auth, isAdmin, async (req, res) => {
+  try {
+    console.log('sort-order body:', JSON.stringify(req.body)); const { table, items } = req.body; // table: 'cabinet_systems'|'system_components_link'|'system_block_links'|'system_component_materials', items: [{id, position}]
+    if (!table || !items || !items.length) {
+      return res.status(400).json({ message: 'Неверные данные' });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const item of items) {
+        await client.query(
+          `UPDATE ${table} SET position = $1 WHERE id = $2`,
+          [item.position, item.id]
+        );
+      }
+      await client.query('COMMIT');
+      res.json({ message: 'Порядок сохранён' });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка сортировки' });
+  }
+});
+
 router.put('/:id', auth, validate([
   param('id').isInt().withMessage('Некорректный ID'),
   body('name').optional().trim().notEmpty().withMessage('Название не может быть пустым'),
@@ -215,7 +245,7 @@ router.get('/:id/blocks', auth, async (req, res) => {
       LEFT JOIN component_types ct ON bt.type_id = ct.id
       LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
       WHERE pb.cabinet_id = $1
-      ORDER BY bt.name
+      ORDER BY pb.position, bt.name
     `, [req.params.id]);
     res.json(result.rows);
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
@@ -240,7 +270,7 @@ router.get('/:id/systems', auth, async (req, res) => {
       FROM cabinet_systems cs
       JOIN systems s ON cs.system_id = s.id
       WHERE cs.cabinet_id = $1
-      ORDER BY s.name
+      ORDER BY cs.position, s.name
     `, [req.params.id]);
     res.json(result.rows);
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
@@ -464,4 +494,7 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
 });
 
+// ========== СОРТИРОВКА ПЕРЕТАСКИВАНИЕМ ==========
+
 module.exports = router;
+

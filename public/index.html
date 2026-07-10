@@ -235,6 +235,51 @@ window.addEventListener('load', function() {
   if (token && user) { currentUser = user; updateUserUI(); loadPage(location.pathname || '/'); }
   else { window.location.href = '/login.html'; }
 });
+
+window.makeDraggable = function(table, apiTable) {
+    if (!table) return;
+    var tbody = table.querySelector('tbody') || table;
+    var draggedRow = null;
+    tbody.addEventListener('dragstart', function(e) {
+        var handle = e.target.closest('.drag-handle');
+        if (!handle) { e.preventDefault(); return; }
+        draggedRow = handle.closest('tr');
+        if (!draggedRow) return;
+        draggedRow.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    tbody.addEventListener('dragend', function(e) {
+        if (draggedRow) draggedRow.style.opacity = '';
+        draggedRow = null;
+    });
+    tbody.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    });
+    tbody.addEventListener('drop', function(e) {
+        e.preventDefault();
+        var target = e.target.closest('tr');
+        if (!target || !draggedRow || target === draggedRow) return;
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+        var from = rows.indexOf(draggedRow);
+        var to = rows.indexOf(target);
+        if (from < 0 || to < 0) return;
+        if (from < to) { tbody.insertBefore(draggedRow, target.nextSibling); }
+        else { tbody.insertBefore(draggedRow, target); }
+        var items = [];
+        tbody.querySelectorAll('tr').forEach(function(tr, idx) {
+            var id = tr.dataset.id;
+            if (id) items.push({ id: parseInt(id), position: idx });
+        });
+        console.log('SORT sending:', { table: apiTable, items: items });
+        fetch('/api/cabinets/sort-order', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ table: apiTable, items: items })
+        }).catch(function(e){ console.error('Sort error:', e); });
+    });
+};
+
 </script>
 </body>
 </html>
