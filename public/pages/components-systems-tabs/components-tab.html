@@ -7,8 +7,8 @@
   </div>
   <div class="table-container">
     <table class="data-table">
-      <thead><tr><th>ID</th><th>Название</th><th>Тип</th><th>LN</th><th>TM</th><th>Параметры</th><th id="componentsActionsCol" style="display:none;">Действия</th></tr></thead>
-      <tbody id="componentsBody"><tr><td colspan="7" class="loading">Загрузка...</td></tr></tbody>
+      <thead><tr><th>ID</th><th>Модуль системы</th><th>Название</th><th>Тип</th><th>LN</th><th>TM</th><th>Параметры</th><th id="componentsActionsCol" style="display:none;">Действия</th></tr></thead>
+      <tbody id="componentsBody"><tr><td colspan="8" class="loading">Загрузка...</td></tr></tbody>
     </table>
   </div>
   <div id="componentsEmpty" class="empty-state" style="display:none;"><p>Компонентов нет</p></div>
@@ -45,7 +45,7 @@
        return esc(p.name)+(p.type?' ('+esc(p.type)+')':'')+': '+esc(p.value);
       }).join('<br>');
      }
-     html+='<tr title="'+esc(item.description || '')+'"><td>'+item.id+'</td><td>'+esc(item.name)+'</td><td>'+esc(item.type_name || '')+'</td><td>'+esc(item.ln || '')+'</td><td>'+esc(item.tm || '')+'</td><td>'+paramsHtml+'</td>';
+     html+='<tr title="'+esc(item.description || '')+'"><td>'+item.id+'</td><td>'+esc(item.module_name || '')+'</td><td>'+esc(item.name)+'</td><td>'+esc(item.type_name || '')+'</td><td>'+esc(item.ln || '')+'</td><td>'+esc(item.tm || '')+'</td><td>'+paramsHtml+'</td>';
      if(isAdmin){
       html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent('+item.id+')">✏️</button> <button class="btn btn-sm btn-duplicate" onclick="duplicateSystemComponent('+item.id+')">📋</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent('+item.id+')">🗑️</button></td>';
      }
@@ -55,7 +55,7 @@
    }
   }).catch(function(err){
    console.error(err);
-   tbody.innerHTML='<tr><td colspan="7" class="error">Ошибка загрузки</td></tr>';
+   tbody.innerHTML='<tr><td colspan="8" class="error">Ошибка загрузки</td></tr>';
   });
  }
  document.getElementById('addComponentBtn').addEventListener('click', function(){

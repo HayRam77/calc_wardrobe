@@ -129,14 +129,12 @@ router.post('/', auth, isAdmin, async (req, res) => {
             try {
                 await client.query(
                     `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
-                     SELECT $1, material_id, quantity FROM system_component_type_materials WHERE type_id = $2
-                     ON CONFLICT (system_component_id, material_id) DO NOTHING`,
+                     SELECT $1, material_id, quantity FROM system_component_type_materials WHERE type_id = $2`,
                     [newComp.id, type_id]
                 );
                 await client.query(
                     `INSERT INTO system_block_links (system_component_id, block_template_id, quantity)
-                     SELECT $1, block_template_id, quantity FROM system_component_type_blocks WHERE type_id = $2
-                     ON CONFLICT (system_component_id, block_template_id) DO NOTHING`,
+                     SELECT $1, block_template_id, quantity FROM system_component_type_blocks WHERE type_id = $2`,
                     [newComp.id, type_id]
                 );
             } catch (inheritErr) {
@@ -199,14 +197,12 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
             try {
                 await client.query(
                     `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
-                     SELECT $1, material_id, quantity FROM system_component_type_materials WHERE type_id = $2
-                     ON CONFLICT (system_component_id, material_id) DO NOTHING`,
+                     SELECT $1, material_id, quantity FROM system_component_type_materials WHERE type_id = $2`,
                     [req.params.id, type_id]
                 );
                 await client.query(
                     `INSERT INTO system_block_links (system_component_id, block_template_id, quantity)
-                     SELECT $1, block_template_id, quantity FROM system_component_type_blocks WHERE type_id = $2
-                     ON CONFLICT (system_component_id, block_template_id) DO NOTHING`,
+                     SELECT $1, block_template_id, quantity FROM system_component_type_blocks WHERE type_id = $2`,
                     [req.params.id, type_id]
                 );
             } catch (inheritErr) {
