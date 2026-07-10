@@ -238,6 +238,8 @@ window.addEventListener('load', function() {
 
 window.makeDraggable = function(table, apiTable) {
     if (!table) return;
+    if (table.dataset.dragInitialized === '1') return;
+    table.dataset.dragInitialized = '1';
     var tbody = table.querySelector('tbody') || table;
     var draggedRow = null;
     tbody.addEventListener('dragstart', function(e) {

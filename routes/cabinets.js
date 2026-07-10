@@ -146,10 +146,11 @@ router.put('/sort-order', auth, isAdmin, async (req, res) => {
     try {
       await client.query('BEGIN');
       for (const item of items) {
-        await client.query(
+        const result = await client.query(
           `UPDATE ${table} SET position = $1 WHERE id = $2`,
           [item.position, item.id]
         );
+        console.log('Updated', table, 'id', item.id, 'position', item.position, 'rows:', result.rowCount);
       }
       await client.query('COMMIT');
       res.json({ message: 'Порядок сохранён' });

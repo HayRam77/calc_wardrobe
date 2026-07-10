@@ -58,7 +58,7 @@ router.get('/:id', auth, async (req, res) => {
       JOIN system_components sc ON scl.component_id = sc.id
       LEFT JOIN system_component_types sct ON sc.type_id = sct.id
       LEFT JOIN system_modules sm ON sc.module_id = sm.id
-      WHERE scl.system_id = $1
+      WHERE scl.system_id = $1 ORDER BY scl.position
     `, [req.params.id]);
     res.json({ ...sys.rows[0], components: comps.rows });
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
@@ -90,7 +90,7 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
       FROM system_components_link scl
       JOIN system_components sc ON scl.component_id = sc.id
       LEFT JOIN system_component_types sct ON sc.type_id = sct.id
-      WHERE scl.system_id = $1
+      WHERE scl.system_id = $1 ORDER BY scl.position
     `, [req.params.id]);
     res.json({ ...sys.rows[0], components: comps.rows });
   } catch (err) { await client.query('ROLLBACK'); console.error(err); res.status(500).json({ message: 'Ошибка' }); }
