@@ -263,6 +263,7 @@
             loadCabinetCalculation(); window.loadBlocks(); });
     };
 
+    window.loadSystemComponents = loadSystemComponents;
     function loadSystemComponents() {
         var container = document.getElementById('cabinetSystemComponents');
         fetch('/api/cabinets/' + cabinetId + '/systems')

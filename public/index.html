@@ -276,7 +276,14 @@ window.makeDraggable = function(table, apiTable) {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ table: apiTable, items: items })
-        }).catch(function(e){ console.error('Sort error:', e); });
+        }).then(function(r) {
+                if (r.ok && apiTable === 'cabinet_systems') {
+                    // Перерисовать компоненты систем в новом порядке
+                    if (typeof window.loadSystemComponents === 'function') {
+                        window.loadSystemComponents();
+                    }
+                }
+            }).catch(function(e){ console.error('Sort error:', e); });
     });
 };
 
