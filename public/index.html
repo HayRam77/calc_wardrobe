@@ -285,6 +285,12 @@ window.makeDraggable = function(table, apiTable) {
                         window.loadSystemComponents();
                     }
                 }
+            }).then(function(r) {
+                if (r && r.ok && apiTable === 'cabinet_systems') {
+                    if (typeof window.loadSystemComponents === 'function') {
+                        window.loadSystemComponents();
+                    }
+                }
             }).catch(function(e){ console.error('Sort error:', e); });
     });
 };

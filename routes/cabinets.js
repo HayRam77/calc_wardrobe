@@ -284,7 +284,10 @@ router.post('/:id/systems', auth, isAdmin, async (req, res) => {
     const { system_id, name, description } = req.body;
     const cabinetId = req.params.id;
     const csResult = await client.query(
-      'INSERT INTO cabinet_systems (cabinet_id, system_id, name, description) VALUES ($1, $2, $3, $4) ON CONFLICT (cabinet_id, system_id) DO UPDATE SET name=$3, description=$4 RETURNING *',
+      `INSERT INTO cabinet_systems (cabinet_id, system_id, name, description, position)
+       VALUES ($1, $2, $3, $4, (SELECT COALESCE(MAX(position), -1) + 1 FROM cabinet_systems WHERE cabinet_id = $1))
+       ON CONFLICT (cabinet_id, system_id) DO UPDATE SET name=$3, description=$4
+       RETURNING *`,
       [cabinetId, system_id, name || null, description || null]
     );
     // await syncSystemToCabinet(client, cabinetId, system_id); // временно отключено
