@@ -136,7 +136,7 @@ window.loadPage = loadPage;
 async function loadPage(url) {
   var container = document.getElementById('contentContainer');
   container.innerHTML = '<p>Загрузка...</p>';
-  var titles = { '/': 'Проекты', '/automation': 'Системы автоматизации', '/components-systems': 'Компоненты систем', '/components-cabinets': 'Компоненты шкафов', '/manufacturers': 'Производители', '/consumables': 'Расходные материалы', '/admin': 'Администрирование' };
+  var titles = { '/': 'Проекты', '/automation': 'Системы автоматизации', '/components-systems': 'Компоненты систем', '/components-cabinets': 'Компоненты шкафов', '/cabinets-list': 'Все шкафы', '/manufacturers': 'Производители', '/consumables': 'Расходные материалы', '/admin': 'Администрирование' };
 
   if (url.startsWith('/project/')) { pageTitle.textContent = 'Проект'; document.title = 'Проект - Конфигуратор вентиляции'; }
   else if (url.startsWith('/cabinet/')) { pageTitle.textContent = 'Шкаф'; document.title = 'Шкаф - Конфигуратор вентиляции'; }

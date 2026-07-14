@@ -78,8 +78,8 @@
             var res = await fetch('/api/admin/users');
             var data = await res.json();
             if (!data.length) { tbody.innerHTML = '<tr><td colspan="6">Нет пользователей</td></tr>'; return; }
-            tbody.innerHTML = data.map(function(u) { return '<tr><td>' + u.id + '</td><td>' + esc(u.username) + '</td><td>' + esc(u.email) + '</td><td>' + (u.role === 'admin' ? 'Админ' : 'Пользователь') + '</td><td>' + formatDate(u.created_at) + '</td><td><button class="btn btn-sm btn-delete" data-id="' + u.id + '">🗑️</button></td></tr>'; }).join('');
-            tbody.querySelectorAll('.btn-delete').forEach(function(btn) { btn.addEventListener('click', async function() { if (!confirm('Удалить?')) return; await fetch('/api/admin/users/' + this.dataset.id, { method: 'DELETE' }); loadUsers(); }); });
+            tbody.innerHTML = data.map(function(u) { return '<tr><td>' + u.id + '</td><td>' + esc(u.username) + '</td><td>' + esc(u.email) + '</td><td>' + (u.role === 'admin' ? 'Админ' : 'Пользователь') + '</td><td>' + formatDate(u.created_at) + '</td><td><button class="btn btn-sm btn-edit" data-id="' + u.id + '">✏️</button> <button class="btn btn-sm btn-delete" data-id="' + u.id + '">🗑️</button></td></tr>'; }).join('');
+            tbody.querySelectorAll('.btn-edit').forEach(function(btn) { btn.addEventListener('click', async function() { var userId = this.dataset.id; var user = data.find(function(u) { return u.id == userId; }); if (!user) return; document.getElementById('userId').value = user.id; document.getElementById('userUsername').value = user.username; document.getElementById('userEmail').value = user.email || ''; document.getElementById('userPassword').value = ''; document.getElementById('userRole').value = user.role; document.getElementById('userModalTitle').textContent = 'Редактировать пользователя'; userError.style.display = 'none'; userModal.classList.add('active'); }); }); tbody.querySelectorAll('.btn-delete').forEach(function(btn) { btn.addEventListener('click', async function() { if (!confirm('Удалить?')) return; await fetch('/api/admin/users/' + this.dataset.id, { method: 'DELETE' }); loadUsers(); }); });
         } catch(e) { tbody.innerHTML = '<tr><td colspan="6">Ошибка загрузки</td></tr>'; }
     }
     var userModal = document.getElementById('userModal'), userForm = document.getElementById('userForm'), userError = document.getElementById('userError');
@@ -89,12 +89,21 @@
     document.getElementById('addUserBtn').addEventListener('click', function() { userForm.reset(); document.getElementById('userId').value = ''; document.getElementById('userModalTitle').textContent = 'Добавить пользователя'; userError.style.display = 'none'; userModal.classList.add('active'); });
     userForm.addEventListener('submit', async function(e) {
         e.preventDefault(); userError.style.display = 'none';
-        var username = document.getElementById('userUsername').value.trim(), email = document.getElementById('userEmail').value.trim(), password = document.getElementById('userPassword').value, role = document.getElementById('userRole').value;
-        if (!username || !email || !password) { userError.textContent = 'Все поля обязательны'; userError.style.display = 'block'; return; }
+        var userId = document.getElementById('userId').value;
+        var username = document.getElementById('userUsername').value.trim();
+        var email = document.getElementById('userEmail').value.trim();
+        var password = document.getElementById('userPassword').value;
+        var role = document.getElementById('userRole').value;
+        if (!username) { userError.textContent = 'Введите имя пользователя'; userError.style.display = 'block'; return; }
+        if (!userId && !password) { userError.textContent = 'Введите пароль'; userError.style.display = 'block'; return; }
+        var body = { username: username, email: email || null, role: role };
+        if (password) body.password = password;
+        var url = userId ? '/api/admin/users/' + userId : '/api/admin/users';
+        var method = userId ? 'PUT' : 'POST';
         try {
-            var res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username, email: email, password: password, role: role }) });
+            var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             var data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Ошибка');
+            if (!res.ok) throw new Error(data.error || data.message || 'Ошибка');
             userModal.classList.remove('active'); loadUsers();
         } catch(err) { userError.textContent = err.message; userError.style.display = 'block'; }
     });

@@ -170,6 +170,7 @@ router.put('/:id', auth, validate([
   param('id').isInt().withMessage('Некорректный ID'),
   body('name').optional().trim().notEmpty().withMessage('Название не может быть пустым'),
   body('description').optional().trim(),
+  body('project_id').optional().isInt({ min: 1 }).withMessage('Некорректный ID проекта'),
   body('width').optional().isFloat({ min: 0 }),
   body('height').optional().isFloat({ min: 0 }),
   body('depth').optional().isFloat({ min: 0 })
@@ -192,7 +193,7 @@ router.put('/:id', auth, validate([
     const fields = [];
     const values = [];
     let counter = 1;
-    for (const field of ['name', 'description', 'width', 'height', 'depth']) {
+    for (const field of ['name', 'description', 'project_id', 'width', 'height', 'depth']) {
       if (req.body[field] !== undefined) {
         fields.push(`${field} = $${counter++}`);
         values.push(req.body[field]);

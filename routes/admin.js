@@ -4,7 +4,7 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const isAdmin = require('../middleware/isAdmin');
-const { body } = require('express-validator');
+const { body, validationResult } = require('express-validator');
 const validate = require('../middleware/validation');
 
 // Все маршруты требуют авторизации и роль admin
@@ -25,7 +25,7 @@ router.get('/users', async (req, res) => {
 // Создать пользователя (админ может создать другого админа или пользователя)
 router.post('/users', validate([
   body('username').trim().notEmpty().withMessage('Имя обязательно'),
-  body('email').isEmail().withMessage('Некорректный email'),
+  body('email').optional().isEmail().withMessage('Некорректный email'),
   body('password').isLength({ min: 6 }).withMessage('Пароль минимум 6 символов'),
   body('role').optional().isIn(['user', 'admin']).withMessage('Роль должна быть user или admin')
 ]), async (req, res) => {
@@ -34,7 +34,7 @@ router.post('/users', validate([
     const bcrypt = require('bcryptjs');
     const hashed = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      'INSERT INTO users (username, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
+      'INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
       [username, email, hashed, role || 'user']
     );
     res.status(201).json(result.rows[0]);
@@ -107,6 +107,68 @@ router.post('/db/import', auth, isAdmin, upload.single('file'), async (req, res)
       res.json({ message: 'Дамп успешно импортирован' });
     });
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
+});
+
+// Обновление пользователя
+router.put('/users/:id', auth, isAdmin, validate([
+    body('username').optional().trim().notEmpty().withMessage('Имя пользователя не может быть пустым'),
+    body('email').optional().trim(),
+    body('password').optional(),
+    body('role').optional().isIn(['user', 'admin']).withMessage('Роль должна быть user или admin')
+]), async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ message: 'Ошибка валидации', errors: errors.array() });
+    }
+    try {
+        const { id } = req.params;
+        const { username, email, password, role } = req.body;
+        const updates = [];
+        const values = [];
+        let idx = 1;
+
+        if (username !== undefined) {
+            updates.push(`username = $${idx++}`);
+            values.push(username.trim());
+        }
+        if (email !== undefined) {
+            updates.push(`email = $${idx++}`);
+            values.push(email.trim() || null);
+        }
+        if (password !== undefined && password.trim() !== '') {
+            const bcrypt = require('bcryptjs');
+            const salt = await bcrypt.genSalt(10);
+            const hash = await bcrypt.hash(password, salt);
+            updates.push(`password_hash = $${idx++}`);
+            values.push(hash);
+        }
+        if (role !== undefined) {
+            updates.push(`role = $${idx++}`);
+            values.push(role);
+        }
+        updates.push(`updated_at = CURRENT_TIMESTAMP`);
+        values.push(id);
+
+        if (updates.length <= 1) {
+            return res.status(400).json({ message: 'Нет данных для обновления' });
+        }
+
+        const result = await pool.query(
+            `UPDATE users SET ${updates.join(', ')} WHERE id = $${idx} RETURNING id, username, email, role, created_at, updated_at`,
+            values
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Пользователь не найден' });
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(err);
+        if (err.code === '23505') {
+            return res.status(400).json({ message: 'Пользователь с таким именем или email уже существует' });
+        }
+        res.status(500).json({ message: 'Ошибка обновления пользователя' });
+    }
 });
 
 module.exports = router;
