@@ -11,7 +11,7 @@ window.SystemCompModal = {
         var isCabinetMode = cabinetMode || false;
         var cabinetIdParam = cabinetId || null;
 
-        console.log('🔍 SystemCompModal.open:', { compId, isEdit, cabinetMode, cabinetIdParam });
+        console.log('SystemCompModal.open:', { compId, isEdit, cabinetMode, cabinetIdParam });
 
         var m = document.createElement('div');
         m.className = 'modal';
@@ -24,7 +24,8 @@ window.SystemCompModal = {
         var loadData = [
             fetch('/api/system-parameters').then(function(r){ return r.json(); }),
             fetch('/api/system-component-types').then(function(r){ return r.json(); }),
-            fetch('/api/system-modules').then(function(r){ return r.json(); })
+            fetch('/api/system-modules').then(function(r){ return r.json(); }),
+            fetch('/api/system-parameter-types').then(function(r){ return r.json(); })
         ];
         if (isEdit) {
             loadData.push(fetch('/api/system-components/' + compId).then(function(r){ return r.json(); }));
@@ -37,30 +38,32 @@ window.SystemCompModal = {
             var params = results[0] || [];
             var types = results[1] || [];
             var modules = results[2] || [];
-            var comp = isEdit ? results[3] : null;
-            var systems = (isCabinetMode && cabinetIdParam && results.length > 4) ? results[4] : [];
-            
-            console.log('✅ Данные загружены:', { 
-                params: params.length, 
+            var paramTypes = results[3] || [];
+            var comp = isEdit ? results[4] : null;
+            var systems = (isCabinetMode && cabinetIdParam && results.length > 5) ? results[5] : [];
+
+            console.log('Data loaded:', {
+                params: params.length,
                 types: types.length,
                 modules: modules.length,
                 comp: comp ? comp.id : null,
                 compName: comp ? comp.name : null,
                 systems: systems.length
             });
-            
-            self._buildForm(m, comp, params, types, modules, callback, isCabinetMode, systems, cabinetIdParam);
+
+            self._buildForm(m, comp, params, types, modules, paramTypes, callback, isCabinetMode, systems, cabinetIdParam);
         }).catch(function(err){
-            console.error('❌ Ошибка загрузки данных:', err);
+            console.error('Error loading data:', err);
             alert('Ошибка загрузки данных. Проверьте подключение к серверу.');
         });
     },
 
-    _buildForm: function(m, comp, params, types, modules, callback, isCabinetMode, systems, cabinetId) {
+    _buildForm: function(m, comp, params, types, modules, paramTypes, callback, isCabinetMode, systems, cabinetId) {
         var self = this;
         var isEdit = !!comp;
+        window._currentCompId = comp ? comp.id : null;
 
-        console.log('🔨 _buildForm:', { isEdit, isCabinetMode, modulesCount: modules ? modules.length : 0 });
+        console.log('_buildForm:', { isEdit, isCabinetMode, modulesCount: modules ? modules.length : 0 });
 
         var h = '';
         if (isCabinetMode) {
@@ -82,7 +85,7 @@ window.SystemCompModal = {
             h += '</optgroup>';
         }
         h += '<optgroup label="Добавить"><option value="__new__">+ новый тип</option></optgroup></select>';
-        h += '<div class="new-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;"><input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;"><button type="button" class="btn btn-sm btn-primary save-type-btn">✓</button></div></div>';
+        h += '<div class="new-type-row" style="display:none;margin-top:5px;display:flex;gap:5px;"><input type="text" class="new-type-name" placeholder="Название нового типа" style="flex:1;"><button type="button" class="btn btn-sm btn-primary save-type-btn">&#10003;</button></div></div>';
 
         // МОДУЛЬ СИСТЕМЫ
         h += '<div class="form-group"><label>Модуль системы:</label><select id="compModule" style="width:100%;"><option value="">-- без модуля --</option>';
@@ -96,15 +99,15 @@ window.SystemCompModal = {
         h += '<div class="new-module-row" style="display:none;margin-top:5px;display:flex;gap:5px;flex-wrap:wrap;">';
         h += '<input type="text" class="new-module-name" placeholder="Название нового модуля" style="flex:1;min-width:150px;">';
         h += '<input type="text" class="new-module-description" placeholder="Описание модуля" style="flex:1;min-width:150px;">';
-        h += '<button type="button" class="btn btn-sm btn-primary save-module-btn">✓</button></div></div>';
+        h += '<button type="button" class="btn btn-sm btn-primary save-module-btn">&#10003;</button></div></div>';
 
         // Остальные поля
         h += '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="compName" value="'+self._esc(comp ? comp.name : '')+'" required></div>';
         h += '<div class="form-group"><label>Производитель:</label><select id="compManufacturer"></select></div>';
         h += '<div class="form-group"><label>Артикул:</label><input type="text" id="compArticle" value="'+self._esc(comp ? comp.article || '' : '')+'"></div>';
         h += '<div class="form-group"><label>Описание:</label><textarea id="compDescription" rows="3">'+self._esc(comp ? comp.description || '' : '')+'</textarea></div>';
-        h += '<div class="form-group"><label>Параметры:</label>
-        h += '<div class="form-row"><div class="form-group"><label>LN</label><input type="text" id="compLn" value="'+self._esc(comp ? comp.ln || '' : '')+'"></div><div class="form-group"><label>TM</label><input type="text" id="compTm" value="'+self._esc(comp ? comp.tm || '' : '')+'"></div></div>';<div id="modalParams"></div><button type="button" id="addParamRowBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить параметр</button></div>';
+        h += '<div class="form-row"><div class="form-group"><label>LN</label><input type="text" id="compLn" value="'+self._esc(comp ? comp.ln || '' : '')+'"></div><div class="form-group"><label>TM</label><input type="text" id="compTm" value="'+self._esc(comp ? comp.tm || '' : '')+'"></div></div>';
+        h += '<div class="form-group"><label>Параметры:</label><div id="modalParams"></div><button type="button" id="addParamRowBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить параметр</button></div>';
 
         if (isEdit) {
             h += '<div class="form-group"><label>Компоненты шкафа:</label><div id="linkedBlocks"><p>Загрузка...</p></div><button type="button" id="addBlockLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить компонент шкафа</button></div>';
@@ -161,9 +164,9 @@ window.SystemCompModal = {
         fetch('/api/manufacturers').then(function(r){ return r.json(); }).then(function(mans){
             var sel = document.getElementById('compManufacturer');
             sel.innerHTML = '<option value="">-- выберите --</option>';
-            mans.forEach(function(m){ 
+            mans.forEach(function(m){
                 var selected = (comp && comp.manufacturer_id == m.id) ? ' selected' : '';
-                sel.innerHTML += '<option value="'+m.id+'"'+selected+'>'+m.name+'</option>'; 
+                sel.innerHTML += '<option value="'+m.id+'"'+selected+'>'+m.name+'</option>';
             });
         });
 
@@ -192,9 +195,9 @@ window.SystemCompModal = {
             s.innerHTML = '<option value="">-- параметр --</option>';
             if (params.length) {
                 s.innerHTML += '<optgroup label="Существующие параметры">';
-                params.forEach(function(p){ 
+                params.forEach(function(p){
                     var selected = (pId == p.id) ? ' selected' : '';
-                    s.innerHTML += '<option value="'+p.id+'"'+selected+'>'+p.name+'</option>'; 
+                    s.innerHTML += '<option value="'+p.id+'"'+selected+'>'+p.name+'</option>';
                 });
                 s.innerHTML += '</optgroup>';
             }
@@ -205,12 +208,38 @@ window.SystemCompModal = {
             vi.placeholder = 'Значение';
             vi.style.flex = '1';
             if (val) vi.value = val;
-            var ti = document.createElement('input');
-            ti.type = 'text';
+
+            // Select для типа параметра
+            var ti = document.createElement('select');
             ti.className = 'param-type';
-            ti.placeholder = 'Тип';
             ti.style.flex = '0.7';
-            if (typeVal) ti.value = typeVal;
+            ti.innerHTML = '<option value="">-- тип --</option>';
+            if (paramTypes && paramTypes.length) {
+                paramTypes.forEach(function(pt){
+                    var sel = (typeVal && pt.name === typeVal) ? ' selected' : '';
+                    ti.innerHTML += '<option value="' + pt.name + '"' + sel + '>' + pt.name + '</option>';
+                });
+            }
+            ti.innerHTML += '<option value="__other__">Другое...</option>';
+            var otherTypeInput = document.createElement('input');
+            otherTypeInput.type = 'text';
+            otherTypeInput.className = 'param-type-other';
+            otherTypeInput.placeholder = 'Введите тип';
+            otherTypeInput.style.cssText = 'flex:0.7;display:none;';
+            if (typeVal && !paramTypes.some(function(pt){ return pt.name === typeVal; })) {
+                ti.value = '__other__';
+                otherTypeInput.style.display = '';
+                otherTypeInput.value = typeVal;
+            }
+            ti.addEventListener('change', function(){
+                if (ti.value === '__other__') {
+                    otherTypeInput.style.display = '';
+                } else {
+                    otherTypeInput.style.display = 'none';
+                    otherTypeInput.value = '';
+                }
+            });
+
             var ni = document.createElement('input');
             ni.type = 'text';
             ni.className = 'new-param-name';
@@ -229,26 +258,32 @@ window.SystemCompModal = {
                 ni.style.display = '';
                 sv.style.display = '';
             }
-            // При выборе существующего параметра подгружаем его тип
             s.addEventListener('change', function(){
                 ni.style.display = sv.style.display = s.value === '__new__' ? '' : 'none';
-                // Если выбран существующий параметр — подгружаем его тип
                 if (s.value && s.value !== '__new__') {
                     var selectedParam = params.find(function(p) { return p.id == s.value; });
                     if (selectedParam && selectedParam.type) {
-                        ti.value = selectedParam.type;
+                        var found = paramTypes.find(function(pt){ return pt.name === selectedParam.type; });
+                        if (found) {
+                            ti.value = found.name;
+                            otherTypeInput.style.display = 'none';
+                            otherTypeInput.value = '';
+                        } else {
+                            ti.value = '__other__';
+                            otherTypeInput.style.display = '';
+                            otherTypeInput.value = selectedParam.type;
+                        }
                     }
                 }
             });
             sv.addEventListener('click', function(){
                 var n = ni.value.trim();
                 if (!n) { alert('Введите название'); return; }
-                fetch('/api/system-parameters', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, type:ti.value.trim()})})
+                fetch('/api/system-parameters', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:n, type: (ti.value === '__other__' ? otherTypeInput.value : ti.value).trim()})})
                 .then(function(r){ return r.json(); })
                 .then(function(np){
                     s.innerHTML += '<option value="'+np.id+'" selected>'+np.name+'</option>';
                     s.value = np.id;
-                    // Добавляем новый параметр в список params
                     params.push({id: np.id, name: np.name, type: np.type});
                     ni.style.display = 'none';
                     sv.style.display = 'none';
@@ -258,6 +293,7 @@ window.SystemCompModal = {
             row.appendChild(s);
             row.appendChild(vi);
             row.appendChild(ti);
+            row.appendChild(otherTypeInput);
             row.appendChild(ni);
             row.appendChild(sv);
             row.appendChild(dl);
@@ -265,9 +301,9 @@ window.SystemCompModal = {
         }
 
         if (comp && comp.params && comp.params.length) {
-            console.log('📋 Загрузка параметров компонента:', comp.params.length);
-            comp.params.forEach(function(p){ 
-                addParamRow(p.parameter_id || p.id, p.value, p.type); 
+            console.log('Loading component params:', comp.params.length);
+            comp.params.forEach(function(p){
+                addParamRow(p.parameter_id || p.id, p.value, p.type);
             });
         } else {
             addParamRow(null, null, null);
@@ -283,9 +319,22 @@ window.SystemCompModal = {
                     if (!data.length) {
                         lc.innerHTML = '<p>Нет связанных компонентов</p>';
                     } else {
-                        var h2 = '<table class="data-table"><thead><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Производитель</th><th>Кол-во</th><th></th></tr></thead><tbody>';
+                        var h2 = '<table class="data-table"><thead><tr><th>Тип</th><th>Название</th><th>Артикул</th><th>Производитель</th><th>LN</th><th>TM</th><th>Кол-во</th><th></th></tr></thead><tbody>';
                         data.forEach(function(l){
-                            h2 += '<tr><td>'+self._esc(l.type_name||'')+'</td><td>'+self._esc(l.name)+'</td><td>'+self._esc(l.article||'')+'</td><td>'+self._esc(l.manufacturer_name||'')+'</td><td>'+l.quantity+'</td><td><button class="btn btn-sm btn-delete" onclick="this.closest(\'tr\').remove();fetch(\'/api/system-components/'+comp.id+'/blocks/'+l.id+'\',{method:\'DELETE\'})">×</button></td></tr>';
+                            var isInherited = l.inherited === true;
+                            h2 += '<tr style="'+(isInherited ? 'opacity:0.7;background:#f9f9f9;' : '')+'">' +
+                                '<td>'+self._esc(l.type_name||'')+'</td>' +
+                                '<td>'+self._esc(l.name)+(isInherited ? ' <span style="font-size:10px;color:#888;">(тип)</span>' : '')+'</td>' +
+                                '<td>'+self._esc(l.article||'')+'</td>' +
+                                '<td>'+self._esc(l.manufacturer_name||'')+'</td>' +
+                                '<td><input type="text" value="'+self._esc(l.ln||'')+'" data-block-id="'+l.block_template_id+'" data-field="ln" style="width:60px;" onchange="updateBlockField(this)"></td>' +
+                                '<td><input type="text" value="'+self._esc(l.tm||'')+'" data-block-id="'+l.block_template_id+'" data-field="tm" style="width:60px;" onchange="updateBlockField(this)"></td>' +
+                                '<td>'+(isInherited ? l.quantity : '<input type="number" value="'+l.quantity+'" data-link-id="'+l.id+'" style="width:60px;" onchange="updateBlockQuantity(this)">')+'</td>' +
+                                '<td>' +
+                                    '<button class="btn btn-sm btn-edit" onclick="window.BlockTemplateModal.open(function(){ location.reload(); }, '+l.block_template_id+')">✏️</button> ' +
+                                    (isInherited ? '<span style="font-size:10px;color:#888;">тип</span>' : '<button class="btn btn-sm btn-delete" onclick="this.closest(\'tr\').remove();fetch(\'/api/system-components/'+comp.id+'/blocks/'+l.id+'\',{method:\'DELETE\'})">×</button>') +
+                                '</td>' +
+                            '</tr>';
                         });
                         h2 += '</tbody></table>';
                         lc.innerHTML = h2;
@@ -310,7 +359,7 @@ window.SystemCompModal = {
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ block_template_id: blockId, quantity: parseInt(quantity) })
                             })
-                            .then(function(){ lc.innerHTML = '<p>Загрузка...</p>'; self._buildForm(m, comp, params, types, modules, callback, isCabinetMode, systems, cabinetId); })
+                            .then(function(){ lc.innerHTML = '<p>Загрузка...</p>'; self._buildForm(m, comp, params, types, modules, paramTypes, callback, isCabinetMode, systems, cabinetId); })
                             .catch(function(e){ alert(e.message); });
                         }
                     }
@@ -329,9 +378,21 @@ window.SystemCompModal = {
                     if (!data.length) {
                         mc.innerHTML = '<p>Нет материалов</p>';
                     } else {
-                        var h3 = '<table class="data-table"><thead><tr><th>Артикул</th><th>Название</th><th>Ед.изм.</th><th>Цена</th><th>Кол-во</th><th></th></tr></thead><tbody>';
+                        var h3 = '<table class="data-table"><thead><tr><th>Артикул</th><th>Название</th><th>Ед.изм.</th><th>LN</th><th>TM</th><th>Кол-во</th><th></th></tr></thead><tbody>';
                         data.forEach(function(item){
-                            h3 += '<tr><td>'+self._esc(item.article||'')+'</td><td>'+self._esc(item.name)+'</td><td>'+self._esc(item.unit||'')+'</td><td>'+(item.price||'')+'</td><td>'+item.quantity+'</td><td><button class="btn btn-sm btn-delete" onclick="this.closest(\'tr\').remove();fetch(\'/api/materials/system-component/'+comp.id+'/'+item.material_id+'\',{method:\'DELETE\'})">×</button></td></tr>';
+                            var isInherited = item.inherited === true;
+                            h3 += '<tr style="'+(isInherited ? 'opacity:0.7;background:#f9f9f9;' : '')+'">' +
+                                '<td>'+self._esc(item.article||'')+'</td>' +
+                                '<td>'+self._esc(item.name)+(isInherited ? ' <span style="font-size:10px;color:#888;">(тип)</span>' : '')+'</td>' +
+                                '<td>'+self._esc(item.unit||'')+'</td>' +
+                                '<td><input type="text" value="'+self._esc(item.ln||'')+'" data-material-id="'+item.material_id+'" data-field="ln" style="width:60px;" onchange="updateMaterialField(this)"></td>' +
+                                '<td><input type="text" value="'+self._esc(item.tm||'')+'" data-material-id="'+item.material_id+'" data-field="tm" style="width:60px;" onchange="updateMaterialField(this)"></td>' +
+                                '<td>'+(isInherited ? item.quantity : '<input type="number" value="'+item.quantity+'" data-link-id="'+item.material_id+'" style="width:60px;" onchange="updateMaterialQuantity('+comp.id+', this)">')+'</td>' +
+                                '<td>' +
+                                    '<button class="btn btn-sm btn-edit" onclick="window.MaterialModal.open(function(){ location.reload(); }, '+item.material_id+')">✏️</button> ' +
+                                    (isInherited ? '<span style="font-size:10px;color:#888;">тип</span>' : '<button class="btn btn-sm btn-delete" onclick="this.closest(\'tr\').remove();fetch(\'/api/materials/system-component/'+comp.id+'/'+item.material_id+'\',{method:\'DELETE\'})">×</button>') +
+                                '</td>' +
+                            '</tr>';
                         });
                         h3 += '</tbody></table>';
                         mc.innerHTML = h3;
@@ -356,7 +417,7 @@ window.SystemCompModal = {
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ material_id: materialId, quantity: parseInt(quantity) })
                             })
-                            .then(function(){ mc.innerHTML = '<p>Загрузка...</p>'; self._buildForm(m, comp, params, types, modules, callback, isCabinetMode, systems, cabinetId); })
+                            .then(function(){ mc.innerHTML = '<p>Загрузка...</p>'; self._buildForm(m, comp, params, types, modules, paramTypes, callback, isCabinetMode, systems, cabinetId); })
                             .catch(function(e){ alert(e.message); });
                         }
                     }
@@ -380,8 +441,10 @@ window.SystemCompModal = {
                 var s = row.querySelector('.param-select');
                 var v = row.querySelector('.param-value');
                 var t = row.querySelector('.param-type');
+                var otherT = row.querySelector('.param-type-other');
                 if (s.value && s.value !== '__new__') {
-                    paramsArr.push({ parameter_id: parseInt(s.value), value: v.value, type: t.value });
+                    var typeValue = t.value === '__other__' ? (otherT ? otherT.value : '') : t.value;
+                    paramsArr.push({ parameter_id: parseInt(s.value), value: v.value, type: typeValue });
                 }
             });
             var body = {
@@ -396,7 +459,7 @@ window.SystemCompModal = {
                 params: paramsArr
             };
             var url = isEdit ? '/api/system-components/' + comp.id : '/api/system-components';
-            
+
             var selectedSystemId = null;
             if (isCabinetMode) {
                 var systemSelect = document.getElementById('cabinetSystemSelect');
@@ -412,8 +475,8 @@ window.SystemCompModal = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             })
-            .then(function(r){ 
-                if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); }); 
+            .then(function(r){
+                if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
                 return r.json();
             })
             .then(function(data){
@@ -422,8 +485,8 @@ window.SystemCompModal = {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ component_id: data.id, quantity: 1 })
-                    }).then(function(r){ 
-                        if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); }); 
+                    }).then(function(r){
+                        if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
                         return data;
                     });
                 }
@@ -439,5 +502,53 @@ window.SystemCompModal = {
         d.textContent = s || '';
         return d.innerHTML;
     }
+};
+
+// Вспомогательные функции для прямого редактирования
+window.updateBlockField = function(input) {
+    var blockId = input.dataset.blockId;
+    var field = input.dataset.field;
+    var value = input.value;
+    fetch('/api/block-templates/' + blockId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value })
+    }).catch(function(e) { alert('Ошибка: ' + e.message); });
+};
+
+window.updateBlockQuantity = function(input) {
+    var linkId = input.dataset.linkId;
+    var quantity = parseInt(input.value) || 1;
+    var compId = window._currentCompId;
+    if (!compId) {
+        alert('Ошибка: ID компонента не найден');
+        return;
+    }
+    fetch('/api/system-components/' + compId + '/blocks/' + linkId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: quantity })
+    }).catch(function(e) { alert('Ошибка: ' + e.message); });
+};
+
+window.updateMaterialField = function(input) {
+    var materialId = input.dataset.materialId;
+    var field = input.dataset.field;
+    var value = input.value;
+    fetch('/api/materials/' + materialId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value })
+    }).catch(function(e) { alert('Ошибка: ' + e.message); });
+};
+
+window.updateMaterialQuantity = function(compId, input) {
+    var materialId = input.dataset.linkId;
+    var quantity = parseInt(input.value) || 1;
+    fetch('/api/materials/system-component/' + compId + '/' + materialId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: quantity })
+    }).catch(function(e) { alert('Ошибка: ' + e.message); });
 };
 </script>
