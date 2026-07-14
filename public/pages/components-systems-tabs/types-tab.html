@@ -41,13 +41,25 @@
     if(empty) empty.style.display='none';
     var html='';
     data.forEach(function(item){
-     html+='<tr><td>'+item.id+'</td><td>'+esc(item.name)+'</td><td>'+esc(item.description || '')+'</td>';
+     html+='<tr><td>'+item.id+'</td><td>'+(item.has_materials || item.has_blocks ? '<strong>'+esc(item.name)+'</strong>' : esc(item.name))+'</td><td>'+esc(item.description || '')+'</td>';
      if(isAdmin){
       html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemComponentType('+item.id+')">✏️</button> <button class="btn btn-sm btn-duplicate" onclick="copyTypeComposition('+item.id+')">📋</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponentType('+item.id+')">🗑️</button></td>';
      }
      html+='</tr>';
     });
     tbody.innerHTML=html;
+   // Навешиваем tooltip при наведении
+   tbody.querySelectorAll('tr').forEach(function(tr) {
+     tr.addEventListener('mouseenter', function(e) { showTypeTooltip(e, parseInt(tr.cells[0].textContent)); });
+     tr.addEventListener('mouseleave', hideTypeTooltip);
+     tr.addEventListener('mousemove', moveTypeTooltip);
+   });
+   // Навешиваем tooltip при наведении
+   tbody.querySelectorAll('tr').forEach(function(tr) {
+     tr.addEventListener('mouseenter', function(e) { showTypeTooltip(e, parseInt(tr.cells[0].textContent)); });
+     tr.addEventListener('mouseleave', hideTypeTooltip);
+     tr.addEventListener('mousemove', moveTypeTooltip);
+   });
    }
   }).catch(function(err){
    console.error(err);
@@ -110,7 +122,7 @@
          }
          var html = '<table class="data-table"><tr><th>Название</th><th>Кол-во</th><th></th></tr>';
          materials.forEach(function(mat){
-           html += '<tr><td>'+esc(mat.name)+'</td><td>'+mat.quantity+'</td><td><button class="btn btn-sm btn-delete" onclick="deleteTypeMaterial('+mat.material_id+')">🗑️</button></td></tr>';
+           html += '<tr><td>'+esc(mat.name)+'</td><td><input type="number" value="'+mat.quantity+'" style="width:60px;" onchange="updateTypeMaterialQty('+id+','+mat.material_id+',this.value)"></td><td><button class="btn btn-sm btn-delete" onclick="deleteTypeMaterial('+mat.material_id+')">🗑️</button></td></tr>';
          });
          html += '</table>';
          ml.innerHTML = html;
@@ -130,14 +142,47 @@
          }
          var html = '<table class="data-table"><tr><th>Название</th><th>Артикул</th><th>Кол-во</th><th></th></tr>';
          blocks.forEach(function(b){
-           html += '<tr><td>'+esc(b.name)+'</td><td>'+esc(b.article || '')+'</td><td>'+b.quantity+'</td><td><button class="btn btn-sm btn-delete" onclick="deleteTypeBlock('+b.block_template_id+')">🗑️</button></td></tr>';
+           html += '<tr><td>'+esc(b.name)+'</td><td>'+esc(b.article || '')+'</td><td><input type="number" value="'+b.quantity+'" style="width:60px;" onchange="updateTypeBlockQty('+id+','+b.block_template_id+',this.value)"></td><td><button class="btn btn-sm btn-delete" onclick="deleteTypeBlock('+b.block_template_id+')">🗑️</button></td></tr>';
          });
          html += '</table>';
          bl.innerHTML = html;
        });
    }
 
-   window.deleteTypeMaterial = function(materialId) {
+   window.updateTypeMaterialQty = function(typeId, materialId, qty) {
+    if (!qty || isNaN(qty) || parseInt(qty) < 1) { alert('Количество должно быть положительным числом'); return; }
+    fetch('/api/system-component-types/' + typeId + '/materials', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ material_id: materialId, quantity: parseInt(qty) })
+    }).catch(function(e){ alert('Ошибка: ' + e.message); });
+};
+
+window.updateTypeBlockQty = function(typeId, blockTemplateId, qty) {
+    if (!qty || isNaN(qty) || parseInt(qty) < 1) { alert('Количество должно быть положительным числом'); return; }
+    fetch('/api/system-component-types/' + typeId + '/blocks', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ block_template_id: blockTemplateId, quantity: parseInt(qty) })
+    }).catch(function(e){ alert('Ошибка: ' + e.message); });
+};
+
+window.updateTypeMaterialQty = function(typeId, materialId, qty) {
+    if (!qty || isNaN(qty) || parseInt(qty) < 1) { alert('Количество должно быть положительным числом'); return; }
+    fetch('/api/system-component-types/' + typeId + '/materials', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ material_id: materialId, quantity: parseInt(qty) })
+    }).catch(function(e){ alert('Ошибка: ' + e.message); });
+};
+window.updateTypeBlockQty = function(typeId, blockTemplateId, qty) {
+    if (!qty || isNaN(qty) || parseInt(qty) < 1) { alert('Количество должно быть положительным числом'); return; }
+    fetch('/api/system-component-types/' + typeId + '/blocks', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ block_template_id: blockTemplateId, quantity: parseInt(qty) })
+    }).catch(function(e){ alert('Ошибка: ' + e.message); });
+};
+
+window.deleteTypeMaterial = function(materialId) {
      if (!confirm('Удалить материал из типа?')) return;
      fetch('/api/system-component-types/'+id+'/materials/'+materialId, { method: 'DELETE' })
        .then(function(){ loadTypeMaterials(); });
@@ -212,7 +257,195 @@
    });
  }
 
- document.getElementById('addTypeBtn').addEventListener('click', function(){
+ var typeTooltipCache = {};
+var typeTooltipEl = null;
+
+function createTooltipEl() {
+  if (typeTooltipEl) return typeTooltipEl;
+  typeTooltipEl = document.createElement('div');
+  typeTooltipEl.id = 'typeTooltip';
+  typeTooltipEl.style.cssText = 'display:none; position:fixed; background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:9999; max-width:500px; font-size:12px;';
+  document.body.appendChild(typeTooltipEl);
+  return typeTooltipEl;
+}
+
+function showTypeTooltip(e, typeId) {
+  var el = createTooltipEl();
+  if (typeTooltipCache[typeId]) {
+    el.innerHTML = typeTooltipCache[typeId];
+    el.style.display = 'block';
+    moveTypeTooltip(e);
+    return;
+  }
+  el.innerHTML = 'Загрузка...';
+  el.style.display = 'block';
+  moveTypeTooltip(e);
+  Promise.all([
+    fetch('/api/system-component-types/' + typeId + '/materials').then(r => r.json()),
+    fetch('/api/system-component-types/' + typeId + '/blocks').then(r => r.json())
+  ]).then(function(results) {
+    var materials = results[0] || [];
+    var blocks = results[1] || [];
+    var html = '<div style="font-weight:bold;margin-bottom:5px;">Материалы:</div>';
+    if (materials.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Кол-во</th></tr>';
+      materials.forEach(function(m){ html += '<tr><td>'+esc(m.name)+'</td><td>'+m.quantity+'</td></tr>'; });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет материалов</p>'; }
+    html += '<div style="font-weight:bold;margin:10px 0 5px;">Компоненты шкафа:</div>';
+    if (blocks.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Кол-во</th></tr>';
+      blocks.forEach(function(b){ html += '<tr><td>'+esc(b.name)+'</td><td>'+b.quantity+'</td></tr>'; });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет компонентов</p>'; }
+    typeTooltipCache[typeId] = html;
+    el.innerHTML = html;
+    moveTypeTooltip(e);
+  }).catch(function(err) {
+    el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
+  });
+}
+
+function moveTypeTooltip(e) {
+  if (!typeTooltipEl || typeTooltipEl.style.display === 'none') return;
+  var x = e.clientX + 15, y = e.clientY + 15;
+  if (x + typeTooltipEl.offsetWidth > window.innerWidth) x = e.clientX - typeTooltipEl.offsetWidth - 15;
+  if (y + typeTooltipEl.offsetHeight > window.innerHeight) y = e.clientY - typeTooltipEl.offsetHeight - 15;
+  typeTooltipEl.style.left = x + 'px';
+  typeTooltipEl.style.top = y + 'px';
+}
+
+function hideTypeTooltip() {
+  if (typeTooltipEl) typeTooltipEl.style.display = 'none';
+}
+
+var typeTooltipCache = {};
+var typeTooltipEl = null;
+
+function createTooltipEl() {
+  if (typeTooltipEl) return typeTooltipEl;
+  typeTooltipEl = document.createElement('div');
+  typeTooltipEl.id = 'typeTooltip';
+  typeTooltipEl.style.cssText = 'display:none; position:fixed; background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:9999; max-width:500px; font-size:12px;';
+  document.body.appendChild(typeTooltipEl);
+  return typeTooltipEl;
+}
+
+function showTypeTooltip(e, typeId) {
+  if (!typeId) return;
+  var el = createTooltipEl();
+  if (typeTooltipCache[typeId]) {
+    el.innerHTML = typeTooltipCache[typeId];
+    el.style.display = 'block';
+    moveTypeTooltip(e);
+    return;
+  }
+  el.innerHTML = 'Загрузка...';
+  el.style.display = 'block';
+  moveTypeTooltip(e);
+  Promise.all([
+    fetch('/api/system-component-types/' + typeId + '/materials').then(function(r){ return r.json(); }),
+    fetch('/api/system-component-types/' + typeId + '/blocks').then(function(r){ return r.json(); })
+  ]).then(function(results) {
+    var materials = results[0] || [];
+    var blocks = results[1] || [];
+    var html = '<div style="font-weight:bold;margin-bottom:5px;">Материалы:</div>';
+    if (materials.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Кол-во</th></tr>';
+      materials.forEach(function(m){ html += '<tr><td>'+esc(m.name)+'</td><td>'+m.quantity+'</td></tr>'; });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет материалов</p>'; }
+    html += '<div style="font-weight:bold;margin:10px 0 5px;">Компоненты шкафа:</div>';
+    if (blocks.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Кол-во</th></tr>';
+      blocks.forEach(function(b){ html += '<tr><td>'+esc(b.name)+'</td><td>'+b.quantity+'</td></tr>'; });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет компонентов</p>'; }
+    typeTooltipCache[typeId] = html;
+    el.innerHTML = html;
+    moveTypeTooltip(e);
+  }).catch(function(err) {
+    el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
+  });
+}
+
+function moveTypeTooltip(e) {
+  if (!typeTooltipEl || typeTooltipEl.style.display === 'none') return;
+  var x = e.clientX + 15, y = e.clientY + 15;
+  if (x + typeTooltipEl.offsetWidth > window.innerWidth) x = e.clientX - typeTooltipEl.offsetWidth - 15;
+  if (y + typeTooltipEl.offsetHeight > window.innerHeight) y = e.clientY - typeTooltipEl.offsetHeight - 15;
+  typeTooltipEl.style.left = x + 'px';
+  typeTooltipEl.style.top = y + 'px';
+}
+
+function hideTypeTooltip() {
+  if (typeTooltipEl) typeTooltipEl.style.display = 'none';
+}
+
+var typeTooltipCache = {};
+var typeTooltipEl = null;
+
+function createTooltipEl() {
+  if (typeTooltipEl) return typeTooltipEl;
+  typeTooltipEl = document.createElement('div');
+  typeTooltipEl.id = 'typeTooltip';
+  typeTooltipEl.style.cssText = 'display:none; position:fixed; background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:9999; max-width:500px; font-size:12px;';
+  document.body.appendChild(typeTooltipEl);
+  return typeTooltipEl;
+}
+
+function showTypeTooltip(e, typeId) {
+  if (!typeId) return;
+  var el = createTooltipEl();
+  if (typeTooltipCache[typeId]) {
+    el.innerHTML = typeTooltipCache[typeId];
+    el.style.display = 'block';
+    moveTypeTooltip(e);
+    return;
+  }
+  el.innerHTML = 'Загрузка...';
+  el.style.display = 'block';
+  moveTypeTooltip(e);
+  Promise.all([
+    fetch('/api/system-component-types/' + typeId + '/materials').then(function(r){ return r.json(); }),
+    fetch('/api/system-component-types/' + typeId + '/blocks').then(function(r){ return r.json(); })
+  ]).then(function(results) {
+    var materials = results[0] || [];
+    var blocks = results[1] || [];
+    var html = '<div style="font-weight:bold;margin-bottom:5px;">Материалы:</div>';
+    if (materials.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Кол-во</th></tr>';
+      materials.forEach(function(m){ html += '<tr><td>'+esc(m.name)+'</td><td>'+m.quantity+'</td></tr>'; });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет материалов</p>'; }
+    html += '<div style="font-weight:bold;margin:10px 0 5px;">Компоненты шкафа:</div>';
+    if (blocks.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Кол-во</th></tr>';
+      blocks.forEach(function(b){ html += '<tr><td>'+esc(b.name)+'</td><td>'+b.quantity+'</td></tr>'; });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет компонентов</p>'; }
+    typeTooltipCache[typeId] = html;
+    el.innerHTML = html;
+    moveTypeTooltip(e);
+  }).catch(function(err) {
+    el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
+  });
+}
+
+function moveTypeTooltip(e) {
+  if (!typeTooltipEl || typeTooltipEl.style.display === 'none') return;
+  var x = e.clientX + 15, y = e.clientY + 15;
+  if (x + typeTooltipEl.offsetWidth > window.innerWidth) x = e.clientX - typeTooltipEl.offsetWidth - 15;
+  if (y + typeTooltipEl.offsetHeight > window.innerHeight) y = e.clientY - typeTooltipEl.offsetHeight - 15;
+  typeTooltipEl.style.left = x + 'px';
+  typeTooltipEl.style.top = y + 'px';
+}
+
+function hideTypeTooltip() {
+  if (typeTooltipEl) typeTooltipEl.style.display = 'none';
+}
+
+document.getElementById('addTypeBtn').addEventListener('click', function(){
    openTypeModal(null);
  });
 
