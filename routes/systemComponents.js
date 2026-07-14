@@ -12,7 +12,10 @@ router.get('/', auth, async (req, res) => {
         const result = await pool.query(`
             SELECT sc.*, sct.name as type_name, m.name as manufacturer_name, sm.name as module_name,
                    COALESCE(ln.value, '') AS ln,
-                   COALESCE(tm.value, '') AS tm
+                   COALESCE(tm.value, '') AS tm,
+                   EXISTS(SELECT 1 FROM system_component_params WHERE component_id = sc.id) as has_params,
+                   EXISTS(SELECT 1 FROM system_block_links WHERE system_component_id = sc.id) as has_blocks,
+                   EXISTS(SELECT 1 FROM system_component_materials WHERE system_component_id = sc.id) as has_materials
             FROM system_components sc
             LEFT JOIN system_component_types sct ON sc.type_id = sct.id
             LEFT JOIN manufacturers m ON sc.manufacturer_id = m.id

@@ -45,20 +45,127 @@
        return esc(p.name)+(p.type?' ('+esc(p.type)+')':'')+': '+esc(p.value);
       }).join('<br>');
      }
-     html+='<tr title="'+esc(item.description || '')+'"><td>'+item.id+'</td><td>'+esc(item.module_name || '')+'</td><td>'+esc(item.name)+'</td><td>'+esc(item.type_name || '')+'</td><td>'+esc(item.ln || '')+'</td><td>'+esc(item.tm || '')+'</td><td>'+paramsHtml+'</td>';
+     var hasLinks = item.has_blocks || item.has_materials;
+     var nameHtml = hasLinks ? '<span class="comp-name-link" style="cursor:pointer;text-decoration:underline;"><strong>'+esc(item.name)+'</strong></span>' : esc(item.name);
+     html+='<tr title="'+esc(item.description || '')+'" data-id="'+item.id+'"'+(hasLinks ? ' data-has-links="1"' : '')+'><td>'+item.id+'</td><td>'+esc(item.module_name || '')+'</td><td>'+nameHtml+'</td><td>'+esc(item.type_name || '')+'</td><td>'+esc(item.ln || '')+'</td><td>'+esc(item.tm || '')+'</td><td>'+paramsHtml+'</td>';
      if(isAdmin){
       html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent('+item.id+')">✏️</button> <button class="btn btn-sm btn-duplicate" onclick="duplicateSystemComponent('+item.id+')">📋</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent('+item.id+')">🗑️</button></td>';
      }
      html+='</tr>';
     });
     tbody.innerHTML=html;
+   // Сохраняем данные для тултипов
+   data.forEach(function(item) {
+     window._componentsData = window._componentsData || {};
+     window._componentsData[item.id] = item;
+   });
+   // Тултип только для названий компонентов со связями
+   tbody.querySelectorAll('.comp-name-link').forEach(function(el) {
+     var tr = el.closest('tr');
+     var compId = parseInt(tr.dataset.id);
+     el.addEventListener('mouseenter', function(e) { var tr = el.closest('tr'); if (tr && tr.dataset.hasLinks) showComponentTooltip(e, compId); });
+     el.addEventListener('mouseleave', hideComponentTooltip);
+     el.addEventListener('mousemove', moveComponentTooltip);
+   });
+   data.forEach(function(item) {
+     window._componentsData = window._componentsData || {};
+     window._componentsData[item.id] = item;
+   });
+
    }
   }).catch(function(err){
    console.error(err);
    tbody.innerHTML='<tr><td colspan="8" class="error">Ошибка загрузки</td></tr>';
   });
  }
- document.getElementById('addComponentBtn').addEventListener('click', function(){
+ var componentTooltipCache = {};
+var componentTooltipEl = null;
+
+function createComponentTooltipEl() {
+  if (componentTooltipEl) return componentTooltipEl;
+  componentTooltipEl = document.createElement('div');
+  componentTooltipEl.id = 'componentTooltip';
+  componentTooltipEl.style.cssText = 'display:none; position:fixed; background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:9999; max-width:500px; font-size:12px;';
+  document.body.appendChild(componentTooltipEl);
+  return componentTooltipEl;
+}
+
+function showComponentTooltip(e, compId) {
+  if (!compId) return;
+  var el = createComponentTooltipEl();
+  if (componentTooltipCache[compId]) {
+    el.innerHTML = componentTooltipCache[compId];
+    el.style.display = 'block';
+    moveComponentTooltip(e);
+    return;
+  }
+  el.innerHTML = 'Загрузка...';
+  el.style.display = 'block';
+  moveComponentTooltip(e);
+  
+  // Загружаем блоки и материалы
+  Promise.all([
+    fetch('/api/system-components/' + compId + '/blocks').then(function(r){ return r.json(); }),
+    fetch('/api/materials/system-component/' + compId).then(function(r){ return r.json(); })
+  ]).then(function(results) {
+    var blocks = results[0] || [];
+    var materials = results[1] || [];
+    var compData = (window._componentsData && window._componentsData[compId]) || {};
+    var params = compData.params || [];
+    
+    var html = '';
+    // Параметры
+    html += '<div style="font-weight:bold;margin-bottom:5px;">Параметры:</div>';
+    if (params.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Параметр</th><th>Тип</th><th>Значение</th></tr>';
+      params.forEach(function(p){
+        html += '<tr><td>'+esc(p.parameter_name || p.name)+'</td><td>'+esc(p.type || '')+'</td><td>'+esc(p.value)+'</td></tr>';
+      });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет параметров</p>'; }
+    
+    // Компоненты шкафа
+    html += '<div style="font-weight:bold;margin:10px 0 5px;">Компоненты шкафа:</div>';
+    if (blocks.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Тип</th><th>LN</th><th>TM</th><th>Кол-во</th></tr>';
+      blocks.forEach(function(b){
+        html += '<tr><td>'+esc(b.name)+'</td><td>'+esc(b.type_name || '')+'</td><td>'+esc(b.ln || '')+'</td><td>'+esc(b.tm || '')+'</td><td>'+b.quantity+'</td></tr>';
+      });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет компонентов</p>'; }
+    
+    // Материалы
+    html += '<div style="font-weight:bold;margin:10px 0 5px;">Материалы:</div>';
+    if (materials.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Ед.</th><th>Кол-во</th></tr>';
+      materials.forEach(function(m){
+        html += '<tr><td>'+esc(m.name || m.material_name)+'</td><td>'+esc(m.unit || '')+'</td><td>'+m.quantity+'</td></tr>';
+      });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет материалов</p>'; }
+    
+    componentTooltipCache[compId] = html;
+    el.innerHTML = html;
+    moveComponentTooltip(e);
+  }).catch(function(err) {
+    el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
+  });
+}
+
+function moveComponentTooltip(e) {
+  if (!componentTooltipEl || componentTooltipEl.style.display === 'none') return;
+  var x = e.clientX + 15, y = e.clientY + 15;
+  if (x + componentTooltipEl.offsetWidth > window.innerWidth) x = e.clientX - componentTooltipEl.offsetWidth - 15;
+  if (y + componentTooltipEl.offsetHeight > window.innerHeight) y = e.clientY - componentTooltipEl.offsetHeight - 15;
+  componentTooltipEl.style.left = x + 'px';
+  componentTooltipEl.style.top = y + 'px';
+}
+
+function hideComponentTooltip() {
+  if (componentTooltipEl) componentTooltipEl.style.display = 'none';
+}
+
+document.getElementById('addComponentBtn').addEventListener('click', function(){
   if(typeof SystemCompModal !== 'undefined'){
    SystemCompModal.open(null, function(){ loadComponents(); });
   }else{

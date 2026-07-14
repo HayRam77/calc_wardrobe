@@ -41,25 +41,34 @@
     if(empty) empty.style.display='none';
     var html='';
     data.forEach(function(item){
-     html+='<tr><td>'+item.id+'</td><td>'+(item.has_materials || item.has_blocks ? '<strong>'+esc(item.name)+'</strong>' : esc(item.name))+'</td><td>'+esc(item.description || '')+'</td>';
+     var hasLinks = item.has_materials || item.has_blocks;
+     html+='<tr'+(hasLinks ? ' data-has-links="1"' : '')+'><td>'+item.id+'</td><td>'+(hasLinks ? '<span class="type-name-link" style="cursor:pointer;text-decoration:underline;"><strong>'+esc(item.name)+'</strong></span>' : esc(item.name))+'</td><td>'+esc(item.description || '')+'</td>';
      if(isAdmin){
       html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemComponentType('+item.id+')">✏️</button> <button class="btn btn-sm btn-duplicate" onclick="copyTypeComposition('+item.id+')">📋</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponentType('+item.id+')">🗑️</button></td>';
      }
      html+='</tr>';
     });
     tbody.innerHTML=html;
-   // Навешиваем tooltip при наведении
-   tbody.querySelectorAll('tr').forEach(function(tr) {
-     tr.addEventListener('mouseenter', function(e) { showTypeTooltip(e, parseInt(tr.cells[0].textContent)); });
-     tr.addEventListener('mouseleave', hideTypeTooltip);
-     tr.addEventListener('mousemove', moveTypeTooltip);
+   // Тултип только для названий типов со связями
+   tbody.querySelectorAll('.type-name-link').forEach(function(el) {
+     var tr = el.closest('tr');
+     if (!tr || !tr.dataset.hasLinks) return;
+     var typeId = parseInt(tr.cells[0].textContent);
+el.addEventListener('mouseleave', hideTypeTooltip);
+     el.addEventListener('mousemove', moveTypeTooltip);
+   });
+   // Тултип только для названий типов со связями
+   tbody.querySelectorAll('.type-name-link').forEach(function(el) {
+     var tr = el.closest('tr');
+     var typeId = parseInt(tr.cells[0].textContent);
+     el.addEventListener('mouseenter', function(e) { var tr = el.closest('tr'); if (tr && tr.dataset.hasLinks) showTypeTooltip(e, typeId); });
+     el.addEventListener('mouseleave', hideTypeTooltip);
+     el.addEventListener('mousemove', moveTypeTooltip);
    });
    // Навешиваем tooltip при наведении
-   tbody.querySelectorAll('tr').forEach(function(tr) {
-     tr.addEventListener('mouseenter', function(e) { showTypeTooltip(e, parseInt(tr.cells[0].textContent)); });
-     tr.addEventListener('mouseleave', hideTypeTooltip);
-     tr.addEventListener('mousemove', moveTypeTooltip);
-   });
+   tbody.querySelectorAll('tr').forEach(function(tr) {});
+   // Навешиваем tooltip при наведении
+   tbody.querySelectorAll('tr').forEach(function(tr) {});
    }
   }).catch(function(err){
    console.error(err);
@@ -331,43 +340,6 @@ function createTooltipEl() {
   return typeTooltipEl;
 }
 
-function showTypeTooltip(e, typeId) {
-  if (!typeId) return;
-  var el = createTooltipEl();
-  if (typeTooltipCache[typeId]) {
-    el.innerHTML = typeTooltipCache[typeId];
-    el.style.display = 'block';
-    moveTypeTooltip(e);
-    return;
-  }
-  el.innerHTML = 'Загрузка...';
-  el.style.display = 'block';
-  moveTypeTooltip(e);
-  Promise.all([
-    fetch('/api/system-component-types/' + typeId + '/materials').then(function(r){ return r.json(); }),
-    fetch('/api/system-component-types/' + typeId + '/blocks').then(function(r){ return r.json(); })
-  ]).then(function(results) {
-    var materials = results[0] || [];
-    var blocks = results[1] || [];
-    var html = '<div style="font-weight:bold;margin-bottom:5px;">Материалы:</div>';
-    if (materials.length) {
-      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Кол-во</th></tr>';
-      materials.forEach(function(m){ html += '<tr><td>'+esc(m.name)+'</td><td>'+m.quantity+'</td></tr>'; });
-      html += '</table>';
-    } else { html += '<p style="color:#888;">Нет материалов</p>'; }
-    html += '<div style="font-weight:bold;margin:10px 0 5px;">Компоненты шкафа:</div>';
-    if (blocks.length) {
-      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Кол-во</th></tr>';
-      blocks.forEach(function(b){ html += '<tr><td>'+esc(b.name)+'</td><td>'+b.quantity+'</td></tr>'; });
-      html += '</table>';
-    } else { html += '<p style="color:#888;">Нет компонентов</p>'; }
-    typeTooltipCache[typeId] = html;
-    el.innerHTML = html;
-    moveTypeTooltip(e);
-  }).catch(function(err) {
-    el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
-  });
-}
 
 function moveTypeTooltip(e) {
   if (!typeTooltipEl || typeTooltipEl.style.display === 'none') return;
@@ -394,43 +366,32 @@ function createTooltipEl() {
   return typeTooltipEl;
 }
 
-function showTypeTooltip(e, typeId) {
-  if (!typeId) return;
-  var el = createTooltipEl();
-  if (typeTooltipCache[typeId]) {
-    el.innerHTML = typeTooltipCache[typeId];
-    el.style.display = 'block';
-    moveTypeTooltip(e);
-    return;
-  }
-  el.innerHTML = 'Загрузка...';
-  el.style.display = 'block';
-  moveTypeTooltip(e);
-  Promise.all([
-    fetch('/api/system-component-types/' + typeId + '/materials').then(function(r){ return r.json(); }),
-    fetch('/api/system-component-types/' + typeId + '/blocks').then(function(r){ return r.json(); })
-  ]).then(function(results) {
-    var materials = results[0] || [];
-    var blocks = results[1] || [];
-    var html = '<div style="font-weight:bold;margin-bottom:5px;">Материалы:</div>';
-    if (materials.length) {
-      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Кол-во</th></tr>';
-      materials.forEach(function(m){ html += '<tr><td>'+esc(m.name)+'</td><td>'+m.quantity+'</td></tr>'; });
-      html += '</table>';
-    } else { html += '<p style="color:#888;">Нет материалов</p>'; }
-    html += '<div style="font-weight:bold;margin:10px 0 5px;">Компоненты шкафа:</div>';
-    if (blocks.length) {
-      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Кол-во</th></tr>';
-      blocks.forEach(function(b){ html += '<tr><td>'+esc(b.name)+'</td><td>'+b.quantity+'</td></tr>'; });
-      html += '</table>';
-    } else { html += '<p style="color:#888;">Нет компонентов</p>'; }
-    typeTooltipCache[typeId] = html;
-    el.innerHTML = html;
-    moveTypeTooltip(e);
-  }).catch(function(err) {
-    el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
-  });
+
+function moveTypeTooltip(e) {
+  if (!typeTooltipEl || typeTooltipEl.style.display === 'none') return;
+  var x = e.clientX + 15, y = e.clientY + 15;
+  if (x + typeTooltipEl.offsetWidth > window.innerWidth) x = e.clientX - typeTooltipEl.offsetWidth - 15;
+  if (y + typeTooltipEl.offsetHeight > window.innerHeight) y = e.clientY - typeTooltipEl.offsetHeight - 15;
+  typeTooltipEl.style.left = x + 'px';
+  typeTooltipEl.style.top = y + 'px';
 }
+
+function hideTypeTooltip() {
+  if (typeTooltipEl) typeTooltipEl.style.display = 'none';
+}
+
+var typeTooltipCache = {};
+var typeTooltipEl = null;
+
+function createTooltipEl() {
+  if (typeTooltipEl) return typeTooltipEl;
+  typeTooltipEl = document.createElement('div');
+  typeTooltipEl.id = 'typeTooltip';
+  typeTooltipEl.style.cssText = 'display:none; position:fixed; background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:9999; max-width:500px; font-size:12px;';
+  document.body.appendChild(typeTooltipEl);
+  return typeTooltipEl;
+}
+
 
 function moveTypeTooltip(e) {
   if (!typeTooltipEl || typeTooltipEl.style.display === 'none') return;
