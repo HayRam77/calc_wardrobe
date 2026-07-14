@@ -43,7 +43,7 @@
     data.forEach(function(item){
      html+='<tr><td>'+item.id+'</td><td>'+esc(item.name)+'</td><td>'+esc(item.description || '')+'</td>';
      if(isAdmin){
-      html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemComponentType('+item.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponentType('+item.id+')">🗑️</button></td>';
+      html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemComponentType('+item.id+')">✏️</button> <button class="btn btn-sm btn-duplicate" onclick="copyTypeComposition('+item.id+')">📋</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponentType('+item.id+')">🗑️</button></td>';
      }
      html+='</tr>';
     });
@@ -226,6 +226,50 @@
   .then(loadTypes)
   .catch(function(e){ alert(e.message); });
  };
+
+window.copyTypeComposition = function(sourceId) {
+  // Загружаем все типы и показываем модальное окно выбора
+  fetch('/api/system-component-types')
+    .then(function(r){ return r.json(); })
+    .then(function(types){
+      var m = document.createElement('div');
+      m.className = 'modal';
+      m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:5000;';
+      m.innerHTML = '<div class="modal-content" style="max-width:400px;">' +
+        '<span class="modal-close">&times;</span>' +
+        '<h3>Копировать состав типа</h3>' +
+        '<form id="copyTypeForm">' +
+          '<div class="form-group"><label>Выберите целевой тип</label><select id="targetTypeSelect" required><option value="">-- выберите --</option></select></div>' +
+          '<div class="form-actions"><button type="submit" class="btn btn-primary">Копировать</button> <button type="button" class="btn btn-secondary cancel-btn">Отмена</button></div>' +
+        '</form>' +
+      '</div>';
+      document.body.appendChild(m);
+      var sel = m.querySelector('#targetTypeSelect');
+      types.forEach(function(t){
+        if (t.id != sourceId) sel.innerHTML += '<option value="'+t.id+'">'+esc(t.name)+'</option>';
+      });
+      function closeModal() { m.remove(); }
+      m.querySelector('.modal-close').addEventListener('click', closeModal);
+      m.querySelector('.cancel-btn').addEventListener('click', closeModal);
+      m.addEventListener('click', function(e){ if(e.target === m) closeModal(); });
+      m.querySelector('#copyTypeForm').addEventListener('submit', function(e){
+        e.preventDefault();
+        var targetId = sel.value;
+        if (!targetId) { alert('Выберите целевой тип'); return; }
+        fetch('/api/system-component-types/' + sourceId + '/copy-to/' + targetId, { method: 'POST' })
+          .then(function(r){
+            if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+            return r.json();
+          })
+          .then(function(data){
+            alert('✅ ' + data.message);
+            closeModal();
+            loadTypes();
+          })
+          .catch(function(e){ alert('Ошибка: ' + e.message); });
+      });
+    });
+};
 
  document.getElementById('exportTypesBtn').addEventListener('click', async function(){
   var r=await fetch('/api/system-component-types/export');

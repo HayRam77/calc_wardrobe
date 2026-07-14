@@ -64,7 +64,8 @@ router.post('/:id/materials', auth, isAdmin, async (req, res) => {
         // Добавляем в тип
         const result = await client.query(
             `INSERT INTO system_component_type_materials (type_id, material_id, quantity)
-             VALUES ($1, $2, $3) ON CONFLICT (type_id, material_id) DO UPDATE SET quantity = EXCLUDED.quantity RETURNING *`,
+             VALUES ($1, $2, $3)
+             ON CONFLICT (type_id, material_id) DO UPDATE SET quantity = EXCLUDED.quantity RETURNING *`,
             [typeId, material_id, qty]
         );
 
@@ -74,7 +75,7 @@ router.post('/:id/materials', auth, isAdmin, async (req, res) => {
              SELECT sc.id, $2, $3
              FROM system_components sc
              WHERE sc.type_id = $1
-             ON CONFLICT (system_component_id, material_id) DO NOTHING`,
+             `,
             [typeId, material_id, qty]
         );
 
@@ -126,7 +127,8 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
         // Добавляем в тип
         const result = await client.query(
             `INSERT INTO system_component_type_blocks (type_id, block_template_id, quantity)
-             VALUES ($1, $2, $3) ON CONFLICT (type_id, block_template_id) DO UPDATE SET quantity = EXCLUDED.quantity RETURNING *`,
+             VALUES ($1, $2, $3)
+             ON CONFLICT (type_id, block_template_id) DO UPDATE SET quantity = EXCLUDED.quantity RETURNING *`,
             [typeId, block_template_id, qty]
         );
 
@@ -136,7 +138,7 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
              SELECT sc.id, $2, $3
              FROM system_components sc
              WHERE sc.type_id = $1
-             ON CONFLICT (system_component_id, block_template_id) DO NOTHING`,
+             `,
             [typeId, block_template_id, qty]
         );
 
@@ -160,5 +162,55 @@ router.delete('/:typeId/blocks/:blockId', auth, isAdmin, async (req, res) => {
 });
 
 
+// ========== КОПИРОВАНИЕ СОСТАВА ТИПА В ДРУГОЙ ТИП ==========
+router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const sourceId = req.params.sourceId;
+        const targetId = req.params.targetId;
+
+        // Проверка существования типов
+        const src = await client.query('SELECT id FROM system_component_types WHERE id = $1', [sourceId]);
+        const tgt = await client.query('SELECT id FROM system_component_types WHERE id = $1', [targetId]);
+        if (src.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Исходный тип не найден' });
+        }
+        if (tgt.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Целевой тип не найден' });
+        }
+
+        // Удаляем старые материалы и блоки целевого типа
+        await client.query('DELETE FROM system_component_type_materials WHERE type_id = $1', [targetId]);
+        await client.query('DELETE FROM system_component_type_blocks WHERE type_id = $1', [targetId]);
+
+        // Копируем материалы
+        const matResult = await client.query(
+            `INSERT INTO system_component_type_materials (type_id, material_id, quantity)
+             SELECT $1, material_id, quantity FROM system_component_type_materials WHERE type_id = $2`,
+            [targetId, sourceId]
+        );
+
+        // Копируем блоки
+        const blkResult = await client.query(
+            `INSERT INTO system_component_type_blocks (type_id, block_template_id, quantity)
+             SELECT $1, block_template_id, quantity FROM system_component_type_blocks WHERE type_id = $2`,
+            [targetId, sourceId]
+        );
+
+        await client.query('COMMIT');
+        res.json({ message: 'Состав типа скопирован (материалов: ' + matResult.rowCount + ', блоков: ' + blkResult.rowCount + ')' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ message: 'Ошибка копирования состава типа' });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
+
 
