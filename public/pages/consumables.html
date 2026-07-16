@@ -1,3 +1,11 @@
+
+<style>
+.sorted-asc::after { content: ' ▲'; font-size: 10px; }
+.sorted-desc::after { content: ' ▼'; font-size: 10px; }
+th[data-sort] { cursor: pointer; user-select: none; }
+th[data-sort]:hover { background-color: #e0e0e0; }
+</style>
+
 <div class="page-content">
     <div style="margin-bottom:10px;">
         <button id="addConsumableBtn" class="btn btn-primary" style="display:none;">Добавить материал</button>
@@ -75,8 +83,8 @@
                 return;
             }
             var html = '<div class="table-container"><table class="data-table"><thead><tr>' +
-                '<th>ID</th><th>Артикул</th><th>Название</th><th>Производитель</th>' +
-                '<th>Описание</th><th>Ссылка</th><th>LN</th><th>TM</th><th>Ед. изм.</th><th>Цена, руб.</th>';
+                '<th data-sort="id">ID</th><th data-sort="article">Артикул</th><th data-sort="name">Название</th><th data-sort="manufacturer">Производитель</th>' +
+                '<th data-sort="description">Описание</th><th>Ссылка</th><th data-sort="ln">LN</th><th data-sort="tm">TM</th><th data-sort="unit">Ед. изм.</th><th data-sort="price">Цена, руб.</th>';
             if (isAdmin) html += '<th>Действия</th>';
             html += '</tr></thead><tbody>';
 
@@ -109,6 +117,59 @@
 
             html += '</tbody></table></div>';
             container.innerHTML = html;
+
+            // === СОРТИРОВКА С СОХРАНЕНИЕМ ===
+            var table = container.querySelector('table');
+            if (table) {
+                var tbody = table.querySelector('tbody');
+                var headers = table.querySelectorAll('thead th[data-sort]');
+                var sortState = JSON.parse(localStorage.getItem('consumables_sort') || '{}');
+                var sortKey = sortState.key || null;
+                var sortDir = sortState.dir || 'asc';
+
+                function applySort(key, dir) {
+                    var rows = Array.from(tbody.querySelectorAll('tr'));
+                    rows.sort(function(a, b) {
+                        var idA = parseInt(a.cells[0].textContent);
+                        var idB = parseInt(b.cells[0].textContent);
+                        var itemA = data.find(function(x) { return x.id == idA; });
+                        var itemB = data.find(function(x) { return x.id == idB; });
+                        if (!itemA || !itemB) return 0;
+                        var valA = (itemA[key] !== undefined ? itemA[key] : '');
+                        var valB = (itemB[key] !== undefined ? itemB[key] : '');
+                        if (typeof valA === 'string') valA = valA.toLowerCase();
+                        if (typeof valB === 'string') valB = valB.toLowerCase();
+                        if (valA < valB) return dir === 'asc' ? -1 : 1;
+                        if (valA > valB) return dir === 'asc' ? 1 : -1;
+                        return 0;
+                    });
+                    rows.forEach(function(row) { tbody.appendChild(row); });
+                    headers.forEach(function(th) {
+                        th.classList.remove('sorted-asc', 'sorted-desc');
+                        if (th.dataset.sort === key) {
+                            th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                        }
+                    });
+                }
+
+                headers.forEach(function(th) {
+                    th.addEventListener('click', function() {
+                        var key = this.dataset.sort;
+                        if (sortKey === key) {
+                            sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            sortKey = key;
+                            sortDir = 'asc';
+                        }
+                        localStorage.setItem('consumables_sort', JSON.stringify({key: sortKey, dir: sortDir}));
+                        applySort(sortKey, sortDir);
+                    });
+                });
+
+                if (sortKey) {
+                    applySort(sortKey, sortDir);
+                }
+            }
 
             container.querySelectorAll('.btn-edit').forEach(function(btn) {
                 btn.addEventListener('click', function() {
