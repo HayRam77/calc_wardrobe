@@ -171,4 +171,95 @@ router.put('/users/:id', auth, isAdmin, validate([
     }
 });
 
+// ========== ОПТИМИЗАЦИЯ БД ==========
+router.post('/db/optimize', auth, isAdmin, async (req, res) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        let totalRemoved = 0;
+        
+        // 1. Удаляем осиротевшие записи в ln_values (entity_id не существует)
+        const lnResult = await client.query(
+            `DELETE FROM ln_values WHERE 
+             (entity_type = 'system_component' AND entity_id NOT IN (SELECT id FROM system_components)) OR
+             (entity_type = 'block_template' AND entity_id NOT IN (SELECT id FROM block_templates)) OR
+             (entity_type = 'material' AND entity_id NOT IN (SELECT id FROM materials))`
+        );
+        totalRemoved += lnResult.rowCount;
+        
+        // 2. Удаляем осиротевшие записи в tm_values
+        const tmResult = await client.query(
+            `DELETE FROM tm_values WHERE 
+             (entity_type = 'system_component' AND entity_id NOT IN (SELECT id FROM system_components)) OR
+             (entity_type = 'block_template' AND entity_id NOT IN (SELECT id FROM block_templates)) OR
+             (entity_type = 'material' AND entity_id NOT IN (SELECT id FROM materials))`
+        );
+        totalRemoved += tmResult.rowCount;
+        
+        // 3. Удаляем пустые cabinet_systems (без system_id)
+        const emptySystems = await client.query(
+            `DELETE FROM cabinet_systems WHERE system_id IS NULL OR system_id NOT IN (SELECT id FROM systems)`
+        );
+        totalRemoved += emptySystems.rowCount;
+        
+        // 4. Удаляем неиспользуемые system_block_links
+        const sblResult = await client.query(
+            `DELETE FROM system_block_links WHERE 
+             system_component_id NOT IN (SELECT id FROM system_components) OR
+             block_template_id NOT IN (SELECT id FROM block_templates)`
+        );
+        totalRemoved += sblResult.rowCount;
+        
+        // 5. Удаляем неиспользуемые system_component_materials
+        const scmResult = await client.query(
+            `DELETE FROM system_component_materials WHERE 
+             system_component_id NOT IN (SELECT id FROM system_components) OR
+             material_id NOT IN (SELECT id FROM materials)`
+        );
+        totalRemoved += scmResult.rowCount;
+        
+        // 6. Удаляем неиспользуемые project_blocks
+        const pbResult = await client.query(
+            `DELETE FROM project_blocks WHERE 
+             cabinet_id NOT IN (SELECT id FROM cabinets) OR
+             template_id NOT IN (SELECT id FROM block_templates)`
+        );
+        totalRemoved += pbResult.rowCount;
+        
+        // 7. Удаляем неиспользуемые project_materials
+        const pmResult = await client.query(
+            `DELETE FROM project_materials WHERE 
+             cabinet_id NOT IN (SELECT id FROM cabinets) OR
+             material_id NOT IN (SELECT id FROM materials)`
+        );
+        totalRemoved += pmResult.rowCount;
+        
+        // 8. Удаляем неиспользуемые system_components_link
+        const sclResult = await client.query(
+            `DELETE FROM system_components_link WHERE 
+             system_id NOT IN (SELECT id FROM systems) OR
+             component_id NOT IN (SELECT id FROM system_components)`
+        );
+        totalRemoved += sclResult.rowCount;
+        
+        // 9. Очищаем пустые параметры компонентов
+        const paramsResult = await client.query(
+            `DELETE FROM system_component_params WHERE 
+             component_id NOT IN (SELECT id FROM system_components) OR
+             parameter_id NOT IN (SELECT id FROM system_parameters)`
+        );
+        totalRemoved += paramsResult.rowCount;
+        
+        await client.query('COMMIT');
+        res.json({ message: 'Оптимизация завершена. Удалено записей: ' + totalRemoved });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(500).json({ message: 'Ошибка оптимизации: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
+

@@ -23,6 +23,7 @@
             <input type="file" id="importDbFile" style="display:none" accept=".sql">
             <button id="importDbBtn" class="btn btn-secondary">Импорт дампа БД</button>
         </div>
+        <div style="margin-top:10px;"><button id="optimizeDbBtn" class="btn btn-secondary">🔧 Оптимизация БД</button></div>
         <div id="dbMessage" style="margin-top:10px;"></div>
     </div>
 </div>
@@ -108,6 +109,19 @@
         } catch(err) { userError.textContent = err.message; userError.style.display = 'block'; }
     });
     // База данных
+    document.getElementById('optimizeDbBtn').addEventListener('click', async function() {
+        if (!confirm('Запустить оптимизацию базы данных? Будут удалены все осиротевшие и неиспользуемые записи.')) return;
+        var msg = document.getElementById('dbMessage');
+        msg.innerHTML = '<p style="color:blue;">Оптимизация запущена...</p>';
+        try {
+            var r = await fetch('/api/admin/db/optimize', { method: 'POST' });
+            var data = await r.json();
+            msg.innerHTML = '<p style="color:' + (r.ok ? 'green' : 'red') + ';">' + data.message + '</p>';
+        } catch(e) {
+            msg.innerHTML = '<p style="color:red;">Ошибка: ' + e.message + '</p>';
+        }
+    });
+
     document.getElementById('exportDbBtn').addEventListener('click', async function() {
         var r = await fetch('/api/admin/db/export');
         if (!r.ok) { document.getElementById('dbMessage').innerHTML = '<p style="color:red;">Ошибка экспорта</p>'; return; }
