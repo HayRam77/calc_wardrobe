@@ -99,6 +99,7 @@ router.get('/', auth, async (req, res) => {
       SELECT bt.*, ct.name as type_name, m.name as manufacturer_name,
              COALESCE(ln.value, '') AS ln,
              COALESCE(tm.value, '') AS tm,
+             EXISTS(SELECT 1 FROM block_template_materials WHERE block_template_id = bt.id) as has_materials,
              COALESCE((SELECT json_agg(json_build_object('id', cpv.id, 'parameter_id', cpv.param_id, 'param_name', p.name, 'param_value', cpv.value))
                        FROM component_param_values cpv
                        LEFT JOIN parameters p ON cpv.param_id = p.id
@@ -120,6 +121,7 @@ router.get('/:id', auth, async (req, res) => {
       SELECT bt.*, ct.name as type_name, m.name as manufacturer_name,
              COALESCE(ln.value, '') AS ln,
              COALESCE(tm.value, '') AS tm,
+             EXISTS(SELECT 1 FROM block_template_materials WHERE block_template_id = bt.id) as has_materials,
              COALESCE((SELECT json_agg(json_build_object('id', cpv.id, 'parameter_id', cpv.param_id, 'param_name', p.name, 'param_value', cpv.value))
                        FROM component_param_values cpv
                        LEFT JOIN parameters p ON cpv.param_id = p.id

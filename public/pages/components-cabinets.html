@@ -12,7 +12,7 @@
             <input type="file" id="importTemplatesFile" style="display:none" accept=".xlsx,.xls">
             <button id="importTemplatesBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
         </div>
-        <div class="table-container"><table class="data-table"><thead><tr><th>Тип</th><th>Название</th><th>Производитель</th><th>Артикул</th><th>Цена, руб.</th><th>Вес, гр.</th><th>Q, Вт</th><th>LN</th>
+        <div class="table-container"><table class="data-table"><thead><tr><th data-sort="type_name">Тип</th><th data-sort="name">Название</th><th data-sort="manufacturer_name">Производитель</th><th data-sort="article">Артикул</th><th data-sort="price">Цена, руб.</th><th data-sort="weight_grams">Вес, гр.</th><th data-sort="power_watts">Q, Вт</th><th data-sort="ln">LN</th>
                         <th>TM</th><th>Ссылка</th><th id="templatesActionsCol" style="display:none;">Действия</th></tr></thead><tbody id="templatesBody"><tr><td colspan="11">Загрузка...</td></tr></tbody></table></div>
     </div>
     <div class="tab-content" id="tab-types">
@@ -99,6 +99,64 @@
     });
 
     // ==================== КОМПОНЕНТЫ ====================
+    var blockTooltipCache = {};
+    var blockTooltipEl = null;
+
+    function createBlockTooltipEl() {
+        if (blockTooltipEl) return blockTooltipEl;
+        blockTooltipEl = document.createElement('div');
+        blockTooltipEl.id = 'blockTooltip';
+        blockTooltipEl.style.cssText = 'display:none; position:fixed; background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:9999; max-width:500px; font-size:12px;';
+        document.body.appendChild(blockTooltipEl);
+        return blockTooltipEl;
+    }
+
+    function showBlockTooltip(e, blockId) {
+        var el = createBlockTooltipEl();
+        if (blockTooltipCache[blockId]) {
+            el.innerHTML = blockTooltipCache[blockId];
+            el.style.display = 'block';
+            moveBlockTooltip(e);
+            return;
+        }
+        el.innerHTML = 'Загрузка...';
+        el.style.display = 'block';
+        moveBlockTooltip(e);
+        fetch('/api/block-templates/' + blockId + '/materials')
+            .then(function(r) { return r.json(); })
+            .then(function(materials) {
+                var html = '<div style="font-weight:bold;margin-bottom:5px;">Привязанные материалы:</div>';
+                if (materials.length) {
+                    html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Кол-во</th></tr>';
+                    materials.forEach(function(m) {
+                        html += '<tr><td>' + esc(m.name) + '</td><td>' + m.quantity + '</td></tr>';
+                    });
+                    html += '</table>';
+                } else {
+                    html += '<p style="color:#888;">Нет материалов</p>';
+                }
+                blockTooltipCache[blockId] = html;
+                el.innerHTML = html;
+                moveBlockTooltip(e);
+            })
+            .catch(function(err) {
+                el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
+            });
+    }
+
+    function moveBlockTooltip(e) {
+        if (!blockTooltipEl || blockTooltipEl.style.display === 'none') return;
+        var x = e.clientX + 15, y = e.clientY + 15;
+        if (x + blockTooltipEl.offsetWidth > window.innerWidth) x = e.clientX - blockTooltipEl.offsetWidth - 15;
+        if (y + blockTooltipEl.offsetHeight > window.innerHeight) y = e.clientY - blockTooltipEl.offsetHeight - 15;
+        blockTooltipEl.style.left = x + 'px';
+        blockTooltipEl.style.top = y + 'px';
+    }
+
+    function hideBlockTooltip() {
+        if (blockTooltipEl) blockTooltipEl.style.display = 'none';
+    }
+
     async function loadTemplates() {
         var tbody = document.getElementById('templatesBody');
         try {
@@ -112,7 +170,9 @@
             data.forEach(function(item) {
                 html += '<tr>';
                 html += '<td>' + esc(item.type_name || '') + '</td>';
-                html += '<td>' + esc(item.name) + '</td>';
+                var hasMats = item.has_materials;
+                var nameHtml = hasMats ? '<span class="block-name-link" style="cursor:pointer;text-decoration:underline;"><strong>' + esc(item.name) + '</strong></span>' : esc(item.name);
+                html += '<td>' + nameHtml + '</td>';
                 html += '<td>' + esc(item.manufacturer_name || '') + '</td>';
                 html += '<td>' + esc(item.article || '') + '</td>';
                 html += '<td>' + (item.price || '') + '</td>';
@@ -127,6 +187,16 @@
                 html += '</tr>';
             });
             tbody.innerHTML = html;
+
+            // Тултипы для названий с материалами
+            tbody.querySelectorAll('.block-name-link').forEach(function(el) {
+                var tr = el.closest('tr');
+                var blockId = tr.querySelector('.btn-edit')?.dataset.id || tr.querySelector('.btn-delete')?.dataset.id;
+                if (!blockId) return;
+                el.addEventListener('mouseenter', function(e) { showBlockTooltip(e, blockId); });
+                el.addEventListener('mouseleave', hideBlockTooltip);
+                el.addEventListener('mousemove', moveBlockTooltip);
+            });
             
             if (isAdmin) {
                 tbody.querySelectorAll('.btn-edit').forEach(function(btn) {
@@ -192,7 +262,9 @@
             data.forEach(function(item) {
                 html += '<tr>';
                 html += '<td>' + item.id + '</td>';
-                html += '<td>' + esc(item.name) + '</td>';
+                var hasMats = item.has_materials;
+                var nameHtml = hasMats ? '<span class="block-name-link" style="cursor:pointer;text-decoration:underline;"><strong>' + esc(item.name) + '</strong></span>' : esc(item.name);
+                html += '<td>' + nameHtml + '</td>';
                 html += '<td>' + esc(item.description || '') + '</td>';
                 if (isAdmin) {
                     html += '<td><button class="btn btn-sm btn-edit" data-id="' + item.id + '">✏️</button> <button class="btn btn-sm btn-delete" data-id="' + item.id + '">🗑️</button></td>';
@@ -200,6 +272,16 @@
                 html += '</tr>';
             });
             tbody.innerHTML = html;
+
+            // Тултипы для названий с материалами
+            tbody.querySelectorAll('.block-name-link').forEach(function(el) {
+                var tr = el.closest('tr');
+                var blockId = tr.querySelector('.btn-edit')?.dataset.id || tr.querySelector('.btn-delete')?.dataset.id;
+                if (!blockId) return;
+                el.addEventListener('mouseenter', function(e) { showBlockTooltip(e, blockId); });
+                el.addEventListener('mouseleave', hideBlockTooltip);
+                el.addEventListener('mousemove', moveBlockTooltip);
+            });
             
             if (isAdmin) {
                 tbody.querySelectorAll('.btn-edit').forEach(function(btn) {
@@ -292,7 +374,9 @@
             data.forEach(function(item) {
                 html += '<tr>';
                 html += '<td>' + item.id + '</td>';
-                html += '<td>' + esc(item.name) + '</td>';
+                var hasMats = item.has_materials;
+                var nameHtml = hasMats ? '<span class="block-name-link" style="cursor:pointer;text-decoration:underline;"><strong>' + esc(item.name) + '</strong></span>' : esc(item.name);
+                html += '<td>' + nameHtml + '</td>';
                 html += '<td>' + esc(item.description || '') + '</td>';
                 if (isAdmin) {
                     html += '<td><button class="btn btn-sm btn-edit" data-id="' + item.id + '">✏️</button> <button class="btn btn-sm btn-delete" data-id="' + item.id + '">🗑️</button></td>';
@@ -300,6 +384,16 @@
                 html += '</tr>';
             });
             tbody.innerHTML = html;
+
+            // Тултипы для названий с материалами
+            tbody.querySelectorAll('.block-name-link').forEach(function(el) {
+                var tr = el.closest('tr');
+                var blockId = tr.querySelector('.btn-edit')?.dataset.id || tr.querySelector('.btn-delete')?.dataset.id;
+                if (!blockId) return;
+                el.addEventListener('mouseenter', function(e) { showBlockTooltip(e, blockId); });
+                el.addEventListener('mouseleave', hideBlockTooltip);
+                el.addEventListener('mousemove', moveBlockTooltip);
+            });
             
             if (isAdmin) {
                 tbody.querySelectorAll('.btn-edit').forEach(function(btn) {
