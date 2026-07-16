@@ -433,7 +433,21 @@
             .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
-    window.openBlockModal = function() {
+    window.updateBlockQtyInCabinet = function(blockId, qty) {
+    if (!qty || isNaN(qty) || parseInt(qty) < 0) { alert('Количество должно быть положительным числом или 0'); return; }
+    var cabinetId = window.cabinetId;
+    if (!cabinetId) { alert('Ошибка: ID шкафа не найден'); return; }
+    fetch('/api/cabinets/' + cabinetId + '/blocks/' + blockId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: parseInt(qty) })
+    }).then(function(r) {
+        if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); });
+        window.loadCabinetCalculation();
+    }).catch(function(e) { alert('Ошибка: ' + e.message); });
+};
+
+window.openBlockModal = function() {
         if (typeof BlockTemplateModal !== 'undefined') {
             BlockTemplateModal.open(function(blockId){
                 if (blockId) {
@@ -501,7 +515,7 @@
                         '<td>' + (item.name || '') + '</td>' +
                         '<td>' + (item.unit || '') + '</td>' +
                         '<td>' + (item.price !== null ? parseFloat(item.price).toFixed(2) : '') + '</td>' +
-                        '<td>' + item.quantity + '</td>' +
+                        '<td><input type="number" value="' + item.quantity + '" style="width:60px;" onchange="updateMaterialQtyInCabinet(' + item.link_id + ', this.value)"></td>' +
                         '<td>' + (item.ln || '') + '</td>' +
                         '<td>' + (item.tm || '') + '</td>' +
                         '<td>' +
@@ -540,7 +554,21 @@
         } else { alert('Модальное окно материалов не загружено'); }
     };
 
-    window.editMaterialQuantity = function(linkId) {
+    window.updateMaterialQtyInCabinet = function(linkId, qty) {
+    if (!qty || isNaN(qty) || parseInt(qty) < 0) { alert('Количество должно быть положительным числом или 0'); return; }
+    var cabinetId = window.cabinetId;
+    if (!cabinetId) { alert('Ошибка: ID шкафа не найден'); return; }
+    fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: parseInt(qty) })
+    }).then(function(r) {
+        if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); });
+        window.loadCabinetCalculation();
+    }).catch(function(e) { alert('Ошибка: ' + e.message); });
+};
+
+window.editMaterialQuantity = function(linkId) {
         var newQty = prompt('Новое количество:');
         if (!newQty || isNaN(newQty) || parseInt(newQty) < 1) return;
         fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, {

@@ -258,7 +258,10 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
     const template_id = parseInt(req.body.template_id);
     const quantity = parseInt(req.body.quantity) || 1;
     const result = await pool.query(
-      'INSERT INTO project_blocks (cabinet_id, template_id, quantity) VALUES ($1, $2, $3) RETURNING *',
+      `INSERT INTO project_blocks (cabinet_id, template_id, quantity)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (cabinet_id, template_id) DO UPDATE SET quantity = project_blocks.quantity + EXCLUDED.quantity
+       RETURNING *`,
       [req.params.id, template_id, quantity]
     );
     res.status(201).json(result.rows[0]);
@@ -428,7 +431,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         '<td>' + esc(block.block_name) + '</td>' +
         '<td>' + esc(block.ln || '') + '</td>' +
         '<td>' + esc(block.tm || '') + '</td>' +
-        '<td>' + (block.quantity || 1) + '</td>' +
+        '<td><input type="number" value="' + (block.quantity || 1) + '" style="width:60px;" onchange="updateBlockQtyInCabinet(' + blockId + ', this.value)"></td>' +
         '<td>' +
           (isSystem ?
             '<button class="btn btn-sm btn-delete" onclick="delBlock(' + blockId + ')">🗑️</button>' :

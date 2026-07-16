@@ -32,6 +32,7 @@ window.BlockTemplateModal = {
             h += '<div class="form-row"><div class="form-group"><label>TM</label><input type="text" id="blockTm"></div></div>';
             h += '<div class="form-group"><label>Ссылка</label><input type="url" id="blockUrl"></div>';
             h += '<div class="form-group"><label>Описание</label><textarea id="blockDescription" rows="2"></textarea></div>';
+            h += '<div class="form-group"><label>Материалы блока</label><div id="blockMaterialsList" style="margin-bottom:5px;"></div><button type="button" class="btn btn-sm btn-primary" id="addBlockMaterialBtn">+ Добавить материал</button></div>';
             h += '<div style="margin-top:15px;"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary cancel-block-btn">Отмена</button></div>';
             f.innerHTML = h;
 
@@ -44,6 +45,8 @@ window.BlockTemplateModal = {
                     container.appendChild(sel);
                 }
                 if (self._preselectedId) setTimeout(function(){ self._loadData(self._preselectedId); }, 50);
+                // Инициализируем обработчики материалов
+                self._initMaterialHandlers(self._preselectedId || 0);
             });
 
             fetch('/api/block-templates').then(function(r){ return r.json(); }).then(function(blocks){
@@ -115,6 +118,9 @@ window.BlockTemplateModal = {
                 if (data.type_id) self._safeSetValue('blockType', data.type_id);
                 document.getElementById('blockModalTitle').textContent = 'Редактировать компонент шкафа';
                 var sel = document.getElementById('existingBlockSelect'); if (sel) sel.value = data.id;
+                // Загружаем материалы блока
+                self._loadMaterials(data.id);
+                self._initMaterialHandlers(data.id);
             })
             .catch(function(err){ console.error(err); alert('Не удалось загрузить данные.'); });
     },
@@ -126,6 +132,60 @@ window.BlockTemplateModal = {
         this._safeSetValue('blockManufacturer', ''); this._safeSetValue('blockType', '');
         var title = document.getElementById('blockModalTitle'); if (title) title.textContent = 'Добавить компонент шкафа';
         var sel = document.getElementById('existingBlockSelect'); if (sel) sel.value = '';
+        // Очищаем список материалов
+        var ml = document.getElementById('blockMaterialsList'); if (ml) ml.innerHTML = '';
+    },
+
+    _loadMaterials: function(blockId) {
+        var self = this;
+        var ml = document.getElementById('blockMaterialsList');
+        if (!ml) return;
+        ml.innerHTML = 'Загрузка...';
+        fetch('/api/block-templates/' + blockId + '/materials')
+            .then(function(r) { return r.json(); })
+            .then(function(materials) {
+                if (!materials.length) {
+                    ml.innerHTML = '<p>Нет материалов</p>';
+                    return;
+                }
+                var html = '<table class="data-table"><tr><th>Название</th><th>Кол-во</th><th></th></tr>';
+                materials.forEach(function(mat) {
+                    html += '<tr><td>' + (mat.name || '') + '</td><td>' + mat.quantity + '</td><td><button class="btn btn-sm btn-delete" onclick="window.BlockTemplateModal._deleteMaterial(' + blockId + ',' + mat.material_id + ')">🗑️</button></td></tr>';
+                });
+                html += '</table>';
+                ml.innerHTML = html;
+            });
+    },
+
+    _deleteMaterial: function(blockId, materialId) {
+        if (!confirm('Удалить материал из блока?')) return;
+        fetch('/api/block-templates/' + blockId + '/materials/' + materialId, { method: 'DELETE' })
+            .then(function() { window.BlockTemplateModal._loadMaterials(blockId); });
+    },
+
+    _initMaterialHandlers: function(blockId) {
+        var self = this;
+        var btn = document.getElementById('addBlockMaterialBtn');
+        if (btn) {
+            btn.onclick = function() {
+                if (typeof MaterialModal !== 'undefined') {
+                    MaterialModal.open(function(materialId) {
+                        if (materialId) {
+                            var qty = prompt('Количество:', '1');
+                            if (qty && !isNaN(qty) && parseInt(qty) > 0) {
+                                fetch('/api/block-templates/' + blockId + '/materials', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ material_id: materialId, quantity: parseInt(qty) })
+                                }).then(function() { self._loadMaterials(blockId); });
+                            }
+                        }
+                    });
+                } else {
+                    alert('Модальное окно материалов не загружено');
+                }
+            };
+        }
     }
 };
 </script>

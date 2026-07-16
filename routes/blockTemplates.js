@@ -271,4 +271,50 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
   catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+// ========== МАТЕРИАЛЫ КОМПОНЕНТА ШКАФА ==========
+
+// Получить материалы блока
+router.get('/:id/materials', auth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT btm.*, m.name, m.article, m.unit, m.price, m.manufacturer,
+                    COALESCE(ln.value, '') AS ln, COALESCE(tm.value, '') AS tm
+             FROM block_template_materials btm
+             JOIN materials m ON btm.material_id = m.id
+             LEFT JOIN ln_values ln ON ln.entity_type = 'material' AND ln.entity_id = m.id
+             LEFT JOIN tm_values tm ON tm.entity_type = 'material' AND tm.entity_id = m.id
+             WHERE btm.block_template_id = $1 ORDER BY m.name`,
+            [req.params.id]
+        );
+        res.json(result.rows);
+    } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+// Добавить материал к блоку
+router.post('/:id/materials', auth, isAdmin, async (req, res) => {
+    try {
+        const { material_id, quantity } = req.body;
+        const result = await pool.query(
+            `INSERT INTO block_template_materials (block_template_id, material_id, quantity)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (block_template_id, material_id) DO UPDATE SET quantity = EXCLUDED.quantity
+             RETURNING *`,
+            [req.params.id, material_id, quantity || 1]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+// Удалить материал из блока
+router.delete('/:blockId/materials/:materialId', auth, isAdmin, async (req, res) => {
+    try {
+        await pool.query(
+            'DELETE FROM block_template_materials WHERE block_template_id = $1 AND material_id = $2',
+            [req.params.blockId, req.params.materialId]
+        );
+        res.json({ message: 'Материал удалён из блока' });
+    } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 module.exports = router;
+
