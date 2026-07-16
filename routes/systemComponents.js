@@ -203,11 +203,7 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
                      SELECT $1, material_id, quantity FROM system_component_type_materials WHERE type_id = $2`,
                     [req.params.id, type_id]
                 );
-                await client.query(
-                    `INSERT INTO system_block_links (system_component_id, block_template_id, quantity)
-                     SELECT $1, block_template_id, quantity FROM system_component_type_blocks WHERE type_id = $2`,
-                    [req.params.id, type_id]
-                );
+                // Блоки не подтягиваем автоматически при редактировании
             } catch (inheritErr) {
                 console.error('Auto-inherit error on update:', inheritErr);
             }
@@ -284,6 +280,7 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
         const result = await pool.query(
             `INSERT INTO system_block_links (system_component_id, block_template_id, quantity)
              VALUES ($1,$2,$3)
+             ON CONFLICT (system_component_id, block_template_id) DO UPDATE SET quantity = EXCLUDED.quantity
              RETURNING *`,
             [req.params.id, block_template_id, quantity||1]
         );

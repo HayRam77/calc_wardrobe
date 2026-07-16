@@ -21,14 +21,15 @@ window.SystemCompModal = {
         m.querySelector('.modal-close').addEventListener('click', function(){ m.remove(); });
         m.addEventListener('click', function(e){ if(e.target === m) m.remove(); });
 
+        // Очищаем кеш и загружаем свежие данные
         var loadData = [
-            fetch('/api/system-parameters').then(function(r){ return r.json(); }),
-            fetch('/api/system-component-types').then(function(r){ return r.json(); }),
-            fetch('/api/system-modules').then(function(r){ return r.json(); }),
-            fetch('/api/system-parameter-types').then(function(r){ return r.json(); })
+            fetch('/api/system-parameters?_=' + Date.now()).then(function(r){ return r.json(); }),
+            fetch('/api/system-component-types?_=' + Date.now()).then(function(r){ return r.json(); }),
+            fetch('/api/system-modules?_=' + Date.now()).then(function(r){ return r.json(); }),
+            fetch('/api/system-parameter-types?_=' + Date.now()).then(function(r){ return r.json(); })
         ];
         if (isEdit) {
-            loadData.push(fetch('/api/system-components/' + compId).then(function(r){ return r.json(); }));
+            loadData.push(fetch('/api/system-components/' + compId + '?_=' + Date.now()).then(function(r){ return r.json(); }));
         }
         if (isCabinetMode && cabinetIdParam) {
             loadData.push(fetch('/api/cabinets/' + cabinetIdParam + '/systems').then(function(r){ return r.json(); }));
@@ -51,7 +52,14 @@ window.SystemCompModal = {
                 systems: systems.length
             });
 
-            self._buildForm(m, comp, params, types, modules, paramTypes, callback, isCabinetMode, systems, cabinetIdParam);
+            // Перезагружаем comp с сервера для получения свежих данных (блоки, материалы)
+            if (isEdit) {
+                fetch('/api/system-components/' + compId + '?_=' + Date.now()).then(function(r){ return r.json(); }).then(function(freshComp) {
+                    self._buildForm(m, freshComp, params, types, modules, paramTypes, callback, isCabinetMode, systems, cabinetIdParam);
+                });
+            } else {
+                self._buildForm(m, comp, params, types, modules, paramTypes, callback, isCabinetMode, systems, cabinetIdParam);
+            }
         }).catch(function(err){
             console.error('Error loading data:', err);
             alert('Ошибка загрузки данных. Проверьте подключение к серверу.');
@@ -313,7 +321,7 @@ window.SystemCompModal = {
         // ==================== КОМПОНЕНТЫ ШКАФА ====================
         var lc = document.getElementById('linkedBlocks');
         if (isEdit) {
-            fetch('/api/system-components/' + comp.id + '/blocks')
+            fetch('/api/system-components/' + comp.id + '/blocks?_=' + Date.now())
                 .then(function(r){ return r.json(); })
                 .then(function(data){
                     if (!data.length) {
