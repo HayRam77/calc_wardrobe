@@ -496,6 +496,72 @@ window.openBlockModal = function() {
                         });
                     }
                 }
+                // === СОРТИРОВКА КОМПОНЕНТОВ ШКАФА ===
+                var blockTable = container.querySelector('table');
+                if (blockTable) {
+                    var blockThead = blockTable.querySelector('thead tr');
+                    if (blockThead) {
+                        blockThead.querySelectorAll('th').forEach(function(th, idx) {
+                            if (!th.dataset.sort && idx > 0) {
+                                var sortKey = '';
+                                if (idx === 1) sortKey = 'system';
+                                else if (idx === 2) sortKey = 'component';
+                                else if (idx === 3) sortKey = 'type';
+                                else if (idx === 4) sortKey = 'name';
+                                else if (idx === 5) sortKey = 'ln';
+                                else if (idx === 6) sortKey = 'tm';
+                                else if (idx === 7) sortKey = 'quantity';
+                                if (sortKey) th.dataset.sort = sortKey;
+                            }
+                        });
+                    }
+                    var blockSortState = JSON.parse(localStorage.getItem('cabinet_blocks_sort') || '{}');
+                    var blockSortKey = blockSortState.key || null;
+                    var blockSortDir = blockSortState.dir || 'asc';
+                    var blockTbody = blockTable.querySelector('tbody');
+                    
+                    function applyBlockSort(key, dir) {
+                        if (!blockTbody || !key) return;
+                        var rows = Array.from(blockTbody.querySelectorAll('tr'));
+                        var colIdx = Array.from(blockThead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === key; });
+                        if (colIdx < 0) return;
+                        rows.sort(function(a, b) {
+                            var valA = (a.cells[colIdx]?.textContent || '').trim();
+                            var valB = (b.cells[colIdx]?.textContent || '').trim();
+                            var numA = parseFloat(valA.replace(/,/g, '.'));
+                            var numB = parseFloat(valB.replace(/,/g, '.'));
+                            if (!isNaN(numA) && !isNaN(numB)) {
+                                return dir === 'asc' ? numA - numB : numB - numA;
+                            }
+                            return dir === 'asc' ? valA.localeCompare(valB, 'ru') : valB.localeCompare(valA, 'ru');
+                        });
+                        rows.forEach(function(row) { blockTbody.appendChild(row); });
+                        blockThead.querySelectorAll('th').forEach(function(th) {
+                            th.classList.remove('sorted-asc', 'sorted-desc');
+                            if (th.dataset.sort === key) {
+                                th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                            }
+                        });
+                    }
+                    
+                    blockThead.querySelectorAll('th[data-sort]').forEach(function(th) {
+                        th.addEventListener('click', function() {
+                            var key = this.dataset.sort;
+                            if (blockSortKey === key) {
+                                blockSortDir = blockSortDir === 'asc' ? 'desc' : 'asc';
+                            } else {
+                                blockSortKey = key;
+                                blockSortDir = 'asc';
+                            }
+                            localStorage.setItem('cabinet_blocks_sort', JSON.stringify({key: blockSortKey, dir: blockSortDir}));
+                            applyBlockSort(blockSortKey, blockSortDir);
+                        });
+                    });
+                    
+                    if (blockSortKey) {
+                        setTimeout(function() { applyBlockSort(blockSortKey, blockSortDir); }, 100);
+                    }
+                }
                 setTimeout(function(){ makeDraggable(container.querySelector('table'), 'system_block_links'); }, 0); })
             .catch(function(e){ console.error(e); });
     };
@@ -528,6 +594,73 @@ window.openBlockModal = function() {
                 });
                 html += '</tbody></table></div>';
                 container.innerHTML = html;
+                // === СОРТИРОВКА МАТЕРИАЛОВ ШКАФА ===
+                var matTable = container.querySelector('table');
+                if (matTable) {
+                    var matThead = matTable.querySelector('thead tr');
+                    if (matThead) {
+                        matThead.querySelectorAll('th').forEach(function(th, idx) {
+                            if (!th.dataset.sort && idx > 0) {
+                                var sortKey = '';
+                                if (idx === 1) sortKey = 'system_name';
+                                else if (idx === 2) sortKey = 'component_name';
+                                else if (idx === 3) sortKey = 'name';
+                                else if (idx === 4) sortKey = 'unit';
+                                else if (idx === 5) sortKey = 'price';
+                                else if (idx === 6) sortKey = 'quantity';
+                                else if (idx === 7) sortKey = 'ln';
+                                else if (idx === 8) sortKey = 'tm';
+                                if (sortKey) th.dataset.sort = sortKey;
+                            }
+                        });
+                    }
+                    var matSortState = JSON.parse(localStorage.getItem('cabinet_materials_sort') || '{}');
+                    var matSortKey = matSortState.key || null;
+                    var matSortDir = matSortState.dir || 'asc';
+                    var matTbody = matTable.querySelector('tbody');
+                    
+                    function applyMatSort(key, dir) {
+                        if (!matTbody || !key) return;
+                        var rows = Array.from(matTbody.querySelectorAll('tr'));
+                        var colIdx = Array.from(matThead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === key; });
+                        if (colIdx < 0) return;
+                        rows.sort(function(a, b) {
+                            var valA = (a.cells[colIdx]?.textContent || '').trim();
+                            var valB = (b.cells[colIdx]?.textContent || '').trim();
+                            var numA = parseFloat(valA.replace(/,/g, '.'));
+                            var numB = parseFloat(valB.replace(/,/g, '.'));
+                            if (!isNaN(numA) && !isNaN(numB)) {
+                                return dir === 'asc' ? numA - numB : numB - numA;
+                            }
+                            return dir === 'asc' ? valA.localeCompare(valB, 'ru') : valB.localeCompare(valA, 'ru');
+                        });
+                        rows.forEach(function(row) { matTbody.appendChild(row); });
+                        matThead.querySelectorAll('th').forEach(function(th) {
+                            th.classList.remove('sorted-asc', 'sorted-desc');
+                            if (th.dataset.sort === key) {
+                                th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                            }
+                        });
+                    }
+                    
+                    matThead.querySelectorAll('th[data-sort]').forEach(function(th) {
+                        th.addEventListener('click', function() {
+                            var key = this.dataset.sort;
+                            if (matSortKey === key) {
+                                matSortDir = matSortDir === 'asc' ? 'desc' : 'asc';
+                            } else {
+                                matSortKey = key;
+                                matSortDir = 'asc';
+                            }
+                            localStorage.setItem('cabinet_materials_sort', JSON.stringify({key: matSortKey, dir: matSortDir}));
+                            applyMatSort(matSortKey, matSortDir);
+                        });
+                    });
+                    
+                    if (matSortKey) {
+                        setTimeout(function() { applyMatSort(matSortKey, matSortDir); }, 100);
+                    }
+                }
                 setTimeout(function(){ makeDraggable(container.querySelector('table'), 'system_component_materials'); }, 0);
             })
             .catch(function(e){ console.error(e); container.innerHTML = '<p style="color:red;">Ошибка загрузки материалов</p>'; });

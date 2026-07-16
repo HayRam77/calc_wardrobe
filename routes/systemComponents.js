@@ -106,7 +106,7 @@ router.post('/', auth, isAdmin, async (req, res) => {
                 `INSERT INTO ln_values (entity_type, entity_id, value)
                  VALUES ($1, $2, $3)
                  ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
-                ['system_component', newComp.id, ln || null]
+                ['system_component', newComp.id, ln || '']
             );
         }
         if (tm !== undefined) {
@@ -114,7 +114,7 @@ router.post('/', auth, isAdmin, async (req, res) => {
                 `INSERT INTO tm_values (entity_type, entity_id, value)
                  VALUES ($1, $2, $3)
                  ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
-                ['system_component', newComp.id, tm || null]
+                ['system_component', newComp.id, tm || '']
             );
         }
 
@@ -127,23 +127,7 @@ router.post('/', auth, isAdmin, async (req, res) => {
             }
         }
 
-        // Авто-подтягивание материалов и блоков из типа
-        if (type_id) {
-            try {
-                await client.query(
-                    `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
-                     SELECT $1, material_id, quantity FROM system_component_type_materials WHERE type_id = $2`,
-                    [newComp.id, type_id]
-                );
-                await client.query(
-                    `INSERT INTO system_block_links (system_component_id, block_template_id, quantity)
-                     SELECT $1, block_template_id, quantity FROM system_component_type_blocks WHERE type_id = $2`,
-                    [newComp.id, type_id]
-                );
-            } catch (inheritErr) {
-                console.error('Auto-inherit error on create:', inheritErr);
-            }
-        }
+        // Авто-подтягивание отключено — наследование из типа работает через API GET
 
         await client.query('COMMIT');
         res.status(201).json(newComp);
@@ -173,7 +157,7 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
                 `INSERT INTO ln_values (entity_type, entity_id, value)
                  VALUES ($1, $2, $3)
                  ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
-                ['system_component', req.params.id, ln || null]
+                ['system_component', req.params.id, ln || '']
             );
         }
         if (tm !== undefined) {
@@ -181,7 +165,7 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
                 `INSERT INTO tm_values (entity_type, entity_id, value)
                  VALUES ($1, $2, $3)
                  ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
-                ['system_component', req.params.id, tm || null]
+                ['system_component', req.params.id, tm || '']
             );
         }
 
@@ -265,6 +249,10 @@ router.get('/:id/blocks', auth, async (req, res) => {
              LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
              LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
              WHERE sc.id = $1
+             AND NOT EXISTS (
+               SELECT 1 FROM system_block_links sbl2
+               WHERE sbl2.system_component_id = sc.id AND sbl2.block_template_id = sctb.block_template_id
+             )
              ORDER BY bt.name`,
             [req.params.id]
         );
