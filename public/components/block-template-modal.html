@@ -32,7 +32,7 @@ window.BlockTemplateModal = {
             h += '<div class="form-row"><div class="form-group"><label>TM</label><input type="text" id="blockTm"></div></div>';
             h += '<div class="form-group"><label>Ссылка</label><input type="url" id="blockUrl"></div>';
             h += '<div class="form-group"><label>Описание</label><textarea id="blockDescription" rows="2"></textarea></div>';
-            h += '<div class="form-group"><label>Материалы блока</label><div id="blockMaterialsList" style="margin-bottom:5px;"></div><button type="button" class="btn btn-sm btn-primary" id="addBlockMaterialBtn">+ Добавить материал</button></div>';
+            h += '<div class="form-group"><label>Материалы компонента шкафа</label><div id="blockMaterialsList" style="margin-bottom:5px;"></div><button type="button" class="btn btn-sm btn-primary" id="addBlockMaterialBtn">+ Добавить материал</button></div>';
             h += '<div style="margin-top:15px;"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary cancel-block-btn">Отмена</button></div>';
             f.innerHTML = h;
 
@@ -150,11 +150,20 @@ window.BlockTemplateModal = {
                 }
                 var html = '<table class="data-table"><tr><th>Название</th><th>Кол-во</th><th></th></tr>';
                 materials.forEach(function(mat) {
-                    html += '<tr><td>' + (mat.name || '') + '</td><td>' + mat.quantity + '</td><td><button class="btn btn-sm btn-delete" onclick="window.BlockTemplateModal._deleteMaterial(' + blockId + ',' + mat.material_id + ')">🗑️</button></td></tr>';
+                    html += '<tr><td>' + (mat.name || '') + '</td><td><input type="number" value="' + mat.quantity + '" style="width:60px;" onchange="window.BlockTemplateModal._updateMaterialQty(' + blockId + ',' + mat.material_id + ', this.value)"></td><td><button class="btn btn-sm btn-delete" onclick="window.BlockTemplateModal._deleteMaterial(' + blockId + ',' + mat.material_id + ')">🗑️</button></td></tr>';
                 });
                 html += '</table>';
                 ml.innerHTML = html;
             });
+    },
+
+    _updateMaterialQty: function(blockId, materialId, qty) {
+        if (!qty || isNaN(qty) || parseInt(qty) < 1) { alert('Количество должно быть положительным числом'); return; }
+        fetch('/api/block-templates/' + blockId + '/materials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ material_id: materialId, quantity: parseInt(qty) })
+        }).catch(function(e) { alert('Ошибка: ' + e.message); });
     },
 
     _deleteMaterial: function(blockId, materialId) {
