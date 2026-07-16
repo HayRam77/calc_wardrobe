@@ -1,3 +1,10 @@
+<style>
+.sorted-asc::after { content: ' ▲'; font-size: 10px; }
+.sorted-desc::after { content: ' ▼'; font-size: 10px; }
+th[data-sort] { cursor: pointer; user-select: none; }
+th[data-sort]:hover { background-color: #e0e0e0; }
+</style>
+
 <div class="page-content">
     <div class="tabs">
         <button class="tab-btn active" data-tab="templates" id="components_cabinets_btn_btn">Компоненты шкафов</button>
@@ -188,6 +195,56 @@
             });
             tbody.innerHTML = html;
 
+            // === СОРТИРОВКА С СОХРАНЕНИЕМ ===
+            var table = tbody.closest('table');
+            var headers = table.querySelectorAll('thead th[data-sort]');
+            var sortState = JSON.parse(localStorage.getItem('block_templates_sort') || '{}');
+            var sortKey = sortState.key || null;
+            var sortDir = sortState.dir || 'asc';
+
+            function applySort(key, dir) {
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                rows.sort(function(a, b) {
+                    var idA = parseInt(a.cells[0].textContent);
+                    var idB = parseInt(b.cells[0].textContent);
+                    var itemA = data.find(function(x) { return x.id == idA; });
+                    var itemB = data.find(function(x) { return x.id == idB; });
+                    if (!itemA || !itemB) return 0;
+                    var valA = (itemA[key] !== undefined ? itemA[key] : '');
+                    var valB = (itemB[key] !== undefined ? itemB[key] : '');
+                    if (typeof valA === 'string') valA = valA.toLowerCase();
+                    if (typeof valB === 'string') valB = valB.toLowerCase();
+                    if (valA < valB) return dir === 'asc' ? -1 : 1;
+                    if (valA > valB) return dir === 'asc' ? 1 : -1;
+                    return 0;
+                });
+                rows.forEach(function(row) { tbody.appendChild(row); });
+                headers.forEach(function(th) {
+                    th.classList.remove('sorted-asc', 'sorted-desc');
+                    if (th.dataset.sort === key) {
+                        th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                    }
+                });
+            }
+
+            headers.forEach(function(th) {
+                th.addEventListener('click', function() {
+                    var key = this.dataset.sort;
+                    if (sortKey === key) {
+                        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortKey = key;
+                        sortDir = 'asc';
+                    }
+                    localStorage.setItem('block_templates_sort', JSON.stringify({key: sortKey, dir: sortDir}));
+                    applySort(sortKey, sortDir);
+                });
+            });
+
+            if (sortKey) {
+                applySort(sortKey, sortDir);
+            }
+
             // Тултипы для названий с материалами
             tbody.querySelectorAll('.block-name-link').forEach(function(el) {
                 var tr = el.closest('tr');
@@ -272,6 +329,56 @@
                 html += '</tr>';
             });
             tbody.innerHTML = html;
+
+            // === СОРТИРОВКА С СОХРАНЕНИЕМ ===
+            var table = tbody.closest('table');
+            var headers = table.querySelectorAll('thead th[data-sort]');
+            var sortState = JSON.parse(localStorage.getItem('block_templates_sort') || '{}');
+            var sortKey = sortState.key || null;
+            var sortDir = sortState.dir || 'asc';
+
+            function applySort(key, dir) {
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                rows.sort(function(a, b) {
+                    var idA = parseInt(a.cells[0].textContent);
+                    var idB = parseInt(b.cells[0].textContent);
+                    var itemA = data.find(function(x) { return x.id == idA; });
+                    var itemB = data.find(function(x) { return x.id == idB; });
+                    if (!itemA || !itemB) return 0;
+                    var valA = (itemA[key] !== undefined ? itemA[key] : '');
+                    var valB = (itemB[key] !== undefined ? itemB[key] : '');
+                    if (typeof valA === 'string') valA = valA.toLowerCase();
+                    if (typeof valB === 'string') valB = valB.toLowerCase();
+                    if (valA < valB) return dir === 'asc' ? -1 : 1;
+                    if (valA > valB) return dir === 'asc' ? 1 : -1;
+                    return 0;
+                });
+                rows.forEach(function(row) { tbody.appendChild(row); });
+                headers.forEach(function(th) {
+                    th.classList.remove('sorted-asc', 'sorted-desc');
+                    if (th.dataset.sort === key) {
+                        th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                    }
+                });
+            }
+
+            headers.forEach(function(th) {
+                th.addEventListener('click', function() {
+                    var key = this.dataset.sort;
+                    if (sortKey === key) {
+                        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortKey = key;
+                        sortDir = 'asc';
+                    }
+                    localStorage.setItem('block_templates_sort', JSON.stringify({key: sortKey, dir: sortDir}));
+                    applySort(sortKey, sortDir);
+                });
+            });
+
+            if (sortKey) {
+                applySort(sortKey, sortDir);
+            }
 
             // Тултипы для названий с материалами
             tbody.querySelectorAll('.block-name-link').forEach(function(el) {
@@ -384,6 +491,56 @@
                 html += '</tr>';
             });
             tbody.innerHTML = html;
+
+            // === СОРТИРОВКА С СОХРАНЕНИЕМ ===
+            var table = tbody.closest('table');
+            var headers = table.querySelectorAll('thead th[data-sort]');
+            var sortState = JSON.parse(localStorage.getItem('block_templates_sort') || '{}');
+            var sortKey = sortState.key || null;
+            var sortDir = sortState.dir || 'asc';
+
+            function applySort(key, dir) {
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                rows.sort(function(a, b) {
+                    var idA = parseInt(a.cells[0].textContent);
+                    var idB = parseInt(b.cells[0].textContent);
+                    var itemA = data.find(function(x) { return x.id == idA; });
+                    var itemB = data.find(function(x) { return x.id == idB; });
+                    if (!itemA || !itemB) return 0;
+                    var valA = (itemA[key] !== undefined ? itemA[key] : '');
+                    var valB = (itemB[key] !== undefined ? itemB[key] : '');
+                    if (typeof valA === 'string') valA = valA.toLowerCase();
+                    if (typeof valB === 'string') valB = valB.toLowerCase();
+                    if (valA < valB) return dir === 'asc' ? -1 : 1;
+                    if (valA > valB) return dir === 'asc' ? 1 : -1;
+                    return 0;
+                });
+                rows.forEach(function(row) { tbody.appendChild(row); });
+                headers.forEach(function(th) {
+                    th.classList.remove('sorted-asc', 'sorted-desc');
+                    if (th.dataset.sort === key) {
+                        th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                    }
+                });
+            }
+
+            headers.forEach(function(th) {
+                th.addEventListener('click', function() {
+                    var key = this.dataset.sort;
+                    if (sortKey === key) {
+                        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortKey = key;
+                        sortDir = 'asc';
+                    }
+                    localStorage.setItem('block_templates_sort', JSON.stringify({key: sortKey, dir: sortDir}));
+                    applySort(sortKey, sortDir);
+                });
+            });
+
+            if (sortKey) {
+                applySort(sortKey, sortDir);
+            }
 
             // Тултипы для названий с материалами
             tbody.querySelectorAll('.block-name-link').forEach(function(el) {
