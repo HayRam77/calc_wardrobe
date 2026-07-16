@@ -125,7 +125,20 @@ router.get('/system-component/:id', auth, async (req, res) => {
             ORDER BY m.name
         `, [req.params.id]);
 
-        const all = [...direct.rows, ...inherited.rows];
+        // Материалы блоков, унаследованных от типа
+        const blockMaterials = await pool.query(`
+            SELECT btm.material_id, (btm.quantity * COALESCE(sctb.quantity, 1)) as quantity,
+                   m.*, man.name as manufacturer_name, true as inherited, 'блок типа' as source
+            FROM system_components sc
+            JOIN system_component_type_blocks sctb ON sc.type_id = sctb.type_id
+            JOIN block_template_materials btm ON btm.block_template_id = sctb.block_template_id
+            JOIN materials m ON btm.material_id = m.id
+            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
+            WHERE sc.id = $1
+            ORDER BY m.name
+        `, [req.params.id]);
+
+        const all = [...direct.rows, ...inherited.rows, ...blockMaterials.rows];
         res.json(all);
     } catch (err) {
         console.error(err);

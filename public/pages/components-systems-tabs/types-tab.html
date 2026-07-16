@@ -131,7 +131,7 @@ el.addEventListener('mouseleave', hideTypeTooltip);
          }
          var html = '<table class="data-table"><tr><th>Название</th><th>Кол-во</th><th></th></tr>';
          materials.forEach(function(mat){
-           html += '<tr><td>'+esc(mat.name)+'</td><td><input type="number" value="'+mat.quantity+'" style="width:60px;" onchange="updateTypeMaterialQty('+id+','+mat.material_id+',this.value)"></td><td><button class="btn btn-sm btn-delete" onclick="deleteTypeMaterial('+mat.material_id+')">🗑️</button></td></tr>';
+           html += '<tr><td>'+esc(mat.name)+'</td><td><input type="number" value="'+mat.quantity+'" style="width:60px;" onchange="updateTypeMaterialQty('+id+','+mat.material_id+',this.value)"></td><td><button class="btn btn-sm btn-delete" type="button" onclick="deleteTypeMaterial('+mat.material_id+')">🗑️</button></td></tr>';
          });
          html += '</table>';
          ml.innerHTML = html;
@@ -151,7 +151,7 @@ el.addEventListener('mouseleave', hideTypeTooltip);
          }
          var html = '<table class="data-table"><tr><th>Название</th><th>Артикул</th><th>Кол-во</th><th></th></tr>';
          blocks.forEach(function(b){
-           html += '<tr><td>'+esc(b.name)+'</td><td>'+esc(b.article || '')+'</td><td><input type="number" value="'+b.quantity+'" style="width:60px;" onchange="updateTypeBlockQty('+id+','+b.block_template_id+',this.value)"></td><td><button class="btn btn-sm btn-delete" onclick="deleteTypeBlock('+b.block_template_id+')">🗑️</button></td></tr>';
+           html += '<tr><td>'+esc(b.name)+'</td><td>'+esc(b.article || '')+'</td><td><input type="number" value="'+b.quantity+'" style="width:60px;" onchange="updateTypeBlockQty('+id+','+b.block_template_id+',this.value)"></td><td><button class="btn btn-sm btn-delete" type="button" onclick="deleteTypeBlock('+b.block_template_id+')">🗑️</button></td></tr>';
          });
          html += '</table>';
          bl.innerHTML = html;

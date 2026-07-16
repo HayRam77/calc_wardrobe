@@ -150,7 +150,7 @@ window.BlockTemplateModal = {
                 }
                 var html = '<table class="data-table"><tr><th>Название</th><th>Кол-во</th><th></th></tr>';
                 materials.forEach(function(mat) {
-                    html += '<tr><td>' + (mat.name || '') + '</td><td><input type="number" value="' + mat.quantity + '" style="width:60px;" onchange="window.BlockTemplateModal._updateMaterialQty(' + blockId + ',' + mat.material_id + ', this.value)"></td><td><button class="btn btn-sm btn-delete" onclick="window.BlockTemplateModal._deleteMaterial(' + blockId + ',' + mat.material_id + ')">🗑️</button></td></tr>';
+                    html += '<tr><td>' + (mat.name || '') + '</td><td><input type="number" value="' + mat.quantity + '" style="width:60px;" onchange="window.BlockTemplateModal._updateMaterialQty(' + blockId + ',' + mat.material_id + ', this.value)"></td><td><button class="btn btn-sm btn-delete" type="button" onclick="window.BlockTemplateModal._deleteMaterial(' + blockId + ',' + mat.material_id + ')">🗑️</button></td></tr>';
                 });
                 html += '</table>';
                 ml.innerHTML = html;
