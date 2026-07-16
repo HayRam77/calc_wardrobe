@@ -292,6 +292,33 @@ router.get('/cabinet/:cabinetId/items', auth, async (req, res) => {
             JOIN systems s ON scl.system_id = s.id
             JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
 
+
+
+            UNION ALL
+
+            SELECT
+                -btm.id as link_id,
+                btm.material_id,
+                m.article,
+                m.name,
+                man.name as manufacturer_name,
+                m.unit,
+                m.price,
+                btm.quantity * COALESCE(sctb.quantity, 1) as quantity,
+                m.ln,
+                m.tm,
+                TRUE as is_component_material,
+                COALESCE(s.name, '-') as system_name,
+                COALESCE(sc.name, '-') as component_name
+            FROM block_template_materials btm
+            JOIN materials m ON btm.material_id = m.id
+            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
+            JOIN system_component_type_blocks sctb ON sctb.block_template_id = btm.block_template_id
+            JOIN system_components sc ON sc.type_id = sctb.type_id
+            JOIN system_components_link scl ON scl.component_id = sc.id
+            JOIN systems s ON scl.system_id = s.id
+            JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
+
             ORDER BY article, name
         `, [cabinetId]);
         res.json(result.rows);
