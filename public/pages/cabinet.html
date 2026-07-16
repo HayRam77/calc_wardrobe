@@ -515,12 +515,14 @@ window.openBlockModal = function() {
                         '<td>' + (item.name || '') + '</td>' +
                         '<td>' + (item.unit || '') + '</td>' +
                         '<td>' + (item.price !== null ? parseFloat(item.price).toFixed(2) : '') + '</td>' +
-                        '<td><input type="number" value="' + item.quantity + '" style="width:60px;" onchange="updateMaterialQtyInCabinet(' + item.link_id + ', this.value)"></td>' +
+                        '<td>' + (item.is_component_material ? item.quantity : '<input type="number" value="' + item.quantity + '" style="width:60px;" onchange="updateMaterialQtyInCabinet(' + item.link_id + ', this.value)">') + '</td>' +
                         '<td>' + (item.ln || '') + '</td>' +
                         '<td>' + (item.tm || '') + '</td>' +
                         '<td>' +
-                            '<button class="btn btn-sm btn-edit" onclick="editCabinetMaterialLink(' + item.link_id + ', ' + item.material_id + ')">✏️</button> ' +
-                            '<button class="btn btn-sm btn-delete" onclick="delCabinetMaterialLink(' + item.link_id + ')">🗑️</button>' +
+                            (item.is_component_material ?
+                                '<span style="font-size:10px;color:#888;">системный</span>' :
+                                '<button class="btn btn-sm btn-edit" onclick="editCabinetMaterialLink(' + item.link_id + ', ' + item.material_id + ')">✏️</button> ' +
+                                '<button class="btn btn-sm btn-delete" onclick="delCabinetMaterialLink(' + item.link_id + ')">🗑️</button>') +
                         '</td>' +
                     '</tr>';
                 });

@@ -455,10 +455,10 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         '<td>' + esc(block.block_name) + '</td>' +
         '<td>' + esc(block.ln || '') + '</td>' +
         '<td>' + esc(block.tm || '') + '</td>' +
-        '<td><input type="number" value="' + (block.quantity || 1) + '" style="width:60px;" onchange="updateBlockQtyInCabinet(' + blockId + ', this.value)"></td>' +
+        '<td>' + (isSystem ? (block.quantity || 1) : '<input type="number" value="' + (block.quantity || 1) + '" style="width:60px;" onchange="updateBlockQtyInCabinet(' + blockId + ', this.value)">') + '</td>' +
         '<td>' +
           (isSystem ?
-            '<button class="btn btn-sm btn-delete" onclick="delBlock(' + blockId + ')">🗑️</button>' :
+            '<span style="font-size:10px;color:#888;">системный</span>' :
             '<button class="btn btn-sm btn-edit" onclick="openBlockModalWithId(' + blockId + ', ' + block.template_id + ')">✏️</button> ' +
             '<button class="btn btn-sm btn-delete" onclick="delBlock(' + blockId + ')">🗑️</button>') +
         '</td>' +
