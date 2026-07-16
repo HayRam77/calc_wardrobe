@@ -410,6 +410,30 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       JOIN systems s ON scl.system_id = s.id
       JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
 
+      UNION ALL
+
+      SELECT
+        -sctb.block_template_id as id,
+        sctb.block_template_id,
+        true as linked,
+        sctb.quantity,
+        bt.name AS block_name,
+        COALESCE(ln.value, '') AS ln,
+        COALESCE(tm.value, '') AS tm,
+        ct.name AS block_type,
+        COALESCE(s.name, '') as system_name,
+        COALESCE(sc.name, '') as component_name,
+        TRUE as is_system
+      FROM system_component_type_blocks sctb
+      JOIN block_templates bt ON sctb.block_template_id = bt.id
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
+      LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
+      JOIN system_components sc ON sc.type_id = sctb.type_id
+      JOIN system_components_link scl ON scl.component_id = sc.id
+      JOIN systems s ON scl.system_id = s.id
+      JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
+
       ORDER BY block_name
     `, [cabinetId]);
 
