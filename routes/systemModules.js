@@ -105,7 +105,7 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
         for (const row of data) {
             try {
                 await pool.query(
-                    'INSERT INTO system_modules (name, description) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                    'INSERT INTO system_modules (name, description) SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM system_modules WHERE name = $1)',
                     [row['название'], row['описание'] || null]
                 );
                 imported++;
