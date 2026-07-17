@@ -32,6 +32,7 @@ window.BlockTemplateModal = {
             h += '<div class="form-row"><div class="form-group"><label>TM</label><input type="text" id="blockTm"></div></div>';
             h += '<div class="form-group"><label>Ссылка</label><input type="url" id="blockUrl"></div>';
             h += '<div class="form-group"><label>Описание</label><textarea id="blockDescription" rows="2"></textarea></div>';
+            h += '<h4>Параметры</h4><div id="blockParamsContainer"></div><button type="button" id="addBlockParamBtn" class="btn btn-sm btn-secondary">+ Добавить параметр</button>';
             h += '<div class="form-group"><label>Материалы компонента шкафа</label><div id="blockMaterialsList" style="margin-bottom:5px;"></div><button type="button" class="btn btn-sm btn-primary" id="addBlockMaterialBtn">+ Добавить материал</button></div>';
             h += '<div style="margin-top:15px;"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary cancel-block-btn">Отмена</button></div>';
             f.innerHTML = h;
@@ -47,6 +48,9 @@ window.BlockTemplateModal = {
                 if (self._preselectedId) setTimeout(function(){ self._loadData(self._preselectedId); }, 50);
                 // Инициализируем обработчики материалов
                 self._initMaterialHandlers(self._preselectedId || 0);
+            self._addParamRow(null, null);
+            var addParamBtn = document.getElementById('addBlockParamBtn');
+            if (addParamBtn) addParamBtn.addEventListener('click', function(){ self._addParamRow(null, null); });
             });
 
             fetch('/api/block-templates').then(function(r){ return r.json(); }).then(function(blocks){
@@ -81,6 +85,14 @@ window.BlockTemplateModal = {
                 var url = document.getElementById('blockUrl')?.value?.trim();
                 var description = document.getElementById('blockDescription')?.value?.trim();
 
+                var pc = document.getElementById('blockParamsContainer');
+                var params = [];
+                if (pc) {
+                    pc.querySelectorAll('.block-param-row').forEach(function(r){
+                        var s4 = r.querySelector('.cabinet-param-select'), v = r.querySelector('.cabinet-param-value');
+                        if (s4 && s4.value && s4.value !== '__new__') params.push({parameter_id: parseInt(s4.value), param_value: v ? v.value : ''});
+                    });
+                }
                 var apiUrl = id ? '/api/block-templates/'+id : '/api/block-templates';
                 var method = id ? 'PUT' : 'POST';
                 fetch(apiUrl, {
@@ -89,7 +101,7 @@ window.BlockTemplateModal = {
                     body: JSON.stringify({
                         name: name, article: article, manufacturer_id: manufacturer_id, type_id: type_id,
                         price: price, weight_grams: weight, power_watts: power, ln: ln, tm: tm,
-                        url: url, description: description
+                        url: url, description: description, parameters: params
                     })
                 }).then(function(r){ return r.json(); }).then(function(result){
                     if (result.error) { alert('Ошибка: '+result.error); }
@@ -121,6 +133,7 @@ window.BlockTemplateModal = {
                 // Загружаем материалы блока
                 self._loadMaterials(data.id);
                 self._initMaterialHandlers(data.id);
+                self._loadParams(data.id);
             })
             .catch(function(err){ console.error(err); alert('Не удалось загрузить данные.'); });
     },
@@ -134,6 +147,7 @@ window.BlockTemplateModal = {
         var sel = document.getElementById('existingBlockSelect'); if (sel) sel.value = '';
         // Очищаем список материалов
         var ml = document.getElementById('blockMaterialsList'); if (ml) ml.innerHTML = '';
+        var pc = document.getElementById('blockParamsContainer'); if (pc) pc.innerHTML = '';
     },
 
     _loadMaterials: function(blockId) {
@@ -195,6 +209,50 @@ window.BlockTemplateModal = {
                 }
             };
         }
+    },
+
+    _loadParams: function(blockId) {
+        var self = this;
+        var pc = document.getElementById('blockParamsContainer');
+        if (!pc) return;
+        pc.innerHTML = 'Загрузка...';
+        fetch('/api/block-templates/' + blockId + '/params')
+            .then(function(r) { return r.json(); })
+            .then(function(params) {
+                pc.innerHTML = '';
+                if (params.length === 0) {
+                    self._addParamRow(null, null);
+                } else {
+                    params.forEach(function(p) {
+                        self._addParamRow(p.parameter_id, p.param_value);
+                    });
+                }
+            })
+            .catch(function() { pc.innerHTML = ''; self._addParamRow(null, null); });
+    },
+
+    _addParamRow: function(paramId, value) {
+        var pc = document.getElementById('blockParamsContainer');
+        if (!pc) return;
+        var self = this;
+        var r = document.createElement('div'); r.className = 'block-param-row'; r.style.cssText = 'display:flex;gap:8px;margin-bottom:5px;';
+        fetch('/api/parameters').then(function(rr){return rr.json();}).then(function(params){
+            var s2 = '<select class="cabinet-param-select" style="flex:1;"><option value="">-- параметр --</option>';
+            if (params.length) {
+                params.forEach(function(x){ s2 += '<option value="'+x.id+'"'+(paramId==x.id?' selected':'')+'>'+x.name+'</option>'; });
+            }
+            s2 += '<option value="__new__">+ новый параметр</option></select>';
+            r.innerHTML = s2 + '<input type="text" class="cabinet-param-value" placeholder="Значение" style="flex:1;" value="'+(value||'')+'"><input type="text" class="cabinet-param-new-name" placeholder="Название" style="flex:2;display:none;"><button type="button" class="btn btn-sm btn-primary cabinet-param-save-btn" style="display:none;">✓</button>';
+            var dl = document.createElement('button'); dl.type = 'button'; dl.textContent = '✕'; dl.className = 'btn btn-sm btn-delete';
+            dl.addEventListener('click', function(){ r.remove(); }); r.appendChild(dl); pc.appendChild(r);
+            var s3 = r.querySelector('.cabinet-param-select'), ni = r.querySelector('.cabinet-param-new-name'), sv = r.querySelector('.cabinet-param-save-btn');
+            s3.addEventListener('change', function(){ ni.style.display = sv.style.display = s3.value === '__new__' ? '' : 'none'; });
+            sv.addEventListener('click', function(){
+                var n = ni.value.trim(); if (!n) { alert('Введите название'); return; }
+                fetch('/api/parameters', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})})
+                .then(function(rr){return rr.json();}).then(function(np){ s3.innerHTML += '<option value="'+np.id+'">'+np.name+'</option>'; s3.value = np.id; ni.style.display = 'none'; sv.style.display = 'none'; });
+            });
+        });
     }
 };
 </script>
