@@ -67,14 +67,30 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
         const typeRes = await pool.query('SELECT id FROM component_types WHERE name = $1', [row['Тип']]);
         const manRes = await pool.query('SELECT id FROM manufacturers WHERE name = $1', [row['Производитель']]);
 
-        const compResult = await pool.query(
-          `INSERT INTO block_templates (name, type_id, manufacturer_id, article, description, price, weight_grams, power_watts, ln, url)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-           ON CONFLICT (article) DO UPDATE SET name=$1, type_id=$2, manufacturer_id=$3, description=$5, price=$6, weight_grams=$7, power_watts=$8, ln=$9, url=$10
-           RETURNING id`,
-          [row['Название'] || '', typeRes.rows[0]?.id || null, manRes.rows[0]?.id || null, row['Артикул'] || null, row['Описание'] || null, row['Цена'] || null, row['Вес'] || null, row['Q'] || null, row['LN'] || null, row['Ссылка'] || null]
-        );
-        const compId = compResult.rows[0].id;
+        const article = row['Артикул'] || null;
+        let compId;
+        if (article) {
+          const existing = await pool.query('SELECT id FROM block_templates WHERE article = $1', [article]);
+          if (existing.rows.length > 0) {
+            compId = existing.rows[0].id;
+            await pool.query(
+              `UPDATE block_templates SET name=$1, type_id=$2, manufacturer_id=$3, description=$4, price=$5, weight_grams=$6, power_watts=$7, ln=$8, url=$9, updated_at=CURRENT_TIMESTAMP WHERE id=$10`,
+              [row['Название'] || '', typeRes.rows[0]?.id || null, manRes.rows[0]?.id || null, row['Описание'] || null, row['Цена'] || null, row['Вес'] || null, row['Q'] || null, row['LN'] || null, row['Ссылка'] || null, compId]
+            );
+          } else {
+            const result = await pool.query(
+              `INSERT INTO block_templates (name, type_id, manufacturer_id, article, description, price, weight_grams, power_watts, ln, url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+              [row['Название'] || '', typeRes.rows[0]?.id || null, manRes.rows[0]?.id || null, article, row['Описание'] || null, row['Цена'] || null, row['Вес'] || null, row['Q'] || null, row['LN'] || null, row['Ссылка'] || null]
+            );
+            compId = result.rows[0].id;
+          }
+        } else {
+          const result = await pool.query(
+            `INSERT INTO block_templates (name, type_id, manufacturer_id, description, price, weight_grams, power_watts, ln, url) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+            [row['Название'] || '', typeRes.rows[0]?.id || null, manRes.rows[0]?.id || null, row['Описание'] || null, row['Цена'] || null, row['Вес'] || null, row['Q'] || null, row['LN'] || null, row['Ссылка'] || null]
+          );
+          compId = result.rows[0].id;
+        }
 
         await pool.query('DELETE FROM component_param_values WHERE component_id = $1', [compId]);
 
