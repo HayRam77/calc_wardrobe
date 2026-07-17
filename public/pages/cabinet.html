@@ -578,7 +578,7 @@ window.openBlockModal = function() {
                     html += '<tr data-id="' + (item.link_id || item.id) + '"><td class="drag-handle" draggable="true">⠿</td>' +
                         '<td>' + (item.system_name || '-') + '</td>' +
                         '<td>' + (item.component_name || '-') + '</td>' +
-                        '<td>' + (item.name || '') + '</td>' +
+                        '<td class="material-name-cell" data-material-id="' + item.material_id + '" data-chain-block="' + (item.chain_block_template || '-') + '" data-chain-comp="' + (item.chain_system_component || '-') + '" data-chain-type="' + (item.chain_type || '') + '" style="cursor:pointer;">' + (item.name || '') + '</td>' +
                         '<td>' + (item.unit || '') + '</td>' +
                         '<td>' + (item.price !== null ? parseFloat(item.price).toFixed(2) : '') + '</td>' +
                         '<td>' + (item.is_component_material ? item.quantity : '<input type="number" value="' + item.quantity + '" style="width:60px;" onchange="updateMaterialQtyInCabinet(' + item.link_id + ', this.value)">') + '</td>' +
@@ -594,6 +594,7 @@ window.openBlockModal = function() {
                 });
                 html += '</tbody></table></div>';
                 container.innerHTML = html;
+                setTimeout(function(){ attachChainTooltips(); }, 100);
                 // === СОРТИРОВКА МАТЕРИАЛОВ ШКАФА ===
                 var matTable = container.querySelector('table');
                 if (matTable) {
@@ -841,4 +842,48 @@ window.openBlockModalWithId = function(blockId, templateId) {
 };
 window.loadCabinetCalculation = function() {    var container = document.getElementById('cabinetCalculation');    container.innerHTML = 'Загрузка...';    fetch('/api/materials/cabinet/' + cabinetId + '/html')        .then(function(r) { return r.text(); })        .then(function(html) {            container.innerHTML = html;
                 setTimeout(function(){ makeDraggable(container.querySelector('table'), 'system_component_materials'); }, 0);        })        .catch(function(e) {            container.innerHTML = '<p style="color:red;">Ошибка загрузки калькуляции</p>';            console.error(e);        });};
+
+// ===== TOOLTIP ЦЕПОЧКИ МАТЕРИАЛА =====
+var chainTooltipStyles = document.createElement("style");
+chainTooltipStyles.textContent = ".material-chain-tooltip{position:fixed;z-index:99999;background:#1e293b;color:#f1f5f9;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;box-shadow:0 4px 16px rgba(0,0,0,0.5);pointer-events:none;opacity:0;transition:opacity 0.15s;max-width:420px;}.material-chain-tooltip.visible{opacity:1;}.chain-header{font-weight:600;margin-bottom:6px;color:#fbbf24;}.chain-line{color:#e2e8f0;}.chain-arrow{color:#94a3b8;margin:0 4px;}";
+document.head.appendChild(chainTooltipStyles);
+var chainTooltip = document.createElement('div');
+chainTooltip.className = 'material-chain-tooltip';
+document.body.appendChild(chainTooltip);
+
+function showChainTooltip(td) {
+  var block = td.dataset.chainBlock || '-';
+  var comp = td.dataset.chainComp || '-';
+  var type = td.dataset.chainType || '';
+  if (block === '-' && comp === '-') return;
+  
+  var matName = td.textContent.trim();
+  var html = '<div class="chain-header">🔗 Связи материала «' + matName + '»:</div>';
+  html += '<div class="chain-line">' + matName;
+  if (block !== '-') html += ' <span class="chain-arrow">→</span> ' + block;
+  if (comp !== '-') html += ' <span class="chain-arrow">→</span> ' + comp;
+  if (type) html += ' (' + type + ')';
+  html += '</div>';
+  
+  chainTooltip.innerHTML = html;
+  chainTooltip.classList.add('visible');
+}
+
+function attachChainTooltips() {
+  document.querySelectorAll('.material-name-cell').forEach(function(td) {
+    td.addEventListener('mouseenter', function(e) {
+      showChainTooltip(td);
+      chainTooltip.style.left = (e.clientX + 12) + 'px';
+      chainTooltip.style.top = (e.clientY + 12) + 'px';
+    });
+    td.addEventListener('mousemove', function(e) {
+      chainTooltip.style.left = (e.clientX + 12) + 'px';
+      chainTooltip.style.top = (e.clientY + 12) + 'px';
+    });
+    td.addEventListener('mouseleave', function() {
+      chainTooltip.classList.remove('visible');
+    });
+  });
+}
+
 </script>
