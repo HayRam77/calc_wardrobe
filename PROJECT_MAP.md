@@ -203,3 +203,20 @@ POST /api/admin/db/import — psql -f filePath
 6. **Если меняешь API** — обнови описание в routes/ и public/pages/ если затронут фронт
 7. **При исправлении бага** — добавь краткое описание проблемы и решения в КЛЮЧЕВЫЕ ОСОБЕННОСТИ
 8. **Держи команды актуальными**: если появились новые способы проверки — добавь в раздел КОМАНДЫ
+
+## БЭКАП И ОТКАТ (после каждого задания)
+
+### Создать бэкап
+mkdir -p /opt/backups
+pg_dump -U hrroot -h localhost bd_calc > /opt/backups/bd_calc_$(date +%Y%m%d_%H%M%S).sql
+tar --exclude=node_modules --exclude=.git -czf /opt/backups/calc_wardrobe_$(date +%Y%m%d_%H%M%S).tar.gz -C /opt/calc_wardrobe .
+ls -la /opt/backups/
+
+### Откат БД
+ls -la /opt/backups/bd_calc_*
+psql -U hrroot -h localhost bd_calc < /opt/backups/bd_calc_ИМЯ_ФАЙЛА.sql
+
+### Откат файлов
+git checkout -- путь/к/файлу
+git log --oneline -5 && git revert ХЕШ
+tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardrobe
