@@ -82,6 +82,31 @@ router.get('/project/:projectId', auth, async (req, res) => {
   }
 });
 
+
+router.get('/export', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT c.id as ID, c.name as Название, p.name as Проект, c.created_at as Дата_создания, c.description as Описание FROM cabinets c JOIN projects p ON c.project_id = p.id ORDER BY c.id`);
+    const ws = XLSX.utils.json_to_sheet(result.rows);
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Шкафы');
+    res.setHeader('Content-Disposition', 'attachment; filename=cabinets.xlsx');
+    res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка экспорта' }); }
+});
+
+router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    let imported = 0;
+    for (const row of data) {
+      try {
+        const proj = await pool.query('SELECT id FROM projects WHERE name=$1', [row['Проект']]);
+        await pool.query('INSERT INTO cabinets (name, project_id, description) VALUES ($1, $2, $3, $4)', [row['Название'], proj.rows[0]?.id || null, row['Описание'] || null]);
+        imported++;
+      } catch (e) {}
+    }
+    res.json({ message: 'Импортировано ' + imported + ' записей' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
 router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -507,31 +532,6 @@ router.put('/:cabinetId/blocks/:blockId', auth, isAdmin, async (req, res) => {
     res.json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка обновления блока' }); }
 });
-
-router.get('/export', auth, async (req, res) => {
-  try {
-    const result = await pool.query(`SELECT c.id as ID, c.name as Название, p.name as Проект, u.username as Создатель, c.created_at as Дата_создания, c.description as Описание FROM cabinets c JOIN projects p ON c.project_id = p.id LEFT JOIN users u ON c.user_id = u.id ORDER BY c.id`);
-    const ws = XLSX.utils.json_to_sheet(result.rows);
-    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Шкафы');
-    res.setHeader('Content-Disposition', 'attachment; filename=cabinets.xlsx');
-    res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка экспорта' }); }
-});
-
-router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
-  try {
-    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    let imported = 0;
-    for (const row of data) {
-      try {
-        const proj = await pool.query('SELECT id FROM projects WHERE name=$1', [row['Проект']]);
-        await pool.query('INSERT INTO cabinets (name, project_id, description, user_id) VALUES ($1, $2, $3, $4)', [row['Название'], proj.rows[0]?.id || null, row['Описание'] || null, 1]);
-        imported++;
-      } catch (e) {}
-    }
-    res.json({ message: 'Импортировано ' + imported + ' записей' });
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
 });
 
 // ========== СОРТИРОВКА ПЕРЕТАСКИВАНИЕМ ==========

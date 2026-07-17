@@ -21,6 +21,19 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Получить один тип
+router.get('/export', auth, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id as ID, name as Название, value as Значение FROM system_parameter_types ORDER BY id');
+        const ws = XLSX.utils.json_to_sheet(result.rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Типы параметров');
+        res.setHeader('Content-Disposition', 'attachment; filename=system_parameter_types.xlsx');
+        res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ message: 'Ошибка экспорта' });
+    }
+});
 router.get('/:id', auth, async (req, res) => {
     try {
         const result = await pool.query('SELECT id, name, value FROM system_parameter_types WHERE id = $1', [req.params.id]);
@@ -77,19 +90,6 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 });
 
 // Экспорт в Excel
-router.get('/export', auth, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT id as ID, name as Название, value as Значение FROM system_parameter_types ORDER BY id');
-        const ws = XLSX.utils.json_to_sheet(result.rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Типы параметров');
-        res.setHeader('Content-Disposition', 'attachment; filename=system_parameter_types.xlsx');
-        res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ message: 'Ошибка экспорта' });
-    }
-});
 
 // Импорт из Excel
 router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {

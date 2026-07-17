@@ -24,6 +24,30 @@ router.get('/', auth, async (req, res) => {
     }
 });
 
+router.get('/export', auth, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT m.id, m.article, m.name, m.description, m.unit, m.price, m.manufacturer_url, m.ln, m.tm
+            FROM materials m
+            ORDER BY m.name
+        `);
+        const ws = XLSX.utils.json_to_sheet(result.rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Материалы');
+
+        const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=materials.xlsx');
+        res.setHeader('Content-Length', buffer.length);
+
+        res.send(buffer);
+    } catch (err) {
+        console.error('❌ Ошибка экспорта:', err);
+        res.status(500).json({ message: 'Ошибка экспорта', error: err.message });
+    }
+});
 router.get('/:id', auth, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -628,30 +652,6 @@ router.delete('/cabinet/:cabinetId/:materialId', auth, isAdmin, async (req, res)
 
 // ==================== ЭКСПОРТ / ИМПОРТ ====================
 
-router.get('/export', auth, async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT m.id, m.article, m.name, m.description, m.unit, m.price, m.manufacturer_url, m.ln, m.tm
-            FROM materials m
-            ORDER BY m.name
-        `);
-        const ws = XLSX.utils.json_to_sheet(result.rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Материалы');
-
-        const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', 'attachment; filename=materials.xlsx');
-        res.setHeader('Content-Length', buffer.length);
-
-        res.send(buffer);
-    } catch (err) {
-        console.error('❌ Ошибка экспорта:', err);
-        res.status(500).json({ message: 'Ошибка экспорта', error: err.message });
-    }
-});
 
 router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
     try {

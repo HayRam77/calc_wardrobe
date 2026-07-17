@@ -25,6 +25,27 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Получить один шаблон
+router.get('/export', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT bt.name as Название, ct.name as Тип, m.name as Производитель, bt.article as Артикул,
+             bt.price as Цена, bt.weight_grams as Вес, bt.power_watts as Мощность, bt.ln as LN,
+             bt.url as Ссылка, bt.description as Описание
+      FROM block_templates bt
+      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
+      ORDER BY bt.name
+    `);
+    const ws = XLSX.utils.json_to_sheet(result.rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Компоненты');
+    res.setHeader('Content-Disposition', 'attachment; filename=block_templates.xlsx');
+    res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка экспорта' });
+  }
+});
 router.get('/:id', auth, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -120,27 +141,6 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 });
 
 // Экспорт в Excel
-router.get('/export', auth, async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT bt.name as Название, ct.name as Тип, m.name as Производитель, bt.article as Артикул,
-             bt.price as Цена, bt.weight_grams as Вес, bt.power_watts as Мощность, bt.ln as LN,
-             bt.url as Ссылка, bt.description as Описание
-      FROM block_templates bt
-      LEFT JOIN component_types ct ON bt.type_id = ct.id
-      LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
-      ORDER BY bt.name
-    `);
-    const ws = XLSX.utils.json_to_sheet(result.rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Компоненты');
-    res.setHeader('Content-Disposition', 'attachment; filename=block_templates.xlsx');
-    res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Ошибка экспорта' });
-  }
-});
 
 // Импорт из Excel
 router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {

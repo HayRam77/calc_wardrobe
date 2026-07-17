@@ -15,7 +15,7 @@ router.get('/export', auth, async (req, res) => {
       FROM block_templates bt
       LEFT JOIN component_types ct ON bt.type_id = ct.id
       LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
-      ORDER BY ${['id','name','type_id','manufacturer_id','article','price','weight_grams','power_watts'].includes(sort) ? 'bt.'+sort : sort} ${order}
+      ORDER BY bt.id ASC
     `);
     const allParams = await pool.query('SELECT id, name FROM parameters ORDER BY id');
     const paramNames = allParams.rows.map(p => p.name);

@@ -21,6 +21,19 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Получить один модуль
+router.get('/export', auth, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT id, name, description FROM system_modules ORDER BY name');
+        const ws = XLSX.utils.json_to_sheet(result.rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Модули системы');
+        res.setHeader('Content-Disposition', 'attachment; filename=system_modules.xlsx');
+        res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Ошибка экспорта' });
+    }
+});
 router.get('/:id', auth, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM system_modules WHERE id = $1', [req.params.id]);
@@ -82,19 +95,6 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 });
 
 // Экспорт в Excel
-router.get('/export', auth, async (req, res) => {
-    try {
-        const result = await pool.query('SELECT id, name, description FROM system_modules ORDER BY name');
-        const ws = XLSX.utils.json_to_sheet(result.rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Модули системы');
-        res.setHeader('Content-Disposition', 'attachment; filename=system_modules.xlsx');
-        res.send(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Ошибка экспорта' });
-    }
-});
 
 // Импорт из Excel
 router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
