@@ -221,7 +221,10 @@ router.get('/cabinet/:cabinetId/items', auth, async (req, res) => {
                 m.tm,
                 FALSE as is_component_material,
                 '-' as system_name,
-                '-' as component_name
+                '-' as component_name,
+                '-' as chain_block_template,
+                '-' as chain_system_component,
+                '-' as chain_type
             FROM project_materials pm
             JOIN materials m ON pm.material_id = m.id
             LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
@@ -242,15 +245,18 @@ router.get('/cabinet/:cabinetId/items', auth, async (req, res) => {
                 m.tm,
                 TRUE as is_component_material,
                 COALESCE(s.name, '-') as system_name,
-                COALESCE(sc.name, '-') as component_name
+                COALESCE(sc.name, '-') as component_name,
+                '-' as chain_block_template,
+                sc.name as chain_system_component,
+                sct.name as chain_type
             FROM system_component_materials scm
             JOIN materials m ON scm.material_id = m.id
             LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
             JOIN system_components sc ON scm.system_component_id = sc.id
+            LEFT JOIN system_component_types sct ON sc.type_id = sct.id
             JOIN system_components_link scl ON scl.component_id = sc.id
             JOIN systems s ON scl.system_id = s.id
             JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
-
 
             UNION ALL
 
@@ -267,7 +273,10 @@ router.get('/cabinet/:cabinetId/items', auth, async (req, res) => {
                 m.tm,
                 TRUE as is_component_material,
                 COALESCE(s.name, '-') as system_name,
-                COALESCE(bt.name, '-') as component_name
+                COALESCE(bt.name, '-') as component_name,
+                bt.name as chain_block_template,
+                sc.name as chain_system_component,
+                sct2.name as chain_type
             FROM block_template_materials btm
             JOIN materials m ON btm.material_id = m.id
             LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
@@ -275,10 +284,9 @@ router.get('/cabinet/:cabinetId/items', auth, async (req, res) => {
             JOIN project_blocks pb ON pb.template_id = bt.id AND pb.cabinet_id = $1
             LEFT JOIN system_block_links sbl ON sbl.block_template_id = bt.id
             LEFT JOIN system_components sc ON sbl.system_component_id = sc.id
+            LEFT JOIN system_component_types sct2 ON sc.type_id = sct2.id
             LEFT JOIN system_components_link scl ON scl.component_id = sc.id
             LEFT JOIN systems s ON scl.system_id = s.id
-
-
 
             UNION ALL
 
@@ -295,17 +303,19 @@ router.get('/cabinet/:cabinetId/items', auth, async (req, res) => {
                 m.tm,
                 TRUE as is_component_material,
                 COALESCE(s.name, '-') as system_name,
-                COALESCE(sc.name, '-') as component_name
+                COALESCE(sc.name, '-') as component_name,
+                '-' as chain_block_template,
+                sc.name as chain_system_component,
+                sct2.name as chain_type
             FROM block_template_materials btm
             JOIN materials m ON btm.material_id = m.id
             LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
             JOIN system_block_links sbl ON sbl.block_template_id = btm.block_template_id
             JOIN system_components sc ON sbl.system_component_id = sc.id
+            LEFT JOIN system_component_types sct2 ON sc.type_id = sct2.id
             JOIN system_components_link scl ON scl.component_id = sc.id
             JOIN systems s ON scl.system_id = s.id
             JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
-
-
 
             UNION ALL
 
@@ -322,12 +332,16 @@ router.get('/cabinet/:cabinetId/items', auth, async (req, res) => {
                 m.tm,
                 TRUE as is_component_material,
                 COALESCE(s.name, '-') as system_name,
-                COALESCE(sc.name, '-') as component_name
+                COALESCE(sc.name, '-') as component_name,
+                '-' as chain_block_template,
+                sc.name as chain_system_component,
+                sct3.name as chain_type
             FROM block_template_materials btm
             JOIN materials m ON btm.material_id = m.id
             LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
             JOIN system_component_type_blocks sctb ON sctb.block_template_id = btm.block_template_id
             JOIN system_components sc ON sc.type_id = sctb.type_id
+            LEFT JOIN system_component_types sct3 ON sc.type_id = sct3.id
             JOIN system_components_link scl ON scl.component_id = sc.id
             JOIN systems s ON scl.system_id = s.id
             JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
