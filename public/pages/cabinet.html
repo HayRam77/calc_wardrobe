@@ -562,7 +562,7 @@ window.openBlockModal = function() {
                         setTimeout(function() { applyBlockSort(blockSortKey, blockSortDir); }, 100);
                     }
                 }
-                setTimeout(function(){ makeDraggable(container.querySelector('table'), 'system_block_links'); }, 0); })
+                setTimeout(function(){ makeDraggable(container.querySelector('table'), 'system_block_links'); }, 0); setTimeout(function(){ attachBlockChainTooltips(); }, 150); })
             .catch(function(e){ console.error(e); });
     };
 
@@ -886,4 +886,31 @@ function attachChainTooltips() {
   });
 }
 
+
+function attachBlockChainTooltips() {
+  document.querySelectorAll('#cabinetBlocks .component-name-cell').forEach(function(td) {
+    var comp = td.dataset.chainComp || '';
+    var type = td.dataset.chainType || '';
+    if (!comp && !type) return;
+    td.addEventListener('mouseenter', function(e) {
+      var blockName = td.closest('tr').querySelector('td:nth-child(4)')?.textContent?.trim() || '';
+      var html = '<div class="chain-header">🔗 Связи компонента «' + blockName + '»:</div>';
+      html += '<div class="chain-line">' + blockName;
+      if (comp) html += ' <span class="chain-arrow">→</span> ' + comp;
+      if (type) html += ' (' + type + ')';
+      html += '</div>';
+      chainTooltip.innerHTML = html;
+      chainTooltip.classList.add('visible');
+      chainTooltip.style.left = (e.clientX + 12) + 'px';
+      chainTooltip.style.top = (e.clientY + 12) + 'px';
+    });
+    td.addEventListener('mousemove', function(e) {
+      chainTooltip.style.left = (e.clientX + 12) + 'px';
+      chainTooltip.style.top = (e.clientY + 12) + 'px';
+    });
+    td.addEventListener('mouseleave', function() {
+      chainTooltip.classList.remove('visible');
+    });
+  });
+}
 </script>

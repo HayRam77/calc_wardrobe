@@ -378,7 +378,9 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         ct.name AS block_type,
         '' as system_name,
         '' as component_name,
-        FALSE as is_system
+        FALSE as is_system,
+        '' as chain_system_component,
+        '' as chain_type
       FROM project_blocks pb
       JOIN block_templates bt ON pb.template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
@@ -399,7 +401,9 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         ct.name AS block_type,
         COALESCE(s.name, '') as system_name,
         COALESCE(sc.name, '') as component_name,
-        TRUE as is_system
+        TRUE as is_system,
+        COALESCE(sc.name, '') as chain_system_component,
+        COALESCE(sct.name, '') as chain_type
       FROM system_block_links sbl
       JOIN block_templates bt ON sbl.block_template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
@@ -409,6 +413,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       JOIN system_components_link scl ON scl.component_id = sc.id
       JOIN systems s ON scl.system_id = s.id
       JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
+      LEFT JOIN system_component_types sct ON sc.type_id = sct.id
 
       UNION ALL
 
@@ -423,7 +428,9 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         ct.name AS block_type,
         COALESCE(s.name, '') as system_name,
         COALESCE(sc.name, '') as component_name,
-        TRUE as is_system
+        TRUE as is_system,
+        COALESCE(sc.name, '') as chain_system_component,
+        COALESCE(sct.name, '') as chain_type
       FROM system_component_type_blocks sctb
       JOIN block_templates bt ON sctb.block_template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
@@ -433,6 +440,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       JOIN system_components_link scl ON scl.component_id = sc.id
       JOIN systems s ON scl.system_id = s.id
       JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
+      LEFT JOIN system_component_types sct ON sc.type_id = sct.id
 
       ORDER BY block_name
     `, [cabinetId]);
@@ -450,7 +458,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       const blockId = block.id;
       html += '<tr>' +
         '<td>' + esc(systemName) + '</td>' +
-        '<td>' + esc(componentName) + '</td>' +
+        '<td class="component-name-cell" data-chain-comp="' + esc(block.chain_system_component || '') + '" data-chain-type="' + esc(block.chain_type || '') + '" style="cursor:pointer;">' + esc(componentName) + '</td>' +
         '<td>' + esc(block.block_type || '') + '</td>' +
         '<td>' + esc(block.block_name) + '</td>' +
         '<td>' + esc(block.ln || '') + '</td>' +
