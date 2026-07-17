@@ -29,7 +29,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             <input type="file" id="importTypesFile" style="display:none" accept=".xlsx,.xls">
             <button id="importTypesBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
         </div>
-        <div class="table-container"><table class="data-table"><thead><tr><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th id="typesActionsCol" style="display:none;">Действия</th></tr></thead><tbody id="typesBody"><tr><td colspan="4" class="loading">Загрузка...</td></tr></tbody></table></div>
+        <div class="table-container"><table class="data-table"><thead><tr><th>ID</th><th>Название</th><th>Описание</th><th id="typesActionsCol" style="display:none;">Действия</th></tr></thead><tbody id="typesBody"><tr><td colspan="4" class="loading">Загрузка...</td></tr></tbody></table></div>
 <th>Ссылка</th>
     </div>
     <div class="tab-content" id="tab-params">
@@ -167,7 +167,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
     async function loadTemplates() {
         var tbody = document.getElementById('templatesBody');
         try {
-            var res = await fetch('/api/block-templates?_='+Date.now()+'&sort='+(JSON.parse(localStorage.getItem('block_templates_sort')||'{}').key||'id')+'&order='+(JSON.parse(localStorage.getItem('block_templates_sort')||'{}').dir||'asc'));
+            var res = await fetch('/api/block-templates');
             var data = await res.json();
             if (!data.length) {
                 tbody.innerHTML = '<tr><td colspan="12">Нет компонентов</td></tr>';
@@ -195,16 +195,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             });
             tbody.innerHTML = html;
 
-            document.querySelectorAll('#tab-templates th[data-sort]').forEach(function(th) {
-     th.onclick = function() {
-       var k = this.dataset.sort;
-       var s = JSON.parse(localStorage.getItem('block_templates_sort') || '{}');
-       s.dir = s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'asc';
-       s.key = k;
-       localStorage.setItem('block_templates_sort', JSON.stringify(s));
-       loadTemplates();
-     };
-   });
+            window.applyTableSort(tbody, 'block_templates_sort');
 
             // Тултипы для названий с материалами
             tbody.querySelectorAll('.block-name-link').forEach(function(el) {
@@ -270,7 +261,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
     async function loadTypes() {
         var tbody = document.getElementById('typesBody');
         try {
-            var res = await fetch('/api/component-types?_='+Date.now()+'&sort='+(JSON.parse(localStorage.getItem('component_types_sort')||'{}').key||'name')+'&order='+(JSON.parse(localStorage.getItem('component_types_sort')||'{}').dir||'asc'));
+            var res = await fetch('/api/component-types');
             var data = await res.json();
             if (!data.length) {
                 tbody.innerHTML = '<tr><td colspan="4">Нет типов</td></tr>';
@@ -291,17 +282,55 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             });
             tbody.innerHTML = html;
 
-            document.querySelectorAll('#tab-types th[data-sort]').forEach(function(th) {
-     th.onclick = function() {
-       var k = this.dataset.sort;
-       var s = JSON.parse(localStorage.getItem('component_types_sort') || '{}');
-       s.dir = s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'asc';
-       s.key = k;
-       localStorage.setItem('component_types_sort', JSON.stringify(s));
-       loadTypes();
-     };
-   });
-            
+            window.applyTableSort(tbody, 'component_types_sort');
+            var table = tbody.closest('table');
+            var headers = table.querySelectorAll('thead th[data-sort]');
+            var sortState = JSON.parse(localStorage.getItem('component_types_sort') || '{}');
+            var sortKey = sortState.key || null;
+            var sortDir = sortState.dir || 'asc';
+
+            function applySort(key, dir) {
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                rows.sort(function(a, b) {
+                    var idA = parseInt(a.cells[0].textContent);
+                    var idB = parseInt(b.cells[0].textContent);
+                    var itemA = data.find(function(x) { return x.id == idA; });
+                    var itemB = data.find(function(x) { return x.id == idB; });
+                    if (!itemA || !itemB) return 0;
+                    var valA = (itemA[key] !== undefined ? itemA[key] : '');
+                    var valB = (itemB[key] !== undefined ? itemB[key] : '');
+                    if (typeof valA === 'string') valA = valA.toLowerCase();
+                    if (typeof valB === 'string') valB = valB.toLowerCase();
+                    if (valA < valB) return dir === 'asc' ? -1 : 1;
+                    if (valA > valB) return dir === 'asc' ? 1 : -1;
+                    return 0;
+                });
+                rows.forEach(function(row) { tbody.appendChild(row); });
+                headers.forEach(function(th) {
+                    th.classList.remove('sorted-asc', 'sorted-desc');
+                    if (th.dataset.sort === key) {
+                        th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                    }
+                });
+            }
+
+            headers.forEach(function(th) {
+                th.addEventListener('click', function() {
+                    var key = this.dataset.sort;
+                    if (sortKey === key) {
+                        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortKey = key;
+                        sortDir = 'asc';
+                    }
+                    localStorage.setItem('component_types_sort', JSON.stringify({key: sortKey, dir: sortDir}));
+                    applySort(sortKey, sortDir);
+                });
+            });
+
+            if (sortKey) {
+                applySort(sortKey, sortDir);
+            }
 
             // Тултипы для названий с материалами
             tbody.querySelectorAll('.block-name-link').forEach(function(el) {
@@ -415,16 +444,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             });
             tbody.innerHTML = html;
 
-            document.querySelectorAll('#tab-templates th[data-sort]').forEach(function(th) {
-     th.onclick = function() {
-       var k = this.dataset.sort;
-       var s = JSON.parse(localStorage.getItem('block_templates_sort') || '{}');
-       s.dir = s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'asc';
-       s.key = k;
-       localStorage.setItem('block_templates_sort', JSON.stringify(s));
-       loadTemplates();
-     };
-   });
+            window.applyTableSort(tbody, 'block_templates_sort');
 
             // Тултипы для названий с материалами
             tbody.querySelectorAll('.block-name-link').forEach(function(el) {

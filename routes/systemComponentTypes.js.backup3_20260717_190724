@@ -33,12 +33,12 @@ router.get('/', auth, async (req, res) => {
   try { 
         const sort = ['id','name','description'].includes(req.query.sort) ? req.query.sort : 'name';
     const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
-    const r = await pool.query(
-      'SELECT sct.*, ' +
-      'EXISTS(SELECT 1 FROM system_component_type_materials WHERE type_id = sct.id) as has_materials, ' +
-      'EXISTS(SELECT 1 FROM system_component_type_blocks WHERE type_id = sct.id) as has_blocks ' +
-      'FROM system_component_types sct ORDER BY sct.' + sort + ' ' + order
-    ); 
+    const r = await pool.query(`
+      SELECT sct.*, 
+             EXISTS(SELECT 1 FROM system_component_type_materials WHERE type_id = sct.id) as has_materials,
+             EXISTS(SELECT 1 FROM system_component_type_blocks WHERE type_id = sct.id) as has_blocks
+      FROM system_component_types sct ORDER BY sct.' + sort + ' ' + order
+    `); 
     res.json(r.rows); 
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } 
 });

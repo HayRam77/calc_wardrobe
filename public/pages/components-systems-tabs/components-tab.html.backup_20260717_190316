@@ -7,7 +7,7 @@
   </div>
   <div class="table-container">
     <table class="data-table">
-      <thead><tr><th data-sort="id">ID</th><th data-sort="module_name">Модуль системы</th><th data-sort="name">Название</th><th data-sort="type_name">Тип</th><th data-sort="ln">LN</th><th data-sort="tm">TM</th><th>Параметры</th><th id="componentsActionsCol" style="display:none;">Действия</th></tr></thead>
+      <thead><tr><th>ID</th><th>Модуль системы</th><th>Название</th><th>Тип</th><th>LN</th><th>TM</th><th>Параметры</th><th id="componentsActionsCol" style="display:none;">Действия</th></tr></thead>
       <tbody id="componentsBody"><tr><td colspan="8" class="loading">Загрузка...</td></tr></tbody>
     </table>
   </div>
@@ -28,7 +28,7 @@
   var tbody=document.getElementById('componentsBody');
    window.loadComponents = loadComponents; // экспорт
   if(!tbody) return;
-  fetch('/api/system-components?_='+Date.now()+'&sort='+(JSON.parse(localStorage.getItem('components_sort')||'{}').key||'name')+'&order='+(JSON.parse(localStorage.getItem('components_sort')||'{}').dir||'asc'))
+  fetch('/api/system-components')
   .then(function(res){ if(!res.ok) throw new Error('Ошибка'); return res.json(); })
   .then(function(data){
    var empty=document.getElementById('componentsEmpty');
@@ -54,16 +54,6 @@
      html+='</tr>';
     });
     tbody.innerHTML=html;
-   document.querySelectorAll('#tab-components th[data-sort]').forEach(function(th) {
-     th.onclick = function() {
-       var k = this.dataset.sort;
-       var s = JSON.parse(localStorage.getItem('components_sort') || '{}');
-       s.dir = s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'asc';
-       s.key = k;
-       localStorage.setItem('components_sort', JSON.stringify(s));
-       loadComponents();
-     };
-   });
    // Сохраняем данные для тултипов
    data.forEach(function(item) {
      window._componentsData = window._componentsData || {};

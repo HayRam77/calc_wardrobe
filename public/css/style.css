@@ -23,3 +23,8 @@ button:hover { opacity: 0.9; }
 .modal { z-index: 3000 !important; }
 .modal { z-index: 3000 !important; }
 .modal-content { position: relative; z-index: 3001; }
+
+.sorted-asc::after { content: ' ▲'; font-size: 10px; }
+.sorted-desc::after { content: ' ▼'; font-size: 10px; }
+th[data-sort] { cursor: pointer; user-select: none; }
+th[data-sort]:hover { background-color: #e0e0e0; }

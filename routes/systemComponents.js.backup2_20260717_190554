@@ -9,8 +9,6 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 router.get('/', auth, async (req, res) => {
     try {
-        const sort = ['id','name','type_name','manufacturer_name','module_name','ln','tm'].includes(req.query.sort) ? req.query.sort : 'name';
-        const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
         const result = await pool.query(`
             SELECT sc.*, sct.name as type_name, m.name as manufacturer_name, sm.name as module_name,
                    COALESCE(ln.value, '') AS ln,
@@ -24,7 +22,7 @@ router.get('/', auth, async (req, res) => {
             LEFT JOIN system_modules sm ON sc.module_id = sm.id
             LEFT JOIN ln_values ln ON ln.entity_type = 'system_component' AND ln.entity_id = sc.id
             LEFT JOIN tm_values tm ON tm.entity_type = 'system_component' AND tm.entity_id = sc.id
-            ORDER BY ${['id','name','type_id','module_id','manufacturer_id','article','description'].includes(sort) ? 'sc.'+sort : sort} ${order}
+            ORDER BY sc.name
         `);
         const components = result.rows;
         for (let i = 0; i < components.length; i++) {

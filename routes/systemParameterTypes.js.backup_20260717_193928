@@ -10,9 +10,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Получить все типы параметров
 router.get('/', auth, async (req, res) => {
     try {
-        const sort = ['id','name','value'].includes(req.query.sort) ? req.query.sort : 'name';
-        const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
-        const result = await pool.query('SELECT id, name, value FROM system_parameter_types ORDER BY ' + sort + ' ' + order);
+        const result = await pool.query('SELECT id, name, value FROM system_parameter_types ORDER BY name');
         res.json(result.rows);
     } catch (err) {
         console.error(err);
