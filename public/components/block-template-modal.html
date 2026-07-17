@@ -133,7 +133,7 @@ window.BlockTemplateModal = {
                 // Загружаем материалы блока
                 self._loadMaterials(data.id);
                 self._initMaterialHandlers(data.id);
-                self._loadParams(data.id);
+                self._renderParams(data.parameters);
             })
             .catch(function(err){ console.error(err); alert('Не удалось загрузить данные.'); });
     },
@@ -211,24 +211,18 @@ window.BlockTemplateModal = {
         }
     },
 
-    _loadParams: function(blockId) {
+    _renderParams: function(params) {
         var self = this;
         var pc = document.getElementById('blockParamsContainer');
         if (!pc) return;
-        pc.innerHTML = 'Загрузка...';
-        fetch('/api/block-templates/' + blockId + '/params')
-            .then(function(r) { return r.json(); })
-            .then(function(params) {
-                pc.innerHTML = '';
-                if (params.length === 0) {
-                    self._addParamRow(null, null);
-                } else {
-                    params.forEach(function(p) {
-                        self._addParamRow(p.parameter_id, p.param_value);
-                    });
-                }
-            })
-            .catch(function() { pc.innerHTML = ''; self._addParamRow(null, null); });
+        pc.innerHTML = '';
+        if (!params || !params.length) {
+            self._addParamRow(null, null);
+        } else {
+            params.forEach(function(p) {
+                self._addParamRow(p.parameter_id, p.param_value);
+            });
+        }
     },
 
     _addParamRow: function(paramId, value) {

@@ -189,6 +189,7 @@ router.post('/', auth, isAdmin, async (req, res) => {
       );
     }
 
+    await client.query('DELETE FROM component_param_values WHERE component_id = $1', [newId]);
     if (parameters && Array.isArray(parameters)) {
       for (const p of parameters) {
         if (p.parameter_id) {
