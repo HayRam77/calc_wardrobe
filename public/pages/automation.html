@@ -4,10 +4,11 @@
         <button id="exportBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
         <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls">
         <button id="importBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
+        <span id="filterBadge" style="display:none; margin-left:10px; font-size:13px; color:#1a5f7a;"></span>
     </div>
     <div class="table-container">
         <table class="data-table" id="systemsTable">
-            <thead><tr><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="cabinet_names">Шкаф</th><th data-sort="description">Описание</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
+            <thead><tr><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="cabinet_names">Шкаф <span id="cabinetFilterIcon" style="cursor:pointer; font-size:14px;" title="Фильтр по шкафам">⚙</span><div id="cabinetDropdown" style="display:none; position:absolute; background:#fff; border:1px solid #ccc; border-radius:4px; padding:8px; z-index:1000; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="description">Описание</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
             <tbody id="systemsBody"><tr><td colspan="5" class="loading">Загрузка...</td></tr></tbody>
         </table>
     </div>
@@ -36,10 +37,19 @@
 
     var sysSortState = JSON.parse(localStorage.getItem('systems_sort') || '{}');
     var sysSortKey = sysSortState.key || null, sysSortDir = sysSortState.dir || 'asc';
+    var selectedCabinets = [];
 
     function renderSystems(data) {
         var tbody = document.getElementById('systemsBody');
-        tbody.innerHTML = data.map(function(s) {
+        var filtered = data;
+        if (selectedCabinets.length > 0) {
+            filtered = data.filter(function(s) {
+                var cabinets = (s.cabinet_names || '').split(', ').filter(Boolean);
+                return selectedCabinets.some(function(sc) { return cabinets.includes(sc); });
+            });
+        }
+        if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="5">Нет систем</td></tr>'; return; }
+        tbody.innerHTML = filtered.map(function(s) {
             return '<tr><td>' + s.id + '</td><td>' + esc(s.name) + '</td><td>' + esc(s.cabinet_names || '-') + '</td><td>' + esc(s.description || '') + '</td>' +
                 (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')">🗑️</button></td>' : '') + '</tr>';
         }).join('');
@@ -61,19 +71,67 @@
                 var th = document.querySelector('th[data-sort="' + sysSortKey + '"]');
                 if (th) th.classList.add(sysSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
             }
+            buildCabinetDropdown(data);
             renderSystems(data);
         });
     }
+
+    function buildCabinetDropdown(data) {
+        var allCabinets = [];
+        data.forEach(function(s) {
+            var names = (s.cabinet_names || '').split(', ').filter(Boolean);
+            names.forEach(function(n) { if (allCabinets.indexOf(n) === -1) allCabinets.push(n); });
+        });
+        allCabinets.sort();
+        var dropdown = document.getElementById('cabinetDropdown');
+        dropdown.innerHTML = allCabinets.map(function(c) {
+            return '<label style="display:block; font-size:13px; cursor:pointer; padding:2px 0;"><input type="checkbox" class="cabinet-filter-cb" value="' + esc(c) + '"> ' + esc(c) + '</label>';
+        }).join('');
+        dropdown.querySelectorAll('.cabinet-filter-cb').forEach(function(cb) {
+            cb.addEventListener('change', function() {
+                selectedCabinets = [];
+                dropdown.querySelectorAll('.cabinet-filter-cb:checked').forEach(function(c) { selectedCabinets.push(c.value); });
+                updateFilterBadge();
+                renderSystems(window._systemsData || []);
+            });
+            cb.addEventListener('click', function(e) { e.stopPropagation(); });
+        });
+    }
+
+    function updateFilterBadge() {
+        var badge = document.getElementById('filterBadge');
+        var icon = document.getElementById('cabinetFilterIcon');
+        if (selectedCabinets.length > 0) {
+            badge.style.display = '';
+            badge.textContent = 'Выбрано: ' + selectedCabinets.length;
+            icon.textContent = '⚙️';
+        } else {
+            badge.style.display = 'none';
+            icon.textContent = '⚙';
+        }
+    }
+
+    // Открытие/закрытие dropdown
+    var filterIcon = document.getElementById('cabinetFilterIcon');
+    var dropdown = document.getElementById('cabinetDropdown');
+    filterIcon.addEventListener('click', function(e) {
+        e.stopPropagation();
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', function() {
+        dropdown.style.display = 'none';
+    });
 
     // Сортировка
     var table = document.getElementById('systemsTable');
     table.querySelectorAll('th[data-sort]').forEach(function(th) {
         th.style.cursor = 'pointer';
-        th.addEventListener('click', function() {
+        th.addEventListener('click', function(e) {
+            if (e.target.closest('#cabinetFilterIcon') || e.target.closest('#cabinetDropdown')) return;
             var key = this.dataset.sort;
-            if (sysSortKey === key) { sysSortDir = sysSortDir === 'asc' ? 'desc' : 'asc'; } else { sysSortKey = key; sysSortDir = 'asc'; }
+            if (sysSortKey === key) { sysSortDir = sysSortDir === 'asc' ? 'desc' : 'asc'; }
+            else { sysSortKey = key; sysSortDir = 'asc'; }
             localStorage.setItem('systems_sort', JSON.stringify({key: sysSortKey, dir: sysSortDir}));
-
             var data = (window._systemsData || []).slice();
             data.sort(function(a, b) {
                 var va = (a[key] || '').toString().toLowerCase();
