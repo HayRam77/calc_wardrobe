@@ -6,9 +6,9 @@
         <button id="importBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
     </div>
     <div class="table-container">
-        <table class="data-table">
-            <thead><tr><th>ID</th><th>Название</th><th>Описание</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
-            <tbody id="systemsBody"><tr><td colspan="4" class="loading">Загрузка...</td></tr></tbody>
+        <table class="data-table" id="systemsTable">
+            <thead><tr><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="cabinet_names">Шкаф</th><th data-sort="description">Описание</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
+            <tbody id="systemsBody"><tr><td colspan="5" class="loading">Загрузка...</td></tr></tbody>
         </table>
     </div>
     <div id="modal" class="modal" style="display:none;">
@@ -34,16 +34,60 @@
     document.querySelector('.close-modal').addEventListener('click', function() { modal.style.display = 'none'; });
     window.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
 
+    var sysSortState = JSON.parse(localStorage.getItem('systems_sort') || '{}');
+    var sysSortKey = sysSortState.key || null, sysSortDir = sysSortState.dir || 'asc';
+
+    function renderSystems(data) {
+        var tbody = document.getElementById('systemsBody');
+        tbody.innerHTML = data.map(function(s) {
+            return '<tr><td>' + s.id + '</td><td>' + esc(s.name) + '</td><td>' + esc(s.cabinet_names || '-') + '</td><td>' + esc(s.description || '') + '</td>' +
+                (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')">🗑️</button></td>' : '') + '</tr>';
+        }).join('');
+    }
+
     function loadSystems() {
         fetch('/api/systems').then(function(r) { return r.json(); }).then(function(data) {
-            var t = document.getElementById('systemsBody');
-            if (!data.length) { t.innerHTML = '<tr><td colspan="4">Нет систем</td></tr>'; return; }
-            t.innerHTML = data.map(function(s) {
-                return '<tr><td>' + s.id + '</td><td>' + esc(s.name) + '</td><td>' + esc(s.description || '') + '</td>' +
-                    (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')" id="automation_edit_btn">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')" id="automation_del_btn">🗑️</button></td>' : '') + '</tr>';
-            }).join('');
+            if (!data.length) { document.getElementById('systemsBody').innerHTML = '<tr><td colspan="5">Нет систем</td></tr>'; return; }
+            window._systemsData = data;
+            if (sysSortKey) {
+                data.sort(function(a, b) {
+                    var va = (a[sysSortKey] || '').toString().toLowerCase();
+                    var vb = (b[sysSortKey] || '').toString().toLowerCase();
+                    if (sysSortKey === 'id') { va = parseInt(a.id) || 0; vb = parseInt(b.id) || 0; }
+                    if (va < vb) return sysSortDir === 'asc' ? -1 : 1;
+                    if (va > vb) return sysSortDir === 'asc' ? 1 : -1;
+                    return 0;
+                });
+                var th = document.querySelector('th[data-sort="' + sysSortKey + '"]');
+                if (th) th.classList.add(sysSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+            }
+            renderSystems(data);
         });
     }
+
+    // Сортировка
+    var table = document.getElementById('systemsTable');
+    table.querySelectorAll('th[data-sort]').forEach(function(th) {
+        th.style.cursor = 'pointer';
+        th.addEventListener('click', function() {
+            var key = this.dataset.sort;
+            if (sysSortKey === key) { sysSortDir = sysSortDir === 'asc' ? 'desc' : 'asc'; } else { sysSortKey = key; sysSortDir = 'asc'; }
+            localStorage.setItem('systems_sort', JSON.stringify({key: sysSortKey, dir: sysSortDir}));
+
+            var data = (window._systemsData || []).slice();
+            data.sort(function(a, b) {
+                var va = (a[key] || '').toString().toLowerCase();
+                var vb = (b[key] || '').toString().toLowerCase();
+                if (key === 'id') { va = parseInt(a.id) || 0; vb = parseInt(b.id) || 0; }
+                if (va < vb) return sysSortDir === 'asc' ? -1 : 1;
+                if (va > vb) return sysSortDir === 'asc' ? 1 : -1;
+                return 0;
+            });
+            renderSystems(data);
+            table.querySelectorAll('th').forEach(function(h) { h.classList.remove('sorted-asc', 'sorted-desc'); });
+            th.classList.add(sysSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+        });
+    });
 
     document.getElementById('addSystemBtn').addEventListener('click', function() { openSystemForm(); });
 
@@ -53,7 +97,7 @@
         h += '<div class="form-group"><label>Название *</label><input type="text" id="sysName" value="' + esc(sys ? sys.name : '') + '" required></div>';
         h += '<div class="form-group"><label>Описание</label><textarea id="sysDesc" rows="2">' + esc(sys ? sys.description || '' : '') + '</textarea></div>';
         modalTitle.textContent = isEdit ? 'Редактировать систему' : 'Добавить систему';
-        modalForm.innerHTML = h + '<div class="form-actions"><button type="submit" class="btn btn-primary" id="automation_btn_btn">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'" id="automation_btn_btn_1">Отмена</button></div>';
+        modalForm.innerHTML = h + '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>';
         modal.style.display = 'flex';
         modalForm.onsubmit = function(e) {
             e.preventDefault();
