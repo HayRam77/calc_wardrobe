@@ -8,7 +8,7 @@
     </div>
     <div class="table-container">
         <table class="data-table" id="systemsTable">
-            <thead><tr><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="cabinet_names">Шкаф <span id="cabinetFilterIcon" style="cursor:pointer; font-size:14px;" title="Фильтр по шкафам">⚙</span><div id="cabinetDropdown" style="display:none; position:absolute; background:#fff; border:1px solid #ccc; border-radius:4px; padding:8px; z-index:1000; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="description">Описание</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
+            <thead><tr><th data-sort="id">ID</th><th data-sort="cabinet_names"><span id="cabinetFilterIcon" style="cursor:pointer; font-size:14px;" title="Фильтр по шкафам">⚙</span> Шкаф<div id="cabinetDropdown" style="display:none; position:absolute; background:#fff; border:1px solid #ccc; border-radius:4px; padding:8px; z-index:1000; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
             <tbody id="systemsBody"><tr><td colspan="5" class="loading">Загрузка...</td></tr></tbody>
         </table>
     </div>
@@ -34,11 +34,9 @@
     var modal = document.getElementById('modal'), modalTitle = document.getElementById('modalTitle'), modalForm = document.getElementById('modalForm');
     document.querySelector('.close-modal').addEventListener('click', function() { modal.style.display = 'none'; });
     window.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
-
     var sysSortState = JSON.parse(localStorage.getItem('systems_sort') || '{}');
     var sysSortKey = sysSortState.key || null, sysSortDir = sysSortState.dir || 'asc';
     var selectedCabinets = [];
-
     function renderSystems(data) {
         var tbody = document.getElementById('systemsBody');
         var filtered = data;
@@ -50,11 +48,10 @@
         }
         if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="5">Нет систем</td></tr>'; return; }
         tbody.innerHTML = filtered.map(function(s) {
-            return '<tr><td>' + s.id + '</td><td>' + esc(s.name) + '</td><td>' + esc(s.cabinet_names || '-') + '</td><td>' + esc(s.description || '') + '</td>' +
+            return '<tr><td>' + s.id + '</td><td>' + esc(s.cabinet_names || '-') + '</td><td>' + esc(s.name) + '</td><td>' + esc(s.description || '') + '</td>' +
                 (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')">🗑️</button></td>' : '') + '</tr>';
         }).join('');
     }
-
     function loadSystems() {
         fetch('/api/systems').then(function(r) { return r.json(); }).then(function(data) {
             if (!data.length) { document.getElementById('systemsBody').innerHTML = '<tr><td colspan="5">Нет систем</td></tr>'; return; }
@@ -75,7 +72,6 @@
             renderSystems(data);
         });
     }
-
     function buildCabinetDropdown(data) {
         var allCabinets = [];
         data.forEach(function(s) {
@@ -97,32 +93,16 @@
             cb.addEventListener('click', function(e) { e.stopPropagation(); });
         });
     }
-
     function updateFilterBadge() {
         var badge = document.getElementById('filterBadge');
         var icon = document.getElementById('cabinetFilterIcon');
-        if (selectedCabinets.length > 0) {
-            badge.style.display = '';
-            badge.textContent = 'Выбрано: ' + selectedCabinets.length;
-            icon.textContent = '⚙️';
-        } else {
-            badge.style.display = 'none';
-            icon.textContent = '⚙';
-        }
+        if (selectedCabinets.length > 0) { badge.style.display = ''; badge.textContent = 'Выбрано: ' + selectedCabinets.length; icon.textContent = '⚙️'; }
+        else { badge.style.display = 'none'; icon.textContent = '⚙'; }
     }
-
-    // Открытие/закрытие dropdown
     var filterIcon = document.getElementById('cabinetFilterIcon');
     var dropdown = document.getElementById('cabinetDropdown');
-    filterIcon.addEventListener('click', function(e) {
-        e.stopPropagation();
-        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
-    });
-    document.addEventListener('click', function() {
-        dropdown.style.display = 'none';
-    });
-
-    // Сортировка
+    filterIcon.addEventListener('click', function(e) { e.stopPropagation(); dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none'; });
+    document.addEventListener('click', function() { dropdown.style.display = 'none'; });
     var table = document.getElementById('systemsTable');
     table.querySelectorAll('th[data-sort]').forEach(function(th) {
         th.style.cursor = 'pointer';
@@ -146,9 +126,7 @@
             th.classList.add(sysSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
         });
     });
-
     document.getElementById('addSystemBtn').addEventListener('click', function() { openSystemForm(); });
-
     function openSystemForm(sys) {
         var isEdit = !!sys;
         var h = '<input type="hidden" id="sysId" value="' + (sys ? sys.id : '') + '">';
@@ -168,14 +146,11 @@
                 .catch(function(e) { alert(e.message); });
         };
     }
-
     window.editSystem = function(id) { fetch('/api/systems/' + id).then(function(r) { return r.json(); }).then(function(s) { openSystemForm(s); }); };
     window.deleteSystem = function(id) { if (!confirm('Удалить?')) return; fetch('/api/systems/' + id, { method: 'DELETE' }).then(loadSystems); };
-
     document.getElementById('exportBtn').addEventListener('click', async function() { var r = await fetch('/api/systems/export'); var b = await r.blob(); var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'systems.xlsx'; a.click(); });
     document.getElementById('importBtn').addEventListener('click', function() { document.getElementById('importFile').click(); });
     document.getElementById('importFile').addEventListener('change', async function() { var fd = new FormData(); fd.append('file', this.files[0]); await fetch('/api/systems/import', { method: 'POST', body: fd }); loadSystems(); this.value = ''; });
-
     window.pageInit = function() { loadSystems(); };
 })();
 </script>
