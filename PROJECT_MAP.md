@@ -234,3 +234,8 @@ tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardro
 ### cabinets.js
 - Восстановлен после ошибки (не хватало }); после router.post('/import'))
 - export/import перенесены перед /:id
+
+### Бэкапы после задачи (18.07.2026)
+- Дамп БД: bd_calc_20260718_151846.sql
+- Файлы: calc_wardrobe_20260718_151846.tar.gz
+- Время: 15:18
