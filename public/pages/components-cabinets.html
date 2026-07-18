@@ -194,18 +194,52 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                 html += '</tr>';
             });
             tbody.innerHTML = html;
+            
+            // Клиентская сортировка (как в cabinet.html)
+            var tmplTable = document.querySelector('#tab-templates table');
+            if (tmplTable) {
+                var tmplThead = tmplTable.querySelector('thead tr');
+                var tmplSortState = JSON.parse(localStorage.getItem('block_templates_sort') || '{}');
+                var tmplSortKey = tmplSortState.key || null;
+                var tmplSortDir = tmplSortState.dir || 'asc';
+                var tmplTbody = tmplTable.querySelector('tbody');
+                
+                function applyTmplSort(key, dir) {
+                    if (!tmplTbody || !key) return;
+                    var rows = Array.from(tmplTbody.querySelectorAll('tr'));
+                    var colIdx = Array.from(tmplThead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === key; });
+                    if (colIdx < 0) return;
+                    rows.sort(function(a, b) {
+                        var valA = (a.cells[colIdx]?.textContent || '').trim();
+                        var valB = (b.cells[colIdx]?.textContent || '').trim();
+                        var numA = parseFloat(valA.replace(/,/g, '.'));
+                        var numB = parseFloat(valB.replace(/,/g, '.'));
+                        if (!isNaN(numA) && !isNaN(numB)) return dir === 'asc' ? numA - numB : numB - numA;
+                        return dir === 'asc' ? valA.localeCompare(valB, 'ru') : valB.localeCompare(valA, 'ru');
+                    });
+                    rows.forEach(function(row) { tmplTbody.appendChild(row); });
+                    tmplThead.querySelectorAll('th').forEach(function(th) {
+                        th.classList.remove('sorted-asc', 'sorted-desc');
+                        if (th.dataset.sort === key) th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                    });
+                }
+                
+                tmplThead.querySelectorAll('th[data-sort]').forEach(function(th) {
+                    th.addEventListener('click', function() {
+                        var key = this.dataset.sort;
+                        if (tmplSortKey === key) { tmplSortDir = tmplSortDir === 'asc' ? 'desc' : 'asc'; }
+                        else { tmplSortKey = key; tmplSortDir = 'asc'; }
+                        localStorage.setItem('block_templates_sort', JSON.stringify({key: tmplSortKey, dir: tmplSortDir}));
+                        applyTmplSort(tmplSortKey, tmplSortDir);
+                    });
+                });
+                
+                if (tmplSortKey) setTimeout(function() { applyTmplSort(tmplSortKey, tmplSortDir); }, 200);
+            }
+
             setTimeout(function(){ initBlockTemplatesDrag(); }, 100);
 
-            document.querySelectorAll('#tab-templates th[data-sort]').forEach(function(th) {
-     th.onclick = function() {
-       var k = this.dataset.sort;
-       var s = JSON.parse(localStorage.getItem('block_templates_sort') || '{}');
-       s.dir = s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'asc';
-       s.key = k;
-       localStorage.setItem('block_templates_sort', JSON.stringify(s));
-       loadTemplates();
-     };
-   });
+            // сортировка заменена
 
             // Тултипы для названий с материалами
             tbody.querySelectorAll('.block-name-link').forEach(function(el) {
@@ -416,16 +450,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             });
             tbody.innerHTML = html;
 
-            document.querySelectorAll('#tab-templates th[data-sort]').forEach(function(th) {
-     th.onclick = function() {
-       var k = this.dataset.sort;
-       var s = JSON.parse(localStorage.getItem('block_templates_sort') || '{}');
-       s.dir = s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'asc';
-       s.key = k;
-       localStorage.setItem('block_templates_sort', JSON.stringify(s));
-       loadTemplates();
-     };
-   });
+            
 
             // Тултипы для названий с материалами
             tbody.querySelectorAll('.block-name-link').forEach(function(el) {
