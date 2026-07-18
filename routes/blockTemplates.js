@@ -15,7 +15,7 @@ router.get('/export', auth, async (req, res) => {
       FROM block_templates bt
       LEFT JOIN component_types ct ON bt.type_id = ct.id
       LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
-      ORDER BY bt.id ASC
+      ORDER BY ${['id','name','type_name','manufacturer_name','article','price','weight_grams','power_watts','ln'].includes(sort) ? 'bt.'+sort : 'COALESCE(bt.position, 9999), bt.id'} ${order}
     `);
     const allParams = await pool.query('SELECT id, name FROM parameters ORDER BY id');
     const paramNames = allParams.rows.map(p => p.name);
@@ -127,7 +127,7 @@ router.get('/', auth, async (req, res) => {
       LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
       LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
       LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
-      ORDER BY bt.id
+      ORDER BY COALESCE(bt.position, 9999), bt.id
     `);
     res.json(result.rows);
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
@@ -337,5 +337,17 @@ router.delete('/:blockId/materials/:materialId', auth, isAdmin, async (req, res)
     } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+router.put('/sort-order', auth, isAdmin, async (req, res) => {
+  try {
+    var items = req.body.items;
+    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
+    for (var i = 0; i < items.length; i++) {
+      await pool.query('UPDATE block_templates SET position = $1 WHERE id = $2', [items[i].position, items[i].id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 module.exports = router;
+
 
