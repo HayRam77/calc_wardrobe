@@ -9,7 +9,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 router.get('/', auth, async (req, res) => {
   try {
-    const systems = await pool.query(`SELECT s.*, STRING_AGG(DISTINCT c.name, ', ') as cabinet_names, STRING_AGG(DISTINCT c.id::text, ',') as cabinet_ids FROM systems s LEFT JOIN cabinet_systems cs ON cs.system_id = s.id LEFT JOIN cabinets c ON cs.cabinet_id = c.id GROUP BY s.id ORDER BY s.name`);
+    const systems = await pool.query(`SELECT s.*, STRING_AGG(DISTINCT c.name, ', ') as cabinet_names, STRING_AGG(DISTINCT c.id::text, ',') as cabinet_ids FROM systems s LEFT JOIN cabinet_systems cs ON cs.system_id = s.id LEFT JOIN cabinets c ON cs.cabinet_id = c.id GROUP BY s.id ORDER BY COALESCE(s.position, 9999), s.name`);
     const result = [];
     for (const sys of systems.rows) {
       const comps = await pool.query(`

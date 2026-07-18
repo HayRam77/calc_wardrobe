@@ -8,8 +8,8 @@
     </div>
     <div class="table-container">
         <table class="data-table" id="systemsTable">
-            <thead><tr><th data-sort="id">ID</th><th data-sort="cabinet_names"><span id="cabinetFilterIcon" style="cursor:pointer; font-size:14px;" title="Фильтр по шкафам">⚙</span> Шкаф<div id="cabinetDropdown" style="display:none; position:absolute; background:#fff; border:1px solid #ccc; border-radius:4px; padding:8px; z-index:1000; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
-            <tbody id="systemsBody"><tr><td colspan="5" class="loading">Загрузка...</td></tr></tbody>
+            <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="cabinet_names"><span id="cabinetFilterIcon" style="cursor:pointer; font-size:14px;" title="Фильтр по шкафам">⚙</span> Шкаф<div id="cabinetDropdown" style="display:none; position:absolute; background:#fff; border:1px solid #ccc; border-radius:4px; padding:8px; z-index:1000; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
+            <tbody id="systemsBody"><tr><td colspan="6" class="loading">Загрузка...</td></tr></tbody>
         </table>
     </div>
     <div id="modal" class="modal" style="display:none;">
@@ -36,7 +36,7 @@
     window.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
     var sysSortState = JSON.parse(localStorage.getItem('systems_sort') || '{}');
     var sysSortKey = sysSortState.key || null, sysSortDir = sysSortState.dir || 'asc';
-    var selectedCabinets = [];
+    var selectedCabinets = JSON.parse(localStorage.getItem('systems_filter')||'[]');
     function renderSystems(data) {
         var tbody = document.getElementById('systemsBody');
         var filtered = data;
@@ -46,29 +46,19 @@
                 return selectedCabinets.some(function(sc) { return cabinets.includes(sc); });
             });
         }
-        if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="5">Нет систем</td></tr>'; return; }
+        if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="6">Нет систем</td></tr>'; return; }
         tbody.innerHTML = filtered.map(function(s) {
             var cabHtml = (s.cabinet_names||'').split(', ').filter(Boolean).map(function(n,i){var ids=(s.cabinet_ids||'').split(',');return '<a href="/cabinet/'+(ids[i]||'')+'" target="_blank" style="color:#1a5f7a;">'+esc(n)+'</a>';}).join(', ')||'-';
-            return '<tr><td>'+s.id+'</td><td>'+cabHtml+'</td><td><a href="#" style="color:#1a5f7a;text-decoration:underline;cursor:pointer;" onclick="openSystemModal('+s.id+')">'+esc(s.name)+'</a></td><td>'+esc(s.description||'')+'</td>' +
+            return '<tr data-id="'+s.id+'"><td class="drag-handle" draggable="true">⠿</td><td>'+s.id+'</td><td>'+cabHtml+'</td><td><a href="#" style="color:#1a5f7a;text-decoration:underline;cursor:pointer;" onclick="openSystemModal('+s.id+')">'+esc(s.name)+'</a></td><td>'+esc(s.description||'')+'</td>' +
                 (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')">🗑️</button></td>' : '') + '</tr>';
         }).join('');
     }
     function loadSystems() {
         fetch('/api/systems').then(function(r) { return r.json(); }).then(function(data) {
-            if (!data.length) { document.getElementById('systemsBody').innerHTML = '<tr><td colspan="5">Нет систем</td></tr>'; return; }
+            if (!data.length) { document.getElementById('systemsBody').innerHTML = '<tr><td colspan="6">Нет систем</td></tr>'; return; }
             window._systemsData = data;
-            if (sysSortKey) {
-                data.sort(function(a, b) {
-                    var va = (a[sysSortKey] || '').toString().toLowerCase();
-                    var vb = (b[sysSortKey] || '').toString().toLowerCase();
-                    if (sysSortKey === 'id') { va = parseInt(a.id) || 0; vb = parseInt(b.id) || 0; }
-                    if (va < vb) return sysSortDir === 'asc' ? -1 : 1;
-                    if (va > vb) return sysSortDir === 'asc' ? 1 : -1;
-                    return 0;
-                });
-                var th = document.querySelector('th[data-sort="' + sysSortKey + '"]');
-                if (th) th.classList.add(sysSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
-            }
+            setTimeout(function(){ initSystemsDrag(); }, 200);
+            // Сортировка из localStorage не применяется при загрузке - позиции из БД
             buildCabinetDropdown(data);
             renderSystems(data);
         });
@@ -82,13 +72,14 @@
         allCabinets.sort();
         var dropdown = document.getElementById('cabinetDropdown');
         dropdown.innerHTML = allCabinets.map(function(c) {
-            return '<label style="display:block; font-size:13px; cursor:pointer; padding:2px 0;"><input type="checkbox" class="cabinet-filter-cb" value="' + esc(c) + '"> ' + esc(c) + '</label>';
+            return '<label style="display:block; font-size:13px; cursor:pointer; padding:2px 0;"><input type="checkbox" class="cabinet-filter-cb" value="' + esc(c) + '" ' + (selectedCabinets.indexOf(c)!==-1?'checked':'') + '> ' + esc(c) + '</label>';
         }).join('');
         dropdown.querySelectorAll('.cabinet-filter-cb').forEach(function(cb) {
             cb.addEventListener('change', function() {
                 selectedCabinets = [];
                 dropdown.querySelectorAll('.cabinet-filter-cb:checked').forEach(function(c) { selectedCabinets.push(c.value); });
                 updateFilterBadge();
+                localStorage.setItem('systems_filter', JSON.stringify(selectedCabinets));
                 renderSystems(window._systemsData || []);
             });
             cb.addEventListener('click', function(e) { e.stopPropagation(); });
@@ -259,6 +250,38 @@
     document.getElementById('exportBtn').addEventListener('click', async function() { var r = await fetch('/api/systems/export'); var b = await r.blob(); var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'systems.xlsx'; a.click(); });
     document.getElementById('importBtn').addEventListener('click', function() { document.getElementById('importFile').click(); });
     document.getElementById('importFile').addEventListener('change', async function() { var fd = new FormData(); fd.append('file', this.files[0]); await fetch('/api/systems/import', { method: 'POST', body: fd }); loadSystems(); this.value = ''; });
+    function initSystemsDrag(){
+        var table=document.getElementById('systemsTable');
+        if(!table || table.dataset.dragInit==='1') return;
+        table.dataset.dragInit='1';
+        var tbody=table.querySelector('tbody'), draggedRow=null;
+        tbody.addEventListener('dragstart',function(e){
+            var handle=e.target.closest('.drag-handle');
+            if(!handle){e.preventDefault();return;}
+            draggedRow=handle.closest('tr');
+            if(draggedRow) draggedRow.style.opacity='0.5';
+        });
+        tbody.addEventListener('dragend',function(){if(draggedRow)draggedRow.style.opacity='';draggedRow=null;});
+        tbody.addEventListener('dragover',function(e){e.preventDefault();});
+        tbody.addEventListener('drop',function(e){
+            e.preventDefault();
+            var target=e.target.closest('tr');
+            if(!target||!draggedRow||target===draggedRow) return;
+            var rows=Array.from(tbody.querySelectorAll('tr'));
+            var from=rows.indexOf(draggedRow), to=rows.indexOf(target);
+            if(from<0||to<0) return;
+            if(from<to) tbody.insertBefore(draggedRow,target.nextSibling);
+            else tbody.insertBefore(draggedRow,target);
+            var items=[];
+            tbody.querySelectorAll('tr').forEach(function(tr,idx){
+                var id=tr.dataset.id;
+                if(id) items.push({id:parseInt(id),position:idx});
+            });
+            fetch('/api/systems/sort-order',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items})})
+            .catch(function(e){console.error(e);});
+        });
+    }
+
     window.pageInit = function() { loadSystems(); };
 })();
 </script>
