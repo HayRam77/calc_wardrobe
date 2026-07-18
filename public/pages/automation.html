@@ -133,14 +133,42 @@
         var h = '<input type="hidden" id="sysId" value="' + (sys ? sys.id : '') + '">';
         h += '<div class="form-group"><label>Название *</label><input type="text" id="sysName" value="' + esc(sys ? sys.name : '') + '" required></div>';
         h += '<div class="form-group"><label>Описание</label><textarea id="sysDesc" rows="2">' + esc(sys ? sys.description || '' : '') + '</textarea></div>';
+            h += '<div class="form-group"><label>Шкафы</label><div style="display:flex;gap:5px;margin-bottom:5px;"><input type="text" id="newCabinetName" placeholder="Новый шкаф" style="flex:1;"><select id="newCabinetProject" style="width:130px;"><option value="">Проект</option></select><button type="button" id="addCabinetBtn" class="btn btn-sm btn-primary">+ Создать</button></div><select id="cabinetSelect" multiple style="width:100%;height:100px;"><option value="">Загрузка...</option></select></div>';
         modalTitle.textContent = isEdit ? 'Редактировать систему' : 'Добавить систему';
         modalForm.innerHTML = h + '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>';
         modal.style.display = 'flex';
+            setTimeout(function(){
+            fetch('/api/projects').then(function(r){return r.json()}).then(function(projects){
+                var ps=document.getElementById('newCabinetProject');
+                if(ps){ps.innerHTML='<option value="">Проект</option>';projects.forEach(function(p){ps.innerHTML+='<option value="'+p.id+'">'+esc(p.name)+'</option>';});}
+            });
+            fetch('/api/cabinets').then(function(r){return r.json()}).then(function(cabs){
+                var sel=document.getElementById('cabinetSelect');
+                if(!sel) return;
+                sel.innerHTML='<option value="0">-- Без шкафа --</option>';
+                cabs.forEach(function(c){sel.innerHTML+='<option value="'+c.id+'">'+esc(c.name)+'</option>';});
+            });
+            var ab=document.getElementById('addCabinetBtn');if(ab)ab.onclick=function(){
+                var n=document.getElementById('newCabinetName').value.trim();
+                var ps=document.getElementById('newCabinetProject');
+                if(!n){alert('Введите название');return;}
+                if(!ps||!ps.value){alert('Выберите проект');return;}
+                fetch('/api/cabinets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,project_id:parseInt(ps.value)})})
+                .then(function(r){return r.json()}).then(function(nc){
+                    if(nc.error){alert(nc.error);return;}
+                    var s=document.getElementById('cabinetSelect');
+                    var o=document.createElement('option');o.value=nc.id;o.textContent=nc.name;o.selected=true;s.appendChild(o);
+                    document.getElementById('newCabinetName').value='';
+                }).catch(function(e){alert(e.message)});
+            };
+            }, 100);
         modalForm.onsubmit = function(e) {
             e.preventDefault();
             var name = document.getElementById('sysName').value.trim();
             if (!name) { alert('Введите название'); return; }
-            var body = { name: name, description: document.getElementById('sysDesc').value.trim() };
+            var sc=[],sel=document.getElementById('cabinetSelect');
+            for(var i=0;i<sel.options.length;i++){var v=parseInt(sel.options[i].value); if(sel.options[i].selected && v>0)sc.push(v);}
+            var body = { name: name, description: document.getElementById('sysDesc').value.trim(), cabinet_ids: sc };
             var url = sys ? '/api/systems/' + sys.id : '/api/systems';
             fetch(url, { method: sys ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
                 .then(function(r) { if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); }); modal.style.display = 'none'; loadSystems(); })
