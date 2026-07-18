@@ -246,3 +246,9 @@ tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardro
 
 ### 18.07.2026 (16:00)
 - automation.html: столбцы переставлены (ID, Шкаф, Название, Описание), иконка фильтра только в Шкаф
+
+### 18.07.2026 (17:30) — Системы автоматизации
+- automation.html: ссылки на шкафы в новой вкладке, модалка системы с компонентами
+- Кнопки: Привязать компонент (выбор из списка), Добавить компонент, Удалить из системы
+- API systems.js: cabinet_ids в GET /api/systems, cabinet_ids в POST/PUT
+- API systems.js: GET /:id/cabinets

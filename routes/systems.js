@@ -9,7 +9,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 router.get('/', auth, async (req, res) => {
   try {
-    const systems = await pool.query(`SELECT s.*, STRING_AGG(DISTINCT c.name, ', ') as cabinet_names FROM systems s LEFT JOIN cabinet_systems cs ON cs.system_id = s.id LEFT JOIN cabinets c ON cs.cabinet_id = c.id GROUP BY s.id ORDER BY s.name`);
+    const systems = await pool.query(`SELECT s.*, STRING_AGG(DISTINCT c.name, ', ') as cabinet_names, STRING_AGG(DISTINCT c.id::text, ',') as cabinet_ids FROM systems s LEFT JOIN cabinet_systems cs ON cs.system_id = s.id LEFT JOIN cabinets c ON cs.cabinet_id = c.id GROUP BY s.id ORDER BY s.name`);
     const result = [];
     for (const sys of systems.rows) {
       const comps = await pool.query(`
@@ -66,9 +66,23 @@ router.get('/:id', auth, async (req, res) => {
 
 router.post('/', auth, isAdmin, async (req, res) => {
   try {
-    const { name, description } = req.body;
-    const result = await pool.query('INSERT INTO systems (name, description) VALUES ($1, $2) RETURNING *', [name, description || null]);
-    res.status(201).json(result.rows[0]);
+    const { name, description, cabinet_ids } = req.body;
+    const result = await pool.query('INSERT INTO systems (name, description) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description RETURNING *', [name, description || null]);
+    const status = result.rows[0].created_at === result.rows[0].updated_at ? 201 : 200;
+    const sysId = result.rows[0].id;
+    if (cabinet_ids && Array.isArray(cabinet_ids)) {
+      for (const cid of cabinet_ids) {
+        await pool.query('INSERT INTO cabinet_systems (cabinet_id, system_id) VALUES ($1, $2) ON CONFLICT (cabinet_id, system_id) DO NOTHING', [cid, sysId]);
+      }
+    }
+    res.status(status).json(result.rows[0]);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+router.get('/:id/cabinets', auth, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT cabinet_id FROM cabinet_systems WHERE system_id = $1', [req.params.id]);
+    res.json(result.rows);
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
@@ -76,8 +90,14 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { name, description, components } = req.body;
+    const { name, description, components, cabinet_ids } = req.body;
     if (name) await client.query('UPDATE systems SET name=$1, description=$2 WHERE id=$3', [name, description || null, req.params.id]);
+    if (cabinet_ids && Array.isArray(cabinet_ids)) {
+      await client.query('DELETE FROM cabinet_systems WHERE system_id = $1', [req.params.id]);
+      for (const cid of cabinet_ids) {
+        await client.query('INSERT INTO cabinet_systems (cabinet_id, system_id) VALUES ($1, $2) ON CONFLICT (cabinet_id, system_id) DO NOTHING', [cid, req.params.id]);
+      }
+    }
     if (components && Array.isArray(components)) {
       for (const c of components) {
         await client.query('INSERT INTO system_components_link (system_id, component_id, quantity, position) VALUES ($1, $2, $3, (SELECT COALESCE(MAX(position), -1) + 1 FROM system_components_link WHERE system_id = $1)) ON CONFLICT (system_id, component_id) DO UPDATE SET quantity = EXCLUDED.quantity', [req.params.id, c.component_id, c.quantity || 1]);
@@ -216,7 +236,8 @@ router.post('/:id/components', auth, isAdmin, async (req, res) => {
              RETURNING *`,
             [req.params.id, component_id, quantity || 1]
         );
-        res.status(201).json(result.rows[0]);
+        const status = result.rows[0].created_at === result.rows[0].updated_at ? 201 : 200;
+    res.status(status).json(result.rows[0]);
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Ошибка добавления компонента в систему' });
