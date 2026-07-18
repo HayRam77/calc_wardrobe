@@ -47,6 +47,15 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
 });
 
+router.put('/sort-order', auth, isAdmin, async (req, res) => {
+  try {
+    var items = req.body.items;
+    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
+    for (var i = 0; i < items.length; i++) {
+      await pool.query('UPDATE systems SET position = $1 WHERE id = $2', [items[i].position, items[i].id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 router.get('/:id', auth, async (req, res) => {
   try {
     const sys = await pool.query('SELECT * FROM systems WHERE id = $1', [req.params.id]);
@@ -244,6 +253,9 @@ router.post('/:id/components', auth, isAdmin, async (req, res) => {
     }
 });
 
+});
+
 module.exports = router;
+
 
 module.exports = router;
