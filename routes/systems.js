@@ -245,3 +245,5 @@ router.post('/:id/components', auth, isAdmin, async (req, res) => {
 });
 
 module.exports = router;
+
+module.exports = router;
