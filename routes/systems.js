@@ -56,6 +56,7 @@ router.put('/sort-order', auth, isAdmin, async (req, res) => {
     }
     res.json({ message: 'ok' });
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
 router.get('/:id', auth, async (req, res) => {
   try {
     const sys = await pool.query('SELECT * FROM systems WHERE id = $1', [req.params.id]);
@@ -251,8 +252,6 @@ router.post('/:id/components', auth, isAdmin, async (req, res) => {
         console.error(err);
         res.status(500).json({ message: 'Ошибка добавления компонента в систему' });
     }
-});
-
 });
 
 module.exports = router;
