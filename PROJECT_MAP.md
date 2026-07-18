@@ -220,3 +220,17 @@ psql -U hrroot -h localhost bd_calc < /opt/backups/bd_calc_ИМЯ_ФАЙЛА.sql
 git checkout -- путь/к/файлу
 git log --oneline -5 && git revert ХЕШ
 tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardrobe
+
+## ИЗМЕНЕНИЯ 18.07.2026
+
+### Системы автоматизации (automation.html)
+- Добавлен столбец "Шкаф" (cabinet_names из API)
+- Сортировка по клику на заголовки (ID, Название, Шкаф, Описание)
+- Сохранение сортировки в localStorage (systems_sort)
+
+### API systems.js
+- GET /api/systems — добавлен JOIN с cabinet_systems и cabinets, поле cabinet_names
+
+### cabinets.js
+- Восстановлен после ошибки (не хватало }); после router.post('/import'))
+- export/import перенесены перед /:id
