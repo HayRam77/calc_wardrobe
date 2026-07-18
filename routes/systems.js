@@ -221,7 +221,7 @@ router.delete('/:id/components', auth, isAdmin, async (req, res) => {
   }
 });
 
-module.exports = router;
+undefined
 
 
 // Добавить компонент в систему
@@ -243,3 +243,5 @@ router.post('/:id/components', auth, isAdmin, async (req, res) => {
         res.status(500).json({ message: 'Ошибка добавления компонента в систему' });
     }
 });
+
+module.exports = router;
