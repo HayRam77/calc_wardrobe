@@ -42,7 +42,7 @@
     var html='';
     data.forEach(function(item){
      var hasLinks = item.has_materials || item.has_blocks;
-     html+='<tr'+(hasLinks ? ' data-has-links="1"' : '')+'><td>'+item.id+'</td><td>'+(hasLinks ? '<span class="type-name-link" style="cursor:pointer;text-decoration:underline;"><strong>'+esc(item.name)+'</strong></span>' : esc(item.name))+'</td><td>'+esc(item.description || '')+'</td>';
+     html+='<tr data-id="'+item.id+'"'+(hasLinks ? ' data-has-links="1"' : '')+'><td class="drag-handle" draggable="true">⠿</td><td>'+item.id+'</td><td>'+(hasLinks ? '<span class="type-name-link" style="cursor:pointer;text-decoration:underline;"><strong>'+esc(item.name)+'</strong></span>' : esc(item.name))+'</td><td>'+esc(item.description || '')+'</td>';
      if(isAdmin){
       html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemComponentType('+item.id+')">✏️</button> <button class="btn btn-sm btn-duplicate" onclick="copyTypeComposition('+item.id+')">📋</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponentType('+item.id+')">🗑️</button></td>';
      }

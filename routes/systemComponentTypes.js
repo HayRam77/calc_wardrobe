@@ -9,7 +9,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 router.get('/export', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id as ID, name as Название, description as Описание FROM system_component_types ORDER BY id');
+    const result = await pool.query('SELECT id as ID, name as Название, description as Описание FROM system_component_types ORDER BY COALESCE(position, 9999), id');
     const ws = XLSX.utils.json_to_sheet(result.rows);
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Типы компонентов систем');
     res.setHeader('Content-Disposition', 'attachment; filename=system_component_types.xlsx');
@@ -37,7 +37,7 @@ router.get('/', auth, async (req, res) => {
       'SELECT sct.*, ' +
       'EXISTS(SELECT 1 FROM system_component_type_materials WHERE type_id = sct.id) as has_materials, ' +
       'EXISTS(SELECT 1 FROM system_component_type_blocks WHERE type_id = sct.id) as has_blocks ' +
-      'FROM system_component_types sct ORDER BY sct.' + sort + ' ' + order
+      'FROM system_component_types sct ORDER BY COALESCE(sct.position, 9999), sct.name
     ); 
     res.json(r.rows); 
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } 

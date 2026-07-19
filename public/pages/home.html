@@ -52,16 +52,65 @@
             var res = await fetch('/api/projects');
             var data = await res.json();
             if (!data.length) { container.innerHTML = '<p>Нет проектов.</p>'; return; }
-            var html = '<div class="table-container"><table class="data-table"><thead><tr><th>ID</th><th>Название</th><th>Описание</th><th>Владелец</th>';
+            var html = '<div class="table-container"><table class="data-table"><thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th>Владелец</th>';
             if (isAdmin) html += '<th>Действия</th>';
             html += '</tr></thead><tbody>';
             data.forEach(function(p) {
-                html += '<tr><td>' + p.id + '</td><td><a href="/project/' + p.id + '" onclick="navigateTo(\'/project/' + p.id + '\');return false;">' + escapeHtml(p.name) + '</a></td><td>' + escapeHtml(p.description || '') + '</td><td>' + escapeHtml(p.owner_name || p.user_id) + '</td>';
+                html += '<tr data-id="' + p.id + '"><td class="drag-handle" draggable="true">⠿</td><td>' + p.id + '</td><td><a href="/project/' + p.id + '" onclick="navigateTo(\'/project/' + p.id + '\');return false;">' + escapeHtml(p.name) + '</a></td><td>' + escapeHtml(p.description || '') + '</td><td>' + escapeHtml(p.owner_name || p.user_id) + '</td>';
                 if (isAdmin) html += '<td><button class="btn btn-sm btn-edit" onclick="editProject(' + p.id + ')" id="home_edit_btn">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteProject(' + p.id + ')" id="home_del_btn">🗑️</button></td>';
                 html += '</tr>';
             });
             html += '</tbody></table></div>';
             container.innerHTML = html;
+
+  var t = container.querySelector('table');
+  if (t) {
+    var thd = t.querySelector('thead tr');
+    var st = JSON.parse(localStorage.getItem('projects_sort') || '{}');
+    var sk = st.key || null, sd = st.dir || 'asc';
+    var tb = t.querySelector('tbody');
+    function srt(k, d) {
+      if (!tb || !k) return;
+      var rs = Array.from(tb.querySelectorAll('tr'));
+      var ci = Array.from(thd.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === k; });
+      if (ci < 0) return;
+      rs.sort(function(a, b) {
+        var va = (a.cells[ci]?.textContent || '').trim();
+        var vb = (b.cells[ci]?.textContent || '').trim();
+        var na = parseFloat(va.replace(/,/g, '.')), nb = parseFloat(vb.replace(/,/g, '.'));
+        if (!isNaN(na) && !isNaN(nb)) return d === 'asc' ? na - nb : nb - na;
+        return d === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+      });
+      rs.forEach(function(r) { tb.appendChild(r); });
+      thd.querySelectorAll('th').forEach(function(th) { th.classList.remove('sorted-asc', 'sorted-desc'); if (th.dataset.sort === k) th.classList.add(d === 'asc' ? 'sorted-asc' : 'sorted-desc'); });
+    }
+    thd.querySelectorAll('th[data-sort]').forEach(function(th) {
+      th.addEventListener('click', function() {
+        var k = this.dataset.sort;
+        if (sk === k) { sd = sd === 'asc' ? 'desc' : 'asc'; } else { sk = k; sd = 'asc'; }
+        localStorage.setItem('projects_sort', JSON.stringify({key: sk, dir: sd}));
+        srt(sk, sd);
+      });
+    });
+    if (sk) setTimeout(function() { srt(sk, sd); }, 200);
+    if (!t.dataset.dragInit) {
+      t.dataset.dragInit = '1'; var dr = null;
+      tb.addEventListener('dragstart', function(e) { var h2 = e.target.closest('.drag-handle'); if (!h2) { e.preventDefault(); return; } dr = h2.closest('tr'); if (dr) dr.style.opacity = '0.5'; });
+      tb.addEventListener('dragend', function() { if (dr) dr.style.opacity = ''; dr = null; });
+      tb.addEventListener('dragover', function(e) { e.preventDefault(); });
+      tb.addEventListener('drop', function(e) {
+        e.preventDefault(); var tg = e.target.closest('tr');
+        if (!tg || !dr || tg === dr) return;
+        var rs = Array.from(tb.querySelectorAll('tr'));
+        var from = rs.indexOf(dr), to = rs.indexOf(tg);
+        if (from < 0 || to < 0) return;
+        if (from < to) tb.insertBefore(dr, tg.nextSibling); else tb.insertBefore(dr, tg);
+        var items = []; tb.querySelectorAll('tr').forEach(function(tr, idx) { var id = tr.dataset.id; if (id) items.push({ id: parseInt(id), position: idx }); });
+        fetch('/api/projects/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e) { console.error(e); });
+      });
+    }
+  }
+
         } catch(e) { container.innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; }
     }
 

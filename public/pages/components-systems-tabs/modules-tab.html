@@ -38,13 +38,61 @@
     if(empty) empty.style.display='none';
     var html='';
     data.forEach(function(item){
-     html+='<tr><td>'+item.id+'</td><td>'+esc(item.name)+'</td><td>'+esc(item.description || '')+'</td>';
+     html+='<tr data-id="'+item.id+'"><td class="drag-handle" draggable="true">⠿</td><td>'+item.id+'</td><td>'+esc(item.name)+'</td><td>'+esc(item.description || '')+'</td>';
      if(isAdmin){
       html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemModule('+item.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemModule('+item.id+')">🗑️</button></td>';
      }
      html+='</tr>';
     });
     tbody.innerHTML=html;
+
+  var t = tbody.closest('table');
+  if (t) {
+    var thd = t.querySelector('thead tr');
+    var st = JSON.parse(localStorage.getItem('sm_sort') || '{}');
+    var sk = st.key || null, sd = st.dir || 'asc';
+    function srt(k, d) {
+      if (!tbody || !k) return;
+      var rs = Array.from(tbody.querySelectorAll('tr'));
+      var ci = Array.from(thd.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === k; });
+      if (ci < 0) return;
+      rs.sort(function(a, b) {
+        var va = (a.cells[ci]?.textContent || '').trim();
+        var vb = (b.cells[ci]?.textContent || '').trim();
+        var na = parseFloat(va.replace(/,/g, '.')), nb = parseFloat(vb.replace(/,/g, '.'));
+        if (!isNaN(na) && !isNaN(nb)) return d === 'asc' ? na - nb : nb - na;
+        return d === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+      });
+      rs.forEach(function(r) { tbody.appendChild(r); });
+      thd.querySelectorAll('th').forEach(function(th) { th.classList.remove('sorted-asc', 'sorted-desc'); if (th.dataset.sort === k) th.classList.add(d === 'asc' ? 'sorted-asc' : 'sorted-desc'); });
+    }
+    thd.querySelectorAll('th[data-sort]').forEach(function(th) {
+      th.addEventListener('click', function() {
+        var k = this.dataset.sort;
+        if (sk === k) { sd = sd === 'asc' ? 'desc' : 'asc'; } else { sk = k; sd = 'asc'; }
+        localStorage.setItem('sm_sort', JSON.stringify({key: sk, dir: sd}));
+        srt(sk, sd);
+      });
+    });
+    if (sk) setTimeout(function() { srt(sk, sd); }, 200);
+    if (!t.dataset.dragInit) {
+      t.dataset.dragInit = '1'; var dr = null;
+      tbody.addEventListener('dragstart', function(e) { var h2 = e.target.closest('.drag-handle'); if (!h2) { e.preventDefault(); return; } dr = h2.closest('tr'); if (dr) dr.style.opacity = '0.5'; });
+      tbody.addEventListener('dragend', function() { if (dr) dr.style.opacity = ''; dr = null; });
+      tbody.addEventListener('dragover', function(e) { e.preventDefault(); });
+      tbody.addEventListener('drop', function(e) {
+        e.preventDefault(); var tg = e.target.closest('tr');
+        if (!tg || !dr || tg === dr) return;
+        var rs = Array.from(tbody.querySelectorAll('tr'));
+        var from = rs.indexOf(dr), to = rs.indexOf(tg);
+        if (from < 0 || to < 0) return;
+        if (from < to) tbody.insertBefore(dr, tg.nextSibling); else tbody.insertBefore(dr, tg);
+        var items = []; tbody.querySelectorAll('tr').forEach(function(tr, idx) { var id = tr.dataset.id; if (id) items.push({ id: parseInt(id), position: idx }); });
+        fetch('/api/system-modules/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e) { console.error(e); });
+      });
+    }
+  }
+
    document.querySelectorAll('#tab-modules th[data-sort]').forEach(function(th) {
      th.onclick = function() {
        var k = this.dataset.sort;

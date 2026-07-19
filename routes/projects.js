@@ -36,6 +36,19 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Получение одного проекта
+router.post('/reorder', auth, isAdmin, async (req, res) => {
+  try {
+    var items = req.body.items;
+    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
+    for (var i = 0; i < items.length; i++) {
+      var id = parseInt(items[i].id), pos = parseInt(items[i].position);
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE projects SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;

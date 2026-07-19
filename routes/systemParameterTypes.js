@@ -34,6 +34,19 @@ router.get('/export', auth, async (req, res) => {
         res.status(500).json({ message: 'Ошибка экспорта' });
     }
 });
+router.post('/reorder', auth, isAdmin, async (req, res) => {
+  try {
+    var items = req.body.items;
+    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
+    for (var i = 0; i < items.length; i++) {
+      var id = parseInt(items[i].id), pos = parseInt(items[i].position);
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE system_parameter_types SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 router.get('/:id', auth, async (req, res) => {
     try {
         const result = await pool.query('SELECT id, name, value FROM system_parameter_types WHERE id = $1', [req.params.id]);

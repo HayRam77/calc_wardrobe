@@ -10,7 +10,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Получить все типы
 router.get('/', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM component_types ORDER BY name');
+    const result = await pool.query('SELECT * FROM component_types ORDER BY COALESCE(position, 9999), name');
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -19,6 +19,19 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Получить один тип
+router.post('/reorder', auth, isAdmin, async (req, res) => {
+  try {
+    var items = req.body.items;
+    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
+    for (var i = 0; i < items.length; i++) {
+      var id = parseInt(items[i].id), pos = parseInt(items[i].position);
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE component_types SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 router.get('/:id', auth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM component_types WHERE id = $1', [req.params.id]);
@@ -74,7 +87,7 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 // Экспорт в Excel
 router.get('/export', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id as ID, name as Название, description as Описание FROM component_types ORDER BY name');
+    const result = await pool.query('SELECT id as ID, name as Название, description as Описание FROM component_types ORDER BY COALESCE(position, 9999), name');
     const ws = XLSX.utils.json_to_sheet(result.rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Типы');
