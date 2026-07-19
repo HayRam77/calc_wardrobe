@@ -268,3 +268,43 @@ tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardro
 ### 19.07.2026 (продолжение)
 - components-cabinets.html: Параметры (drag+sort) ✅
 - API parameters.js: POST /reorder, ORDER BY position
+
+## ИТОГИ 19.07.2026 — Drag-and-drop + сортировка
+
+### Реализовано на страницах:
+| Страница | Drag | Sort | Сохранение |
+|----------|------|------|------------|
+| automation.html (Системы автоматизации) | ✅ | ✅ | localStorage + API /systems/sort-order |
+| cabinet.html (Шкаф) | ✅ | ✅ | было ранее |
+| components-cabinets.html / Компоненты | ✅ | ✅ | localStorage + клиентская сортировка + API /block-templates/sort-order |
+| components-cabinets.html / Типы | ✅ | ✅ | localStorage + клиентская сортировка + API /component-types/reorder |
+| components-cabinets.html / Параметры | ✅ | ✅ | localStorage + клиентская сортировка + API /parameters/reorder |
+| manufacturers.html | ✅ | ✅ | localStorage + клиентская сортировка + API /manufacturers/sort-order |
+| consumables.html | ✅ | ✅ | клиентская сортировка + API /materials/sort-order |
+
+### Принцип работы:
+1. **Drag-and-drop**: перетаскивание строк за значок ⠿, позиции отправляются через API (PUT/POST /sort-order или /reorder)
+2. **Сортировка по клику**: клиентская (сортирует DOM-строки, не дёргает API), сохраняется в localStorage
+3. **При обновлении**: позиции загружаются из БД (ORDER BY position), затем применяется клиентская сортировка из localStorage
+
+### Добавленные API роуты:
+- PUT /api/systems/sort-order
+- PUT /api/block-templates/sort-order
+- POST /api/component-types/reorder
+- POST /api/parameters/reorder
+- PUT /api/manufacturers/sort-order
+- PUT /api/materials/sort-order
+
+### Добавленные колонки в БД:
+- systems.position
+- block_templates.position
+- component_types.position
+- parameters.position
+- manufacturers.position
+- materials.position
+
+### Особенности:
+- Клиентская сортировка не конфликтует с drag-and-drop
+- Сортировка по клику сохраняется в localStorage
+- После обновления страницы порядок из БД (position), затем применяется сохранённая сортировка
+- Для систем автоматизации дополнительно сохраняется фильтр по шкафам
