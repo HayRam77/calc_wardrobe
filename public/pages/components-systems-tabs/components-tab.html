@@ -7,8 +7,8 @@
   </div>
   <div class="table-container">
     <table class="data-table">
-      <thead><tr><th data-sort="id">ID</th><th data-sort="module_name">Модуль системы</th><th data-sort="name">Название</th><th data-sort="type_name">Тип</th><th data-sort="ln">LN</th><th data-sort="tm">TM</th><th>Параметры</th><th id="componentsActionsCol" style="display:none;">Действия</th></tr></thead>
-      <tbody id="componentsBody"><tr><td colspan="8" class="loading">Загрузка...</td></tr></tbody>
+      <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="module_name">Модуль системы</th><th data-sort="name">Название</th><th data-sort="type_name">Тип</th><th data-sort="ln">LN</th><th data-sort="tm">TM</th><th>Параметры</th><th id="componentsActionsCol" style="display:none;">Действия</th></tr></thead>
+      <tbody id="componentsBody"><tr><td colspan="9" class="loading">Загрузка...</td></tr></tbody>
     </table>
   </div>
   <div id="componentsEmpty" class="empty-state" style="display:none;"><p>Компонентов нет</p></div>
@@ -54,6 +54,73 @@
      html+='</tr>';
     });
     tbody.innerHTML=html;
+
+  var compTable = tbody.closest('table');
+  if (compTable) {
+    var compThead = compTable.querySelector('thead tr');
+    var compSortState = JSON.parse(localStorage.getItem('system_components_sort') || '{}');
+    var compSortKey = compSortState.key || null;
+    var compSortDir = compSortState.dir || 'asc';
+    function applyCompSort(key, dir) {
+      if (!tbody || !key) return;
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+      var colIdx = Array.from(compThead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === key; });
+      if (colIdx < 0) return;
+      rows.sort(function(a, b) {
+        var va = (a.cells[colIdx]?.textContent || '').trim();
+        var vb = (b.cells[colIdx]?.textContent || '').trim();
+        var na = parseFloat(va.replace(/,/g, '.'));
+        var nb = parseFloat(vb.replace(/,/g, '.'));
+        if (!isNaN(na) && !isNaN(nb)) return dir === 'asc' ? na - nb : nb - na;
+        return dir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+      });
+      rows.forEach(function(row) { tbody.appendChild(row); });
+      compThead.querySelectorAll('th').forEach(function(th) {
+        th.classList.remove('sorted-asc', 'sorted-desc');
+        if (th.dataset.sort === key) th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+      });
+    }
+    compThead.querySelectorAll('th[data-sort]').forEach(function(th) {
+      th.addEventListener('click', function() {
+        var key = this.dataset.sort;
+        if (compSortKey === key) { compSortDir = compSortDir === 'asc' ? 'desc' : 'asc'; }
+        else { compSortKey = key; compSortDir = 'asc'; }
+        localStorage.setItem('system_components_sort', JSON.stringify({key: compSortKey, dir: compSortDir}));
+        applyCompSort(compSortKey, compSortDir);
+      });
+    });
+    if (compSortKey) setTimeout(function() { applyCompSort(compSortKey, compSortDir); }, 200);
+    if (!compTable.dataset.dragInit) {
+      compTable.dataset.dragInit = '1';
+      var draggedRow = null;
+      tbody.addEventListener('dragstart', function(e) {
+        var h2 = e.target.closest('.drag-handle');
+        if (!h2) { e.preventDefault(); return; }
+        draggedRow = h2.closest('tr');
+        if (draggedRow) draggedRow.style.opacity = '0.5';
+      });
+      tbody.addEventListener('dragend', function() { if (draggedRow) draggedRow.style.opacity = ''; draggedRow = null; });
+      tbody.addEventListener('dragover', function(e) { e.preventDefault(); });
+      tbody.addEventListener('drop', function(e) {
+        e.preventDefault();
+        var target = e.target.closest('tr');
+        if (!target || !draggedRow || target === draggedRow) return;
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+        var from = rows.indexOf(draggedRow), to = rows.indexOf(target);
+        if (from < 0 || to < 0) return;
+        if (from < to) tbody.insertBefore(draggedRow, target.nextSibling);
+        else tbody.insertBefore(draggedRow, target);
+        var items = [];
+        tbody.querySelectorAll('tr').forEach(function(tr, idx) {
+          var id = tr.dataset.id;
+          if (id) items.push({ id: parseInt(id), position: idx });
+        });
+        fetch('/api/system-components/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
+        .catch(function(e) { console.error(e); });
+      });
+    }
+  }
+
    document.querySelectorAll('#tab-components th[data-sort]').forEach(function(th) {
      th.onclick = function() {
        var k = this.dataset.sort;

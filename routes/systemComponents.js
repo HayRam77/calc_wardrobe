@@ -41,6 +41,19 @@ router.get('/', auth, async (req, res) => {
     } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+router.post('/reorder', auth, isAdmin, async (req, res) => {
+  try {
+    var items = req.body.items;
+    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
+    for (var i = 0; i < items.length; i++) {
+      var id = parseInt(items[i].id), pos = parseInt(items[i].position);
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE system_components SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 router.get('/export', auth, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -52,7 +65,7 @@ router.get('/export', auth, async (req, res) => {
             LEFT JOIN manufacturers m ON sc.manufacturer_id=m.id
             LEFT JOIN ln_values ln ON ln.entity_type = 'system_component' AND ln.entity_id = sc.id
             LEFT JOIN tm_values tm ON tm.entity_type = 'system_component' AND tm.entity_id = sc.id
-            ORDER BY sc.name
+            ORDER BY COALESCE(sc.position, 9999), sc.name
         `);
         const ws = XLSX.utils.json_to_sheet(result.rows);
         const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Компоненты систем');
