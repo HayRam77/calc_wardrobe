@@ -9,7 +9,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 router.get('/export', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id as ID, name as Название, description as Описание FROM system_component_types ORDER BY COALESCE(position, 9999), id');
+    const result = await pool.query('SELECT id as ID, name as Название, description as Описание FROM system_component_types ORDER BY id');
     const ws = XLSX.utils.json_to_sheet(result.rows);
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Типы компонентов систем');
     res.setHeader('Content-Disposition', 'attachment; filename=system_component_types.xlsx');
@@ -37,24 +37,11 @@ router.get('/', auth, async (req, res) => {
       'SELECT sct.*, ' +
       'EXISTS(SELECT 1 FROM system_component_type_materials WHERE type_id = sct.id) as has_materials, ' +
       'EXISTS(SELECT 1 FROM system_component_type_blocks WHERE type_id = sct.id) as has_blocks ' +
-      'FROM system_component_types sct ORDER BY COALESCE(sct.position, 9999), sct.name
+      'FROM system_component_types sct ORDER BY sct.' + sort + ' ' + order
     ); 
     res.json(r.rows); 
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } 
 });
-router.post('/reorder', auth, isAdmin, async (req, res) => {
-  try {
-    var items = req.body.items;
-    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
-    for (var i = 0; i < items.length; i++) {
-      var id = parseInt(items[i].id), pos = parseInt(items[i].position);
-      if (isNaN(id) || isNaN(pos)) continue;
-      await pool.query('UPDATE system_component_types SET position = $1 WHERE id = $2', [pos, id]);
-    }
-    res.json({ message: 'ok' });
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
-});
-
 router.get('/:id', auth, async (req, res) => { try { const r = await pool.query('SELECT * FROM system_component_types WHERE id = $1', [req.params.id]); if (r.rows.length === 0) return res.status(404).json({ message: 'Не найден' }); res.json(r.rows[0]); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
 router.post('/', auth, isAdmin, async (req, res) => { try { const r = await pool.query('INSERT INTO system_component_types (name, description) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET description=$2 RETURNING *', [req.body.name, req.body.description || null]); res.status(201).json(r.rows[0]); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
 router.put('/:id', auth, isAdmin, async (req, res) => { try { const r = await pool.query('UPDATE system_component_types SET name=$1, description=$2 WHERE id=$3 RETURNING *', [req.body.name, req.body.description || null, req.params.id]); res.json(r.rows[0]); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });

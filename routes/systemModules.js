@@ -23,7 +23,7 @@ router.get('/', auth, async (req, res) => {
 // Получить один модуль
 router.get('/export', auth, async (req, res) => {
     try {
-        const result = await pool.query('SELECT id, name, description FROM system_modules ORDER BY COALESCE(position, 9999), name');
+        const result = await pool.query('SELECT id, name, description FROM system_modules ORDER BY name');
         const ws = XLSX.utils.json_to_sheet(result.rows);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Модули системы');
@@ -34,19 +34,6 @@ router.get('/export', auth, async (req, res) => {
         res.status(500).json({ message: 'Ошибка экспорта' });
     }
 });
-router.post('/reorder', auth, isAdmin, async (req, res) => {
-  try {
-    var items = req.body.items;
-    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
-    for (var i = 0; i < items.length; i++) {
-      var id = parseInt(items[i].id), pos = parseInt(items[i].position);
-      if (isNaN(id) || isNaN(pos)) continue;
-      await pool.query('UPDATE system_modules SET position = $1 WHERE id = $2', [pos, id]);
-    }
-    res.json({ message: 'ok' });
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
-});
-
 router.get('/:id', auth, async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM system_modules WHERE id = $1', [req.params.id]);

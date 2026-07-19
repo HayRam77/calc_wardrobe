@@ -7,8 +7,8 @@
   </div>
   <div class="table-container">
     <table class="data-table">
-      <thead><tr><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="value">Значение</th><th id="paramTypesActionsCol" style="display:none;">Действия</th></tr></thead>
-      <tbody id="paramTypesBody"><tr><td colspan="5" class="loading">Загрузка...</td></tr></tbody>
+      <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="value">Значение</th><th id="paramTypesActionsCol" style="display:none;">Действия</th></tr></thead>
+      <tbody id="paramTypesBody"><tr><td colspan="4" class="loading">Загрузка...</td></tr></tbody>
     </table>
   </div>
   <div id="paramTypesEmpty" class="empty-state" style="display:none;"><p>Типов параметров нет</p></div>
@@ -47,54 +47,7 @@
      html+='</tr>';
     });
     tbody.innerHTML=html;
-
-  var t = tbody.closest('table');
-  if (t) {
-    var thd = t.querySelector('thead tr');
-    var st = JSON.parse(localStorage.getItem('spt_sort') || '{}');
-    var sk = st.key || null, sd = st.dir || 'asc';
-    function srt(k, d) {
-      if (!tbody || !k) return;
-      var rs = Array.from(tbody.querySelectorAll('tr'));
-      var ci = Array.from(thd.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === k; });
-      if (ci < 0) return;
-      rs.sort(function(a, b) {
-        var va = (a.cells[ci]?.textContent || '').trim();
-        var vb = (b.cells[ci]?.textContent || '').trim();
-        var na = parseFloat(va.replace(/,/g, '.')), nb = parseFloat(vb.replace(/,/g, '.'));
-        if (!isNaN(na) && !isNaN(nb)) return d === 'asc' ? na - nb : nb - na;
-        return d === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
-      });
-      rs.forEach(function(r) { tbody.appendChild(r); });
-      thd.querySelectorAll('th').forEach(function(th) { th.classList.remove('sorted-asc', 'sorted-desc'); if (th.dataset.sort === k) th.classList.add(d === 'asc' ? 'sorted-asc' : 'sorted-desc'); });
-    }
-    thd.querySelectorAll('th[data-sort]').forEach(function(th) {
-      th.addEventListener('click', function() {
-        var k = this.dataset.sort;
-        if (sk === k) { sd = sd === 'asc' ? 'desc' : 'asc'; } else { sk = k; sd = 'asc'; }
-        localStorage.setItem('spt_sort', JSON.stringify({key: sk, dir: sd}));
-        srt(sk, sd);
-      });
-    });
-    if (sk) setTimeout(function() { srt(sk, sd); }, 200);
-    if (!t.dataset.dragInit) {
-      t.dataset.dragInit = '1'; var dr = null;
-      tbody.addEventListener('dragstart', function(e) { var h2 = e.target.closest('.drag-handle'); if (!h2) { e.preventDefault(); return; } dr = h2.closest('tr'); if (dr) dr.style.opacity = '0.5'; });
-      tbody.addEventListener('dragend', function() { if (dr) dr.style.opacity = ''; dr = null; });
-      tbody.addEventListener('dragover', function(e) { e.preventDefault(); });
-      tbody.addEventListener('drop', function(e) {
-        e.preventDefault(); var tg = e.target.closest('tr');
-        if (!tg || !dr || tg === dr) return;
-        var rs = Array.from(tbody.querySelectorAll('tr'));
-        var from = rs.indexOf(dr), to = rs.indexOf(tg);
-        if (from < 0 || to < 0) return;
-        if (from < to) tbody.insertBefore(dr, tg.nextSibling); else tbody.insertBefore(dr, tg);
-        var items = []; tbody.querySelectorAll('tr').forEach(function(tr, idx) { var id = tr.dataset.id; if (id) items.push({ id: parseInt(id), position: idx }); });
-        fetch('/api/system-parameter-types/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e) { console.error(e); });
-      });
-    }
-  }
-
+  setTimeout(function(){ initDragAndSort(tbody.closest('table'), 'spt_sort', '/api/system-parameter-types/reorder'); }, 100);
    document.querySelectorAll('#tab-param-types th[data-sort]').forEach(function(th) {
      th.onclick = function() {
        var k = this.dataset.sort;

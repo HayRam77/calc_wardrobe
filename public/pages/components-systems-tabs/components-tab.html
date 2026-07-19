@@ -47,7 +47,7 @@
      }
      var hasLinks = item.has_blocks || item.has_materials;
      var nameHtml = hasLinks ? '<span class="comp-name-link" style="cursor:pointer;text-decoration:underline;"><strong>'+esc(item.name)+'</strong></span>' : esc(item.name);
-     html+='<tr data-id="'+item.id+'" title="'+esc(item.description || '')+'" data-id="'+item.id+'"'+(hasLinks ? ' data-has-links="1"' : '')+'><td class="drag-handle" draggable="true">⠿</td><td>'+item.id+'</td><td>'+esc(item.module_name || '')+'</td><td>'+nameHtml+'</td><td>'+esc(item.type_name || '')+'</td><td>'+esc(item.ln || '')+'</td><td>'+esc(item.tm || '')+'</td><td>'+paramsHtml+'</td>';
+     html+='<tr title="'+esc(item.description || '')+'" data-id="'+item.id+'"'+(hasLinks ? ' data-has-links="1"' : '')+'><td>'+item.id+'</td><td>'+esc(item.module_name || '')+'</td><td>'+nameHtml+'</td><td>'+esc(item.type_name || '')+'</td><td>'+esc(item.ln || '')+'</td><td>'+esc(item.tm || '')+'</td><td>'+paramsHtml+'</td>';
      if(isAdmin){
       html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent('+item.id+')">✏️</button> <button class="btn btn-sm btn-duplicate" onclick="duplicateSystemComponent('+item.id+')">📋</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent('+item.id+')">🗑️</button></td>';
      }
