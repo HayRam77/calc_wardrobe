@@ -264,3 +264,7 @@ tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardro
 - API manufacturers.js: PUT /sort-order, ORDER BY position
 - API materials.js: PUT /sort-order, ORDER BY position
 - Добавлены колонки position в таблицы БД
+
+### 19.07.2026 (продолжение)
+- components-cabinets.html: Параметры (drag+sort) ✅
+- API parameters.js: POST /reorder, ORDER BY position
