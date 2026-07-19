@@ -15,7 +15,7 @@ router.get('/', auth, async (req, res) => {
             SELECT m.*, man.name as manufacturer_name
             FROM materials m
             LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
-            ORDER BY m.name
+            ORDER BY COALESCE(m.position, 9999), m.name
         `);
         res.json(result.rows);
     } catch (err) {
@@ -82,6 +82,19 @@ router.post('/', auth, isAdmin, async (req, res) => {
         console.error(err);
         res.status(500).json({ message: 'Ошибка создания материала' });
     }
+});
+
+router.put('/sort-order', auth, isAdmin, async (req, res) => {
+  try {
+    var items = req.body.items;
+    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
+    for (var i = 0; i < items.length; i++) {
+      var id = parseInt(items[i].id), pos = parseInt(items[i].position);
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE materials SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
 router.put('/:id', auth, isAdmin, async (req, res) => {

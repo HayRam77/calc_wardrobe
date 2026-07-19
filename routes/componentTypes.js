@@ -7,6 +7,19 @@ const XLSX = require('xlsx');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
+router.post('/reorder', auth, isAdmin, async (req, res) => {
+  try {
+    var items = req.body.items;
+    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
+    for (var i = 0; i < items.length; i++) {
+      var id = parseInt(items[i].id), pos = parseInt(items[i].position);
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE component_types SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 router.get('/export', auth, async (req, res) => {
   try {
     const result = await pool.query('SELECT id as ID, name as Название, description as Описание FROM component_types ORDER BY id');
@@ -33,7 +46,7 @@ router.get('/', auth, async (req, res) => {
   try {
     const sort = ['id','name','description'].includes(req.query.sort) ? req.query.sort : 'name';
     const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
-    const r = await pool.query('SELECT * FROM component_types ORDER BY ' + sort + ' ' + order);
+    const r = await pool.query('SELECT * FROM component_types ORDER BY COALESCE(position, 9999), ' + sort + ' ' + order);
     res.json(r.rows);
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });

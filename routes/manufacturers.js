@@ -32,7 +32,7 @@ router.use(checkToken);
 // Получить всех производителей
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM manufacturers ORDER BY name');
+    const result = await pool.query('SELECT * FROM manufacturers ORDER BY COALESCE(position, 9999), name');
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -50,6 +50,20 @@ router.post('/', async (req, res) => {
 });
 
 // Обновить производителя
+router.put('/sort-order', async (req, res) => {
+  try {
+    var items = req.body.items;
+    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
+    for (var i = 0; i < items.length; i++) {
+      var id = parseInt(items[i].id);
+      var pos = parseInt(items[i].position);
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE manufacturers SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
 router.put('/:id', async (req, res) => {
   try {
     const { name, country, website } = req.body;

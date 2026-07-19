@@ -252,3 +252,15 @@ tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardro
 - Кнопки: Привязать компонент (выбор из списка), Добавить компонент, Удалить из системы
 - API systems.js: cabinet_ids в GET /api/systems, cabinet_ids в POST/PUT
 - API systems.js: GET /:id/cabinets
+
+### 19.07.2026 — drag-and-drop + сортировка
+- automation.html: drag+sort+filter ✅
+- components-cabinets.html: Компоненты (drag+клиентская сортировка) ✅
+- components-cabinets.html: Типы (drag через POST /reorder + клиентская сортировка) ✅
+- manufacturers.html: drag+sort ✅
+- consumables.html: drag+sort ✅
+- API componentTypes.js: POST /reorder
+- API blockTemplates.js: PUT /sort-order, ORDER BY position
+- API manufacturers.js: PUT /sort-order, ORDER BY position
+- API materials.js: PUT /sort-order, ORDER BY position
+- Добавлены колонки position в таблицы БД

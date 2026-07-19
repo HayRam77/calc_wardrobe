@@ -44,16 +44,97 @@
             var res = await fetch('/api/manufacturers');
             var data = await res.json();
             if (!data.length) { container.innerHTML = '<p>Нет производителей.</p>'; return; }
-            var html = '<div class="table-container"><table class="data-table"><thead><tr><th>ID</th><th>Название</th><th>Страна</th><th>Сайт</th>';
+            var html = '<div class="table-container"><table class="data-table"><thead><tr><th style="width:1%"></th><th>ID</th><th>Название</th><th>Страна</th><th>Сайт</th>';
             if (isAdmin) html += '<th>Действия</th>';
             html += '</tr></thead><tbody>';
             data.forEach(function(m) {
-                html += '<tr><td>'+m.id+'</td><td>'+escapeHtml(m.name)+'</td><td>'+escapeHtml(m.country||'')+'</td><td>'+(m.website?'<a href="'+escapeHtml(m.website)+'" target="_blank">'+escapeHtml(m.website)+'</a>':'')+'</td>';
+                html += '<tr data-id="'+m.id+'"><td class="drag-handle" draggable="true">⠿</td><td>'+m.id+'</td><td>'+escapeHtml(m.name)+'</td><td>'+escapeHtml(m.country||'')+'</td><td>'+(m.website?'<a href="'+escapeHtml(m.website)+'" target="_blank">'+escapeHtml(m.website)+'</a>':'')+'</td>';
                 if (isAdmin) html += '<td><button class="btn btn-sm btn-edit" data-id="'+m.id+'">✏️</button> <button class="btn btn-sm btn-delete" data-id="'+m.id+'">🗑️</button></td>';
                 html += '</tr>';
             });
             html += '</tbody></table></div>';
             container.innerHTML = html;
+
+            // Клиентская сортировка + drag
+            var manTable = container.querySelector('table');
+            if (manTable) {
+                var manThead = manTable.querySelector('thead tr');
+                var manSortState = JSON.parse(localStorage.getItem('manufacturers_sort') || '{}');
+                var manSortKey = manSortState.key || null;
+                var manSortDir = manSortState.dir || 'asc';
+                var manTbody = manTable.querySelector('tbody');
+                
+                manThead.querySelectorAll('th').forEach(function(th, idx) {
+                    if (idx === 1) th.dataset.sort = 'id';
+                    else if (idx === 2) th.dataset.sort = 'name';
+                    else if (idx === 3) th.dataset.sort = 'country';
+                });
+                
+                function applyManSort(key, dir) {
+                    if (!manTbody || !key) return;
+                    var rows = Array.from(manTbody.querySelectorAll('tr'));
+                    var colIdx = Array.from(manThead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === key; });
+                    if (colIdx < 0) return;
+                    rows.sort(function(a, b) {
+                        var va = (a.cells[colIdx]?.textContent || '').trim();
+                        var vb = (b.cells[colIdx]?.textContent || '').trim();
+                        var na = parseFloat(va.replace(/,/g, '.'));
+                        var nb = parseFloat(vb.replace(/,/g, '.'));
+                        if (!isNaN(na) && !isNaN(nb)) return dir === 'asc' ? na - nb : nb - na;
+                        return dir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+                    });
+                    rows.forEach(function(row) { manTbody.appendChild(row); });
+                    manThead.querySelectorAll('th').forEach(function(th) {
+                        th.classList.remove('sorted-asc', 'sorted-desc');
+                        if (th.dataset.sort === key) th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                    });
+                }
+                
+                manThead.querySelectorAll('th[data-sort]').forEach(function(th) {
+                    th.style.cursor = 'pointer';
+                    th.addEventListener('click', function() {
+                        var key = this.dataset.sort;
+                        if (manSortKey === key) { manSortDir = manSortDir === 'asc' ? 'desc' : 'asc'; }
+                        else { manSortKey = key; manSortDir = 'asc'; }
+                        localStorage.setItem('manufacturers_sort', JSON.stringify({key: manSortKey, dir: manSortDir}));
+                        applyManSort(manSortKey, manSortDir);
+                    });
+                });
+                
+                if (manSortKey) setTimeout(function() { applyManSort(manSortKey, manSortDir); }, 200);
+                
+                // Drag-and-drop
+                if (!manTable.dataset.dragInit) {
+                    manTable.dataset.dragInit = '1';
+                    var draggedRow = null;
+                    manTbody.addEventListener('dragstart', function(e) {
+                        var h2 = e.target.closest('.drag-handle');
+                        if (!h2) { e.preventDefault(); return; }
+                        draggedRow = h2.closest('tr');
+                        if (draggedRow) draggedRow.style.opacity = '0.5';
+                    });
+                    manTbody.addEventListener('dragend', function() { if (draggedRow) draggedRow.style.opacity = ''; draggedRow = null; });
+                    manTbody.addEventListener('dragover', function(e) { e.preventDefault(); });
+                    manTbody.addEventListener('drop', function(e) {
+                        e.preventDefault();
+                        var target = e.target.closest('tr');
+                        if (!target || !draggedRow || target === draggedRow) return;
+                        var rows = Array.from(manTbody.querySelectorAll('tr'));
+                        var from = rows.indexOf(draggedRow), to = rows.indexOf(target);
+                        if (from < 0 || to < 0) return;
+                        if (from < to) manTbody.insertBefore(draggedRow, target.nextSibling);
+                        else manTbody.insertBefore(draggedRow, target);
+                        var items = [];
+                        manTbody.querySelectorAll('tr').forEach(function(tr, idx) {
+                            var id = tr.dataset.id;
+                            if (id) items.push({ id: parseInt(id), position: idx });
+                        });
+                        fetch('/api/manufacturers/sort-order', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
+                        .catch(function(e) { console.error(e); });
+                    });
+                }
+            }
+
             container.querySelectorAll('.btn-edit').forEach(function(b){b.addEventListener('click',function(){openManufacturerModal(this.dataset.id);});});
             container.querySelectorAll('.btn-delete').forEach(function(b){b.addEventListener('click',async function(){if(!confirm('Удалить?'))return;await fetch('/api/manufacturers/'+this.dataset.id,{method:'DELETE'});loadManufacturers();});});
         } catch(e) { container.innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; }
