@@ -45,6 +45,7 @@ const systemModulesRouter = require("./routes/systemModules");
 app.use("/api/system-modules", systemModulesRouter);
 app.use('/api/systems', systemsRouter);
 app.use('/api/materials', materialsRouter);
+app.use('/api/table-sort', require('./routes/table-sort'));
 
 // SPA fallback
 app.get('*', (req, res) => {

@@ -54,13 +54,43 @@
         }).join('');
     }
     function loadSystems() {
-        fetch('/api/systems').then(function(r) { return r.json(); }).then(function(data) {
+        Promise.all([
+            fetch('/api/systems').then(function(r) { return r.json(); }),
+            fetch('/api/table-sort/systems').then(function(r) { return r.json(); })
+        ]).then(function(results) {
+            var data = results[0];
+            var saved = results[1] || {};
             if (!data.length) { document.getElementById('systemsBody').innerHTML = '<tr><td colspan="6">Нет систем</td></tr>'; return; }
             window._systemsData = data;
             setTimeout(function(){ initSystemsDrag(); }, 200);
-            // Сортировка из localStorage не применяется при загрузке - позиции из БД
+            
+            // Восстановление фильтра
+            if (saved.filter_data && saved.filter_data.cabinets) {
+                selectedCabinets = saved.filter_data.cabinets;
+            }
+            // Восстановление сортировки
+            if (saved.sort_key) {
+                sysSortKey = saved.sort_key;
+                sysSortDir = saved.sort_dir || 'asc';
+            }
+            
             buildCabinetDropdown(data);
+            
+            // Восстановление порядка
+            var savedOrder = saved.sort_order || [];
+            if (savedOrder.length > 0) {
+                var dataMap = {};
+                data.forEach(function(item) { dataMap[item.id] = item; });
+                var ordered = [];
+                savedOrder.forEach(function(id) { if (dataMap[id]) ordered.push(dataMap[id]); });
+                data.forEach(function(item) { if (savedOrder.indexOf(item.id) < 0) ordered.push(item); });
+                data = ordered;
+            }
             renderSystems(data);
+            var ids = data.map(function(x){return x.id;});
+            var sl = document.getElementById("sortStatusLine");
+            if(!sl){sl=document.createElement("div");sl.id="sortStatusLine";sl.style.cssText="margin-top:8px;font-size:12px;color:#555;";var tc=document.querySelector(".table-container");if(tc)tc.parentNode.insertBefore(sl,tc.nextSibling);}
+            sl.textContent=ids.length+": "+ids.join(" - ");
         });
     }
     function buildCabinetDropdown(data) {
@@ -80,6 +110,7 @@
                 dropdown.querySelectorAll('.cabinet-filter-cb:checked').forEach(function(c) { selectedCabinets.push(c.value); });
                 updateFilterBadge();
                 localStorage.setItem('systems_filter', JSON.stringify(selectedCabinets));
+                fetch('/api/table-sort/systems',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({filter_data:{cabinets:selectedCabinets}})}).catch(function(e){console.error(e);});
                 renderSystems(window._systemsData || []);
             });
             cb.addEventListener('click', function(e) { e.stopPropagation(); });
@@ -114,6 +145,16 @@
                 return 0;
             });
             renderSystems(data);
+            var sortedIds = data.map(function(item){return item.id;});
+            localStorage.setItem('systems_order', JSON.stringify(sortedIds));
+            var sl2 = document.getElementById('sortStatusLine');
+            if(sl2) sl2.textContent = sortedIds.length + ': ' + sortedIds.join(' - ');
+            fetch('/api/table-sort/systems',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sort_order:sortedIds, sort_key:sysSortKey, sort_dir:sysSortDir})}).catch(function(e){console.error(e);});
+            var sortedIds = data.map(function(item){return item.id;});
+            localStorage.setItem('systems_order', JSON.stringify(sortedIds));
+            var sl = document.getElementById('sortStatusLine');
+            if(sl) sl.textContent = sortedIds.length + ': ' + sortedIds.join(' - ');
+            fetch('/api/table-sort/systems',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sort_order:sortedIds, sort_key:sysSortKey, sort_dir:sysSortDir})}).catch(function(e){console.error(e);});
             table.querySelectorAll('th').forEach(function(h) { h.classList.remove('sorted-asc', 'sorted-desc'); });
             th.classList.add(sysSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
         });
@@ -252,33 +293,51 @@
     document.getElementById('importFile').addEventListener('change', async function() { var fd = new FormData(); fd.append('file', this.files[0]); await fetch('/api/systems/import', { method: 'POST', body: fd }); loadSystems(); this.value = ''; });
     function initSystemsDrag(){
         var table=document.getElementById('systemsTable');
-        if(!table || table.dataset.dragInit==='1') return;
-        table.dataset.dragInit='1';
-        var tbody=table.querySelector('tbody'), draggedRow=null;
-        tbody.addEventListener('dragstart',function(e){
+        if(!table) return;
+        var tbody=table.querySelector('tbody');
+        if(!tbody) return;
+        
+        var dragInfo=null;
+        
+        tbody.addEventListener('mousedown',function(e){
             var handle=e.target.closest('.drag-handle');
-            if(!handle){e.preventDefault();return;}
-            draggedRow=handle.closest('tr');
-            if(draggedRow) draggedRow.style.opacity='0.5';
-        });
-        tbody.addEventListener('dragend',function(){if(draggedRow)draggedRow.style.opacity='';draggedRow=null;});
-        tbody.addEventListener('dragover',function(e){e.preventDefault();});
-        tbody.addEventListener('drop',function(e){
+            if(!handle) return;
             e.preventDefault();
-            var target=e.target.closest('tr');
-            if(!target||!draggedRow||target===draggedRow) return;
+            var row=handle.closest('tr');
+            if(!row) return;
+            dragInfo={row:row, startY:e.clientY};
+            row.style.opacity='0.5';
+        });
+        
+        document.addEventListener('mousemove',function(e){
+            if(!dragInfo) return;
             var rows=Array.from(tbody.querySelectorAll('tr'));
-            var from=rows.indexOf(draggedRow), to=rows.indexOf(target);
-            if(from<0||to<0) return;
-            if(from<to) tbody.insertBefore(draggedRow,target.nextSibling);
-            else tbody.insertBefore(draggedRow,target);
-            var items=[];
-            tbody.querySelectorAll('tr').forEach(function(tr,idx){
-                var id=tr.dataset.id;
-                if(id) items.push({id:parseInt(id),position:idx});
+            var target=null;
+            for(var i=0;i<rows.length;i++){
+                var rect=rows[i].getBoundingClientRect();
+                if(e.clientY>rect.top && e.clientY<rect.bottom){target=rows[i];break;}
+            }
+            if(target && target!==dragInfo.row){
+                var ti=rows.indexOf(target), ri=rows.indexOf(dragInfo.row);
+                if(ri<ti) tbody.insertBefore(dragInfo.row,target.nextSibling);
+                else tbody.insertBefore(dragInfo.row,target);
+            }
+        });
+        
+        document.addEventListener('mouseup',function(){
+            if(!dragInfo) return;
+            dragInfo.row.style.opacity='';
+            var items=[], ids=[];
+            tbody.querySelectorAll('tr[data-id]').forEach(function(tr,idx){
+                var id=parseInt(tr.dataset.id);
+                if(id){items.push({id:id,position:idx});ids.push(id);}
             });
-            fetch('/api/systems/sort-order',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items})})
-            .catch(function(e){console.error(e);});
+            localStorage.setItem('systems_order', JSON.stringify(ids));
+            var sl=document.getElementById('sortStatusLine');
+            if(sl) sl.textContent=ids.length+': '+ids.join(' - ');
+            fetch('/api/table-sort/systems',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sort_order:ids})}).catch(function(e){console.error(e);});
+            fetch('/api/systems/sort-order',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items})}).catch(function(e){console.error(e);});
+            dragInfo=null;
         });
     }
 

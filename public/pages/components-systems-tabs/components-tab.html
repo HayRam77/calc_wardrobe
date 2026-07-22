@@ -1,301 +1,328 @@
-<div id="tab-components" class="tab-content">
-  <div style="margin-bottom:10px;">
-    <button id="addComponentBtn" class="btn btn-primary" style="display:none;">Добавить компонент систем</button>
-    <button id="exportComponentsBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
-    <input type="file" id="importComponentsFile" style="display:none" accept=".xlsx,.xls">
-    <button id="importComponentsBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
-  </div>
-  <div class="table-container">
-    <table class="data-table">
-      <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="module_name">Модуль системы</th><th data-sort="name">Название</th><th data-sort="type_name">Тип</th><th data-sort="ln">LN</th><th data-sort="tm">TM</th><th>Параметры</th><th id="componentsActionsCol" style="display:none;">Действия</th></tr></thead>
-      <tbody id="componentsBody"><tr><td colspan="9" class="loading">Загрузка...</td></tr></tbody>
-    </table>
-  </div>
-  <div id="componentsEmpty" class="empty-state" style="display:none;"><p>Компонентов нет</p></div>
+<div class="page-content">
+    <div style="margin-bottom:10px;">
+        <button id="addComponentBtn" class="btn btn-primary" style="display:none;">Добавить систему</button>
+        <button id="exportComponentsBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
+        <input type="file" id="importComponentsFile" style="display:none" accept=".xlsx,.xls">
+        <button id="importComponentsBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
+        <span id="filterBadge" style="display:none; margin-left:10px; font-size:13px; color:#1a5f7a;"></span>
+    </div>
+    <div class="table-container">
+        <table class="data-table" id="componentsTable">
+            <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="module_name"><span id="moduleFilterIcon" style="cursor:pointer; font-size:14px;" title="Фильтр по модулям">⚙</span> Модуль системы<div id="moduleDropdown" style="display:none; position:absolute; background:#fff; border:1px solid #ccc; border-radius:4px; padding:8px; z-index:1000; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th id="componentsActionsCol" style="display:none;">Действия</th></tr></thead>
+            <tbody id="componentsBody"><tr><td colspan="6" class="loading">Загрузка...</td></tr></tbody>
+        </table>
+    </div>
+    <div id="modal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width:600px;">
+            <span class="close-modal">&times;</span>
+            <h3 id="modalTitle"></h3>
+            <form id="modalForm"></form>
+        </div>
+    </div>
 </div>
 <script>
 (function() {
- var currentUser=JSON.parse(localStorage.getItem('user') || 'null');
- var isAdmin=currentUser && currentUser.role==='admin';
- function applyPermissions(){
-  var btns=['addComponentBtn','exportComponentsBtn','importComponentsBtn'];
-  btns.forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display=isAdmin?'':'none'; });
-  var col=document.getElementById('componentsActionsCol');
-  if(col) col.style.display=isAdmin?'':'none';
- }
- function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
- function loadComponents(){
-  var tbody=document.getElementById('componentsBody');
-   window.loadComponents = loadComponents; // экспорт
-  if(!tbody) return;
-  fetch('/api/system-components?_='+Date.now()+'&sort='+(JSON.parse(localStorage.getItem('components_sort')||'{}').key||'name')+'&order='+(JSON.parse(localStorage.getItem('components_sort')||'{}').dir||'asc'))
-  .then(function(res){ if(!res.ok) throw new Error('Ошибка'); return res.json(); })
-  .then(function(data){
-   var empty=document.getElementById('componentsEmpty');
-   if(!data.length){
-    if(empty) empty.style.display='';
-    tbody.innerHTML='';
-   }else{
-    if(empty) empty.style.display='none';
-    var html='';
-    data.forEach(function(item){
-     var paramsHtml='-';
-     if(item.params && item.params.length){
-      paramsHtml=item.params.map(function(p){
-       return esc(p.name)+(p.type?' ('+esc(p.type)+')':'')+': '+esc(p.value);
-      }).join('<br>');
-     }
-     var hasLinks = item.has_blocks || item.has_materials;
-     var nameHtml = hasLinks ? '<span class="comp-name-link" style="cursor:pointer;text-decoration:underline;"><strong>'+esc(item.name)+'</strong></span>' : esc(item.name);
-     html+='<tr title="'+esc(item.description || '')+'" data-id="'+item.id+'"'+(hasLinks ? ' data-has-links="1"' : '')+'><td>'+item.id+'</td><td>'+esc(item.module_name || '')+'</td><td>'+nameHtml+'</td><td>'+esc(item.type_name || '')+'</td><td>'+esc(item.ln || '')+'</td><td>'+esc(item.tm || '')+'</td><td>'+paramsHtml+'</td>';
-     if(isAdmin){
-      html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent('+item.id+')">✏️</button> <button class="btn btn-sm btn-duplicate" onclick="duplicateSystemComponent('+item.id+')">📋</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent('+item.id+')">🗑️</button></td>';
-     }
-     html+='</tr>';
-    });
-    tbody.innerHTML=html;
-
-  var compTable = tbody.closest('table');
-  if (compTable) {
-    var compThead = compTable.querySelector('thead tr');
-    var compSortState = JSON.parse(localStorage.getItem('system_components_sort') || '{}');
-    var compSortKey = compSortState.key || null;
-    var compSortDir = compSortState.dir || 'asc';
-    function applyCompSort(key, dir) {
-      if (!tbody || !key) return;
-      var rows = Array.from(tbody.querySelectorAll('tr'));
-      var colIdx = Array.from(compThead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === key; });
-      if (colIdx < 0) return;
-      rows.sort(function(a, b) {
-        var va = (a.cells[colIdx]?.textContent || '').trim();
-        var vb = (b.cells[colIdx]?.textContent || '').trim();
-        var na = parseFloat(va.replace(/,/g, '.'));
-        var nb = parseFloat(vb.replace(/,/g, '.'));
-        if (!isNaN(na) && !isNaN(nb)) return dir === 'asc' ? na - nb : nb - na;
-        return dir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
-      });
-      rows.forEach(function(row) { tbody.appendChild(row); });
-      compThead.querySelectorAll('th').forEach(function(th) {
-        th.classList.remove('sorted-asc', 'sorted-desc');
-        if (th.dataset.sort === key) th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
-      });
+    var user = JSON.parse(localStorage.getItem('user') || 'null');
+    var isAdmin = user && user.role === 'admin';
+    if (isAdmin) {
+        document.getElementById('addComponentBtn').style.display = '';
+        document.getElementById('exportComponentsBtn').style.display = '';
+        document.getElementById('importComponentsBtn').style.display = '';
+        document.getElementById('componentsActionsCol').style.display = '';
     }
-    compThead.querySelectorAll('th[data-sort]').forEach(function(th) {
-      th.addEventListener('click', function() {
-        var key = this.dataset.sort;
-        if (compSortKey === key) { compSortDir = compSortDir === 'asc' ? 'desc' : 'asc'; }
-        else { compSortKey = key; compSortDir = 'asc'; }
-        localStorage.setItem('system_components_sort', JSON.stringify({key: compSortKey, dir: compSortDir}));
-        applyCompSort(compSortKey, compSortDir);
-      });
-    });
-    if (compSortKey) setTimeout(function() { applyCompSort(compSortKey, compSortDir); }, 200);
-    if (!compTable.dataset.dragInit) {
-      compTable.dataset.dragInit = '1';
-      var draggedRow = null;
-      tbody.addEventListener('dragstart', function(e) {
-        var h2 = e.target.closest('.drag-handle');
-        if (!h2) { e.preventDefault(); return; }
-        draggedRow = h2.closest('tr');
-        if (draggedRow) draggedRow.style.opacity = '0.5';
-      });
-      tbody.addEventListener('dragend', function() { if (draggedRow) draggedRow.style.opacity = ''; draggedRow = null; });
-      tbody.addEventListener('dragover', function(e) { e.preventDefault(); });
-      tbody.addEventListener('drop', function(e) {
-        e.preventDefault();
-        var target = e.target.closest('tr');
-        if (!target || !draggedRow || target === draggedRow) return;
-        var rows = Array.from(tbody.querySelectorAll('tr'));
-        var from = rows.indexOf(draggedRow), to = rows.indexOf(target);
-        if (from < 0 || to < 0) return;
-        if (from < to) tbody.insertBefore(draggedRow, target.nextSibling);
-        else tbody.insertBefore(draggedRow, target);
-        var items = [];
-        tbody.querySelectorAll('tr').forEach(function(tr, idx) {
-          var id = tr.dataset.id;
-          if (id) items.push({ id: parseInt(id), position: idx });
+    function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+    var modal = document.getElementById('modal'), modalTitle = document.getElementById('modalTitle'), modalForm = document.getElementById('modalForm');
+    document.querySelector('.close-modal').addEventListener('click', function() { modal.style.display = 'none'; });
+    window.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
+    var sysSortState = JSON.parse(localStorage.getItem('components_sort') || '{}');
+    var sysSortKey = sysSortState.key || null, sysSortDir = sysSortState.dir || 'asc';
+    var selectedModules = JSON.parse(localStorage.getItem('components_filter')||'[]');
+    function renderComponents(data) {
+        var tbody = document.getElementById('componentsBody');
+        var filtered = data;
+        if (selectedModules.length > 0) {
+            filtered = data.filter(function(s) {
+                var cabinets = (s.module_name || '').split(', ').filter(Boolean);
+                return selectedModules.some(function(sc) { return cabinets.includes(sc); });
+            });
+        }
+        if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="6">Нет систем</td></tr>'; return; }
+        tbody.innerHTML = filtered.map(function(s) {
+            var cabHtml = (s.module_name||'').split(', ').filter(Boolean).map(function(n,i){var ids=(s.cabinet_ids||'').split(',');return '<a href="/cabinet/'+(ids[i]||'')+'" target="_blank" style="color:#1a5f7a;">'+esc(n)+'</a>';}).join(', ')||'-';
+            return '<tr data-id="'+s.id+'"><td class="drag-handle" draggable="true">⠿</td><td>'+s.id+'</td><td>'+cabHtml+'</td><td><a href="#" style="color:#1a5f7a;text-decoration:underline;cursor:pointer;" onclick="openComponentModal('+s.id+')">'+esc(s.name)+'</a></td><td>'+esc(s.description||'')+'</td>' +
+                (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editComponent(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteComponent(' + s.id + ')">🗑️</button></td>' : '') + '</tr>';
+        }).join('');
+    }
+    function loadComponents() {
+        fetch('/api/system-components').then(function(r) { return r.json(); }).then(function(data) {
+            if (!data.length) { document.getElementById('componentsBody').innerHTML = '<tr><td colspan="6">Нет систем</td></tr>'; return; }
+            window._componentsData = data;
+            setTimeout(function(){ initComponentsDrag(); }, 200);
+            // Сортировка из localStorage не применяется при загрузке - позиции из БД
+            buildModuleDropdown(data);
+            var savedOrder = JSON.parse(localStorage.getItem('components_order') || '[]');
+            if (savedOrder.length > 0) {
+                var dataMap = {};
+                data.forEach(function(item) { dataMap[item.id] = item; });
+                var ordered = [];
+                savedOrder.forEach(function(id) { if (dataMap[id]) ordered.push(dataMap[id]); });
+                data.forEach(function(item) { if (savedOrder.indexOf(item.id) < 0) ordered.push(item); });
+                data = ordered;
+            }
+            try { console.log('calling renderComponents...'); renderComponents(data); console.log('renderComponents done'); } catch(e) { console.error('renderComponents error:', e); }
         });
-        fetch('/api/system-components/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
-        .catch(function(e) { console.error(e); });
-      });
     }
-  }
+    function buildModuleDropdown(data) {
+        var allModules = [];
+        data.forEach(function(s) {
+            var names = (s.module_name || '').split(', ').filter(Boolean);
+            names.forEach(function(n) { if (allModules.indexOf(n) === -1) allModules.push(n); });
+        });
+        allModules.sort();
+        var dropdown = document.getElementById('moduleDropdown');
+        dropdown.innerHTML = allModules.map(function(c) {
+            return '<label style="display:block; font-size:13px; cursor:pointer; padding:2px 0;"><input type="checkbox" class="module-filter-cb" value="' + esc(c) + '" ' + (selectedModules.indexOf(c)!==-1?'checked':'') + '> ' + esc(c) + '</label>';
+        }).join('');
+        dropdown.querySelectorAll('.module-filter-cb').forEach(function(cb) {
+            cb.addEventListener('change', function() {
+                selectedModules = [];
+                dropdown.querySelectorAll('.module-filter-cb:checked').forEach(function(c) { selectedModules.push(c.value); });
+                updateFilterBadge();
+                localStorage.setItem('components_filter', JSON.stringify(selectedModules));
+                renderComponents(window._componentsData || []);
+            });
+            cb.addEventListener('click', function(e) { e.stopPropagation(); });
+        });
+    }
+    function updateFilterBadge() {
+        var badge = document.getElementById('filterBadge');
+        var icon = document.getElementById('moduleFilterIcon');
+        if (selectedModules.length > 0) { badge.style.display = ''; badge.textContent = 'Выбрано: ' + selectedModules.length; icon.textContent = '⚙️'; }
+        else { badge.style.display = 'none'; icon.textContent = '⚙'; }
+    }
+    var filterIcon = document.getElementById('moduleFilterIcon');
+    var dropdown = document.getElementById('moduleDropdown');
+    filterIcon.addEventListener('click', function(e) { e.stopPropagation(); dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none'; });
+    document.addEventListener('click', function() { dropdown.style.display = 'none'; });
+    var table = document.getElementById('componentsTable');
+    table.querySelectorAll('th[data-sort]').forEach(function(th) {
+        th.style.cursor = 'pointer';
+        th.addEventListener('click', function(e) {
+            if (e.target.closest('#moduleFilterIcon') || e.target.closest('#moduleDropdown')) return;
+            var key = this.dataset.sort;
+            if (sysSortKey === key) { sysSortDir = sysSortDir === 'asc' ? 'desc' : 'asc'; }
+            else { sysSortKey = key; sysSortDir = 'asc'; }
+            console.log('SORT CLICK key:', key, 'sysSortKey:', sysSortKey);
+            localStorage.setItem('components_sort', JSON.stringify({key: sysSortKey, dir: sysSortDir}));
+            var data = (window._componentsData || []).slice();
+            data.sort(function(a, b) {
+                var va = (a[key] || '').toString().toLowerCase();
+                var vb = (b[key] || '').toString().toLowerCase();
+                if (key === 'id') { va = parseInt(a.id) || 0; vb = parseInt(b.id) || 0; }
+                if (va < vb) return sysSortDir === 'asc' ? -1 : 1;
+                if (va > vb) return sysSortDir === 'asc' ? 1 : -1;
+                return 0;
+            });
+            try { console.log('calling renderComponents...'); renderComponents(data); console.log('renderComponents done'); } catch(e) { console.error('renderComponents error:', e); }
+            table.querySelectorAll('th').forEach(function(h) { h.classList.remove('sorted-asc', 'sorted-desc'); });
+            th.classList.add(sysSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+            var sortedIds = data.map(function(item){ return item.id; });
+            console.log('SORTED IDs:', sortedIds.slice(0,5));
+            localStorage.setItem('components_order', JSON.stringify(sortedIds));
+        });
+    });
+    document.getElementById('addComponentBtn').addEventListener('click', function() { openComponentForm(); });
+    function openComponentForm(sys) {
+        var isEdit = !!sys;
+        var h = '<input type="hidden" id="sysId" value="' + (sys ? sys.id : '') + '">';
+        h += '<div class="form-group"><label>Название *</label><input type="text" id="sysName" value="' + esc(sys ? sys.name : '') + '" required></div>';
+        h += '<div class="form-group"><label>Описание</label><textarea id="sysDesc" rows="2">' + esc(sys ? sys.description || '' : '') + '</textarea></div>';
+            h += '<div class="form-group"><label>Модуль системыы</label><div style="display:flex;gap:5px;margin-bottom:5px;"><input type="text" id="newCabinetName" placeholder="Новый шкаф" style="flex:1;"><select id="newCabinetProject" style="width:130px;"><option value="">Проект</option></select><button type="button" id="addCabinetBtn" class="btn btn-sm btn-primary">+ Создать</button></div><select id="cabinetSelect" multiple style="width:100%;height:100px;"><option value="">Загрузка...</option></select></div>';
+        modalTitle.textContent = isEdit ? 'Редактировать систему' : 'Добавить систему';
+        modalForm.innerHTML = h + '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>';
+        modal.style.display = 'flex';
+            setTimeout(function(){
+            fetch('/api/projects').then(function(r){return r.json()}).then(function(projects){
+                var ps=document.getElementById('newCabinetProject');
+                if(ps){ps.innerHTML='<option value="">Проект</option>';projects.forEach(function(p){ps.innerHTML+='<option value="'+p.id+'">'+esc(p.name)+'</option>';});}
+            });
+            fetch('/api/cabinets').then(function(r){return r.json()}).then(function(cabs){
+                var sel=document.getElementById('cabinetSelect');
+                if(!sel) return;
+                sel.innerHTML='<option value="0">-- Без шкафа --</option>';
+                cabs.forEach(function(c){sel.innerHTML+='<option value="'+c.id+'">'+esc(c.name)+'</option>';});
+            });
+            var ab=document.getElementById('addCabinetBtn');if(ab)ab.onclick=function(){
+                var n=document.getElementById('newCabinetName').value.trim();
+                var ps=document.getElementById('newCabinetProject');
+                if(!n){alert('Введите название');return;}
+                if(!ps||!ps.value){alert('Выберите проект');return;}
+                fetch('/api/cabinets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,project_id:parseInt(ps.value)})})
+                .then(function(r){return r.json()}).then(function(nc){
+                    if(nc.error){alert(nc.error);return;}
+                    var s=document.getElementById('cabinetSelect');
+                    var o=document.createElement('option');o.value=nc.id;o.textContent=nc.name;o.selected=true;s.appendChild(o);
+                    document.getElementById('newCabinetName').value='';
+                }).catch(function(e){alert(e.message)});
+            };
+            }, 100);
+        modalForm.onsubmit = function(e) {
+            e.preventDefault();
+            var name = document.getElementById('sysName').value.trim();
+            if (!name) { alert('Введите название'); return; }
+            var sc=[],sel=document.getElementById('cabinetSelect');
+            for(var i=0;i<sel.options.length;i++){var v=parseInt(sel.options[i].value); if(sel.options[i].selected && v>0)sc.push(v);}
+            var body = { name: name, description: document.getElementById('sysDesc').value.trim(), cabinet_ids: sc };
+            var url = sys ? '/api/system-components/' + sys.id : '/api/system-components';
+            fetch(url, { method: sys ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+                .then(function(r) { if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); }); modal.style.display = 'none'; loadComponents(); })
+                .catch(function(e) { alert(e.message); });
+        };
+    }
+    window.editComponent = function(id) { fetch('/api/system-components/' + id).then(function(r) { return r.json(); }).then(function(s) { openComponentForm(s); }); };
 
-   document.querySelectorAll('#tab-components th[data-sort]').forEach(function(th) {
-     th.onclick = function() {
-       var k = this.dataset.sort;
-       var s = JSON.parse(localStorage.getItem('components_sort') || '{}');
-       s.dir = s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'asc';
-       s.key = k;
-       localStorage.setItem('components_sort', JSON.stringify(s));
-       loadComponents();
-     };
-   });
-   // Сохраняем данные для тултипов
-   data.forEach(function(item) {
-     window._componentsData = window._componentsData || {};
-     window._componentsData[item.id] = item;
-   });
-   // Тултип только для названий компонентов со связями
-   tbody.querySelectorAll('.comp-name-link').forEach(function(el) {
-     var tr = el.closest('tr');
-     var compId = parseInt(tr.dataset.id);
-     el.addEventListener('mouseenter', function(e) { var tr = el.closest('tr'); if (tr && tr.dataset.hasLinks) showComponentTooltip(e, compId); });
-     el.addEventListener('mouseleave', hideComponentTooltip);
-     el.addEventListener('mousemove', moveComponentTooltip);
-   });
-   data.forEach(function(item) {
-     window._componentsData = window._componentsData || {};
-     window._componentsData[item.id] = item;
-   });
+    window.openComponentModal = function(sysId) {
+        var modal = document.createElement('div'); modal.className = 'modal'; modal.style.cssText = 'display:flex;z-index:3000;';
+        modal.innerHTML = '<div class="modal-content" style="max-width:95vw;max-height:90vh;overflow-y:auto;"><span class="modal-close">&times;</span><h3 id="sysModTitle">Система</h3><div id="sysModBody">Загрузка...</div></div>';
+        document.body.appendChild(modal);
+        modal.querySelector('.modal-close').onclick = function(){ modal.remove(); };
+        modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+        modal._loadSysData = loadSysData;
 
-   }
-  }).catch(function(err){
-   console.error(err);
-   tbody.innerHTML='<tr><td colspan="8" class="error">Ошибка загрузки</td></tr>';
-  });
- }
- var componentTooltipCache = {};
-var componentTooltipEl = null;
+        function loadSysData() { window._currentSysLoadFn = loadSysData;
+            document.getElementById('sysModBody').innerHTML = 'Загрузка...';
+            fetch('/api/system-components/' + sysId).then(function(r){ return r.json(); }).then(function(data){
+                document.getElementById('sysModTitle').textContent = 'Система: ' + (data.name || '');
+                if (!data.components || !data.components.length) {
+                    document.getElementById('sysModBody').innerHTML = '<p>Нет компонентов</p>';
+                } else {
+                    var h = '<div class="table-container"><table class="data-table"><thead><tr><th>Компонент</th><th>Тип</th><th>Модуль</th><th>Действия</th></tr></thead><tbody>';
+                    data.components.forEach(function(c){
+                        h += '<tr><td>'+esc(c.name)+'</td><td>'+esc(c.type_name||'')+'</td><td>'+esc(c.module_name||'-')+'</td>'+
+                            '<td><button class="btn btn-sm btn-edit" onclick="editSysCompInModal('+c.component_id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteCompFromSys('+sysId+','+c.link_id+')">🗑️</button></td></tr>';
+                    });
+                    h += '</tbody></table></div>';
+                    h += '<div style="margin-top:10px;display:flex;gap:10px;"><button class="btn btn-primary btn-sm" id="attachCompToSysBtn">+ Привязать компонент</button><button class="btn btn-secondary btn-sm" id="addCompToSysBtn">+ Добавить компонент</button></div>';
+                    document.getElementById('sysModBody').innerHTML = h;
+                    document.getElementById('attachCompToSysBtn').onclick = function(){ attachCompToSys(sysId, loadSysData); };
+                    document.getElementById('addCompToSysBtn').onclick = function(){ addCompToSys(sysId, loadSysData); };
+                }
+            });
+        }
+        loadSysData();
+    };
 
-function createComponentTooltipEl() {
-  if (componentTooltipEl) return componentTooltipEl;
-  componentTooltipEl = document.createElement('div');
-  componentTooltipEl.id = 'componentTooltip';
-  componentTooltipEl.style.cssText = 'display:none; position:fixed; background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:9999; max-width:500px; font-size:12px;';
-  document.body.appendChild(componentTooltipEl);
-  return componentTooltipEl;
-}
+    window.deleteCompFromSys = function(sysId, linkId) {
+        if (!confirm('Удалить компонент из системы?')) return;
+        fetch('/api/system-components/link/' + linkId, { method: 'DELETE' })
+        .then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+            if (window._currentSysLoadFn) window._currentSysLoadFn();
+        })
+        .catch(function(e){ alert(e.message); });
+    };
 
-function showComponentTooltip(e, compId) {
-  if (!compId) return;
-  var el = createComponentTooltipEl();
-  if (componentTooltipCache[compId]) {
-    el.innerHTML = componentTooltipCache[compId];
-    el.style.display = 'block';
-    moveComponentTooltip(e);
-    return;
-  }
-  el.innerHTML = 'Загрузка...';
-  el.style.display = 'block';
-  moveComponentTooltip(e);
-  
-  // Загружаем блоки и материалы
-  Promise.all([
-    fetch('/api/system-components/' + compId + '/blocks').then(function(r){ return r.json(); }),
-    fetch('/api/materials/system-component/' + compId).then(function(r){ return r.json(); })
-  ]).then(function(results) {
-    var blocks = results[0] || [];
-    var materials = results[1] || [];
-    var compData = (window._componentsData && window._componentsData[compId]) || {};
-    var params = compData.params || [];
-    
-    var html = '';
-    // Параметры
-    html += '<div style="font-weight:bold;margin-bottom:5px;">Параметры:</div>';
-    if (params.length) {
-      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Параметр</th><th>Тип</th><th>Значение</th></tr>';
-      params.forEach(function(p){
-        html += '<tr><td>'+esc(p.parameter_name || p.name)+'</td><td>'+esc(p.type || '')+'</td><td>'+esc(p.value)+'</td></tr>';
-      });
-      html += '</table>';
-    } else { html += '<p style="color:#888;">Нет параметров</p>'; }
-    
-    // Компоненты шкафа
-    html += '<div style="font-weight:bold;margin:10px 0 5px;">Компоненты шкафа:</div>';
-    if (blocks.length) {
-      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Тип</th><th>LN</th><th>TM</th><th>Кол-во</th></tr>';
-      blocks.forEach(function(b){
-        html += '<tr><td>'+esc(b.name)+'</td><td>'+esc(b.type_name || '')+'</td><td>'+esc(b.ln || '')+'</td><td>'+esc(b.tm || '')+'</td><td>'+b.quantity+'</td></tr>';
-      });
-      html += '</table>';
-    } else { html += '<p style="color:#888;">Нет компонентов</p>'; }
-    
-    // Материалы
-    html += '<div style="font-weight:bold;margin:10px 0 5px;">Материалы:</div>';
-    if (materials.length) {
-      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Ед.</th><th>Кол-во</th></tr>';
-      materials.forEach(function(m){
-        html += '<tr><td>'+esc(m.name || m.material_name)+'</td><td>'+esc(m.unit || '')+'</td><td>'+m.quantity+'</td></tr>';
-      });
-      html += '</table>';
-    } else { html += '<p style="color:#888;">Нет материалов</p>'; }
-    
-    componentTooltipCache[compId] = html;
-    el.innerHTML = html;
-    moveComponentTooltip(e);
-  }).catch(function(err) {
-    el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
-  });
-}
+    window.editSysCompInModal = function(compId) {
+        if (typeof SystemCompModal !== 'undefined') SystemCompModal.open(compId, function(){});
+    };
 
-function moveComponentTooltip(e) {
-  if (!componentTooltipEl || componentTooltipEl.style.display === 'none') return;
-  var x = e.clientX + 15, y = e.clientY + 15;
-  if (x + componentTooltipEl.offsetWidth > window.innerWidth) x = e.clientX - componentTooltipEl.offsetWidth - 15;
-  if (y + componentTooltipEl.offsetHeight > window.innerHeight) y = e.clientY - componentTooltipEl.offsetHeight - 15;
-  componentTooltipEl.style.left = x + 'px';
-  componentTooltipEl.style.top = y + 'px';
-}
+    function attachCompToSys(sysId, refreshFn) {
+        var m = document.createElement('div'); m.className = 'modal'; m.style.cssText = 'display:flex;z-index:4000;';
+        m.innerHTML = '<div class="modal-content" style="max-width:500px;"><span class="modal-close">&times;</span><h3>Привязать компонент</h3><select id="attSel" style="width:100%;"><option value="">-- выберите --</option></select><div style="margin-top:10px;"><label>Кол-во:</label><input type="number" id="attQty" value="1" min="1" style="width:80px;"></div><div style="margin-top:15px;"><button id="attOk" class="btn btn-primary">Привязать</button> <button class="btn btn-secondary" onclick="this.closest(\'.modal\').remove()">Отмена</button></div></div>';
+        document.body.appendChild(m);
+        m.querySelector('.modal-close').onclick = function(){ m.remove(); };
+        m.addEventListener('click', function(e){ if(e.target===m) m.remove(); });
+        fetch('/api/system-components').then(function(r){ return r.json(); }).then(function(comps){
+            var sel = document.getElementById('attSel');
+            comps.forEach(function(c){ sel.innerHTML += '<option value="'+c.id+'">'+c.name+(c.type_name?' ('+c.type_name+')':'')+'</option>'; });
+        });
+        document.getElementById('attOk').onclick = function(){
+            var compId = document.getElementById('attSel').value;
+            var qty = parseInt(document.getElementById('attQty').value) || 1;
+            if (!compId) { alert('Выберите компонент'); return; }
+            fetch('/api/system-components/'+sysId+'/components',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({component_id:parseInt(compId),quantity:qty})})
+            .then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message); }); m.remove(); refreshFn(); })
+            .catch(function(e){ alert(e.message); });
+        };
+    }
 
-function hideComponentTooltip() {
-  if (componentTooltipEl) componentTooltipEl.style.display = 'none';
-}
+    function addCompToSys(sysId, refreshFn) {
+        if (typeof SystemCompModal !== 'undefined') {
+            SystemCompModal.open(null, function(compId){
+                if (compId) {
+                    var qty = prompt('Количество:', '1');
+                    if (qty && !isNaN(qty) && parseInt(qty) > 0) {
+                        fetch('/api/system-components/'+sysId+'/components',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({component_id:compId,quantity:parseInt(qty)})})
+                        .then(function(){ refreshFn(); })
+                        .catch(function(e){ alert(e.message); });
+                    }
+                }
+            }, false, null);
+        }
+    }
+    window.deleteComponent = function(id) { if (!confirm('Удалить?')) return; fetch('/api/system-components/' + id, { method: 'DELETE' }).then(loadComponents); };
+    document.getElementById('exportComponentsBtn').addEventListener('click', async function() { var r = await fetch('/api/system-components/export'); var b = await r.blob(); var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'systems.xlsx'; a.click(); });
+    document.getElementById('importComponentsBtn').addEventListener('click', function() { document.getElementById('importComponentsFile').click(); });
+    document.getElementById('importComponentsFile').addEventListener('change', async function() { var fd = new FormData(); fd.append('file', this.files[0]); await fetch('/api/system-components/import', { method: 'POST', body: fd }); loadComponents(); this.value = ''; });
+    function initComponentsDrag(){
+        var table=document.getElementById('componentsTable');
+        if(!table) return;
+        var tbody=table.querySelector('tbody');
+        if(!tbody) return;
+        
+        var dragInfo=null;
+        
+        tbody.addEventListener('mousedown',function(e){
+            var handle=e.target.closest('.drag-handle');
+            if(!handle) return;
+            e.preventDefault();
+            var row=handle.closest('tr');
+            if(!row) return;
+            dragInfo={row:row, startY:e.clientY, placeholder:null};
+            row.style.opacity='0.5';
+            row.style.cursor='grabbing';
+        });
+        
+        document.addEventListener('mousemove',function(e){
+            if(!dragInfo) return;
+            e.preventDefault();
+            var rows=Array.from(tbody.querySelectorAll('tr'));
+            var target=null;
+            for(var i=0;i<rows.length;i++){
+                var r=rows[i];
+                var rect=r.getBoundingClientRect();
+                if(e.clientY>rect.top && e.clientY<rect.bottom){
+                    target=r;
+                    break;
+                }
+            }
+            if(target && target!==dragInfo.row){
+                var targetIdx=rows.indexOf(target);
+                var rowIdx=rows.indexOf(dragInfo.row);
+                if(rowIdx<targetIdx){
+                    tbody.insertBefore(dragInfo.row,target.nextSibling);
+                }else{
+                    tbody.insertBefore(dragInfo.row,target);
+                }
+            }
+        });
+        
+        document.addEventListener('mouseup',function(){
+            if(!dragInfo) return;
+            dragInfo.row.style.opacity='';
+            dragInfo.row.style.cursor='';
+            var items=[];
+            var ids=[];
+            tbody.querySelectorAll('tr[data-id]').forEach(function(tr,idx){
+                var id=parseInt(tr.dataset.id);
+                if(id){ items.push({id:id,position:idx}); ids.push(id); }
+            });
+            localStorage.setItem('components_order', JSON.stringify(ids));
+            fetch('/api/system-components/reorder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items})})
+            .catch(function(e){console.error(e);});
+            dragInfo=null;
+        });
+    }
 
-document.getElementById('addComponentBtn').addEventListener('click', function(){
-  if(typeof SystemCompModal !== 'undefined'){
-   SystemCompModal.open(null, function(){ loadComponents(); });
-  }else{
-   setTimeout(function(){ document.getElementById('addComponentBtn').click(); }, 200);
-  }
- });
- window.editSystemComponent=function(id){
-  if(typeof SystemCompModal !== 'undefined'){
-   SystemCompModal.open(id, function(){ loadComponents(); });
-  }
- };
- window.deleteSystemComponent=function(id){
-  if(!confirm('Удалить?')) return;
-  fetch('/api/system-components/'+id, { method:'DELETE' })
-  .then(loadComponents)
-  .catch(function(e){ alert(e.message); });
- };
- document.getElementById('exportComponentsBtn').addEventListener('click', async function(){
-  var r=await fetch('/api/system-components/export');
-  var b=await r.blob();
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(b);
-  a.download='system_components.xlsx';
-  a.click();
- });
- document.getElementById('importComponentsBtn').addEventListener('click', function(){
-  document.getElementById('importComponentsFile').click();
- });
- document.getElementById('importComponentsFile').addEventListener('change', async function(){
-  var fd=new FormData();
-  fd.append('file', this.files[0]);
-  await fetch('/api/system-components/import', { method:'POST', body:fd });
-  loadComponents();
-  this.value='';
- });
- applyPermissions();
- loadComponents();
+    window.pageInit = function() { loadComponents(); };
 })();
-
-window.duplicateSystemComponent = function(id) {
-  if (!confirm('Создать копию этого компонента со всеми параметрами, блоками и материалами?')) return;
-  fetch('/api/system-components/' + id + '/duplicate', { method: 'POST' })
-    .then(function(r){
-      if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-      return r.json();
-    })
-    .then(function(data){
-      alert('✅ ' + data.message);
-      if (typeof window.loadComponents === 'function') window.loadComponents();
-    })
-    .catch(function(e){ alert('Ошибка: ' + e.message); });
-};
-
-
-window.loadComponents = loadComponents;
 </script>
