@@ -1,161 +1,161 @@
 <div id="tab-modules" class="tab-content">
   <div style="margin-bottom:10px;">
-    <button id="addModuleBtn" class="btn btn-primary" style="display:none;">Добавить модуль системы</button>
-    <button id="exportModulesBtn" class="btn btn-secondary" style="display:none;">Экспорт выгрузка</button>
+    <button id="addModuleBtn" class="btn btn-primary" style="display:none;">Добавить модуль</button>
+    <button id="exportModulesBtn" class="btn btn-secondary" style="display:none;">Экспорт</button>
     <input type="file" id="importModulesFile" style="display:none" accept=".xlsx,.xls">
-    <button id="importModulesBtn" class="btn btn-secondary" style="display:none;">Импорт выгрузка</button>
+    <button id="importModulesBtn" class="btn btn-secondary" style="display:none;">Импорт</button>
   </div>
   <div class="table-container">
     <table class="data-table">
-      <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="description">Описание</th>
-              <th id="modulesActionsCol" style="display:none;">Действия</th></tr></thead>
-      <tbody id="modulesBody"><tr><td colspan="4" class="loading">Загрузка...</td></tr></tbody>
+      <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th id="modulesActionsCol" style="display:none;">Действия</th></tr></thead>
+      <tbody id="modulesBody"><tr><td colspan="5" class="loading">Загрузка...</td></tr></tbody>
     </table>
   </div>
-  <div id="modulesEmpty" class="empty-state" style="display:none;"><p>Модулей нет</p></div>
 </div>
 <script>
 (function() {
- var currentUser=JSON.parse(localStorage.getItem('user') || 'null');
- var isAdmin=currentUser && currentUser.role==='admin';
+ var user = JSON.parse(localStorage.getItem("user") || "null");
+ var isAdmin = user && user.role === "admin";
+ applyPermissions();
  function applyPermissions(){
-  var btns=['addModuleBtn','exportModulesBtn','importModulesBtn'];
-  btns.forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display=isAdmin?'':'none'; });
-  var col=document.getElementById('modulesActionsCol');
-  if(col) col.style.display=isAdmin?'':'none';
+  ["addModuleBtn","exportModulesBtn","importModulesBtn"].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = isAdmin ? "" : "none"; });
+  var col = document.getElementById("modulesActionsCol");
+  if(col) col.style.display = isAdmin ? "" : "none";
  }
- function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+ function esc(s){ var d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+ function updateStatusLine(ids) {
+   var sl = document.getElementById("sortStatusLine");
+   if (!sl) {
+     sl = document.createElement("div"); sl.id = "sortStatusLine";
+     sl.style.cssText = "margin-top:8px;font-size:12px;color:#555;";
+     var btnDiv = document.querySelector("#tab-modules > div:first-child");
+     if (btnDiv) btnDiv.parentNode.insertBefore(sl, btnDiv.nextSibling);
+   }
+   sl.textContent = ids.length + ": " + ids.join(" - ");
+ }
  function loadModules(){
-  var tbody=document.getElementById('modulesBody');
-  if(!tbody) return;
-  fetch('/api/system-modules?_='+Date.now()+'&sort='+(JSON.parse(localStorage.getItem('modules_sort')||'{}').key||'name')+'&order='+(JSON.parse(localStorage.getItem('modules_sort')||'{}').dir||'asc')).then(function(r){ if(!r.ok) throw new Error('Ошибка'); return r.json(); })
-  .then(function(data){
-   var empty=document.getElementById('modulesEmpty');
-   if(!data.length){
-    if(empty) empty.style.display='';
-    tbody.innerHTML='';
-   }else{
-    if(empty) empty.style.display='none';
-    var html='';
-    data.forEach(function(item){
-     html+='<tr data-id="'+item.id+'"><td class="drag-handle" draggable="true">⠿</td><td>'+item.id+'</td><td>'+esc(item.name)+'</td><td>'+esc(item.description || '')+'</td>';
-     if(isAdmin){
-      html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemModule('+item.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemModule('+item.id+')">🗑️</button></td>';
+   var tbody = document.getElementById("modulesBody");
+   if(!tbody) return;
+   fetch("/api/system-modules?_="+Date.now())
+   .then(function(r){ return r.json(); })
+   .then(function(data){
+     if(!data.length){ tbody.innerHTML = "<tr><td colspan=5>No modules</td></tr>"; return; }
+     var html = "";
+     for (var i = 0; i < data.length; i++) {
+       var item = data[i];
+       html += "<tr draggable=\"false\" data-id=\""+item.id+"\"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+esc(item.name)+"</td><td>"+esc(item.description||"")+"</td>";
+       if(isAdmin) html += "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editModule("+item.id+")\">\u270F\uFE0F</button> <button class=\"btn btn-sm btn-delete\" onclick=\"deleteModule("+item.id+")\">\uD83D\uDDD1\uFE0F</button></td>";
+       html += "</tr>";
      }
-     html+='</tr>';
-    });
-    tbody.innerHTML=html;
-  setTimeout(function(){ initDragAndSort(tbody.closest('table'), 'sm_sort', '/api/system-modules/reorder'); }, 100);
-   document.querySelectorAll('#tab-modules th[data-sort]').forEach(function(th) {
+     tbody.innerHTML = html;
+     initDragAndSort();
+     initSortableHeaders();
+     loadSortFromDB();
+     updateStatusLine(data.map(function(x){return x.id;}));
+   }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=5>Error</td></tr>"; });
+ }
+ function initDragAndSort(){
+   var tbody = document.getElementById("modulesBody");
+   var table = tbody.closest("table");
+   if (!table || table.dataset.dragInit) return;
+   table.dataset.dragInit = "1";
+   var dragInfo = null;
+   tbody.addEventListener("mousedown", function(e) {
+     var handle = e.target.closest(".drag-handle");
+     if (!handle) return;
+     e.preventDefault();
+     var row = handle.closest("tr");
+     if (!row) return;
+     dragInfo = {row: row, startY: e.clientY};
+     row.style.opacity = "0.5";
+   });
+   document.addEventListener("mousemove", function(e) {
+     if (!dragInfo) return;
+     var rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
+     var target = null;
+     for (var i = 0; i < rows.length; i++) {
+       var rect = rows[i].getBoundingClientRect();
+       if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; }
+     }
+     if (target && target !== dragInfo.row) {
+       var ti = rows.indexOf(target), ri = rows.indexOf(dragInfo.row);
+       if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
+       else tbody.insertBefore(dragInfo.row, target);
+     }
+   });
+   document.addEventListener("mouseup", function() {
+     if (!dragInfo) return;
+     dragInfo.row.style.opacity = "";
+     var ids = [];
+     tbody.querySelectorAll("tr[data-id]").forEach(function(tr) { var id = parseInt(tr.dataset.id); if (id) ids.push(id); });
+     localStorage.setItem("modules_order", JSON.stringify(ids));
+     updateStatusLine(ids);
+     fetch("/api/table-sort/system-modules", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids}) }).catch(function(e){console.error(e);});
+     fetch("/api/system-modules/reorder", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ids: ids}) }).catch(function(e){console.error(e);});
+     dragInfo = null;
+   });
+ }
+ function initSortableHeaders(){
+   var tbody = document.getElementById("modulesBody");
+   var thead = document.querySelector("#tab-modules thead tr");
+   thead.querySelectorAll("th[data-sort]").forEach(function(th) {
+     th.style.cursor = "pointer";
      th.onclick = function() {
        var k = this.dataset.sort;
-       var s = JSON.parse(localStorage.getItem('modules_sort') || '{}');
-       s.dir = s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'asc';
+       var s = JSON.parse(localStorage.getItem("modules_sort") || "{}");
+       s.dir = s.key === k ? (s.dir === "asc" ? "desc" : "asc") : "asc";
        s.key = k;
-       localStorage.setItem('modules_sort', JSON.stringify(s));
-       loadModules();
+       localStorage.setItem("modules_sort", JSON.stringify(s));
+       var rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
+       var colIdx = Array.from(thead.querySelectorAll("th")).findIndex(function(th) { return th.dataset.sort === k; });
+       if (colIdx < 0) return;
+       rows.sort(function(a, b) {
+         var va = (a.cells[colIdx]?.textContent || "").trim();
+         var vb = (b.cells[colIdx]?.textContent || "").trim();
+         var na = parseFloat(va.replace(/,/g, ".")), nb = parseFloat(vb.replace(/,/g, "."));
+         if (!isNaN(na) && !isNaN(nb)) return s.dir === "asc" ? na - nb : nb - na;
+         return s.dir === "asc" ? va.localeCompare(vb, "ru") : vb.localeCompare(va, "ru");
+       });
+       rows.forEach(function(row) { tbody.appendChild(row); });
+       var ids = rows.map(function(r) { return parseInt(r.dataset.id); }).filter(Boolean);
+       updateStatusLine(ids);
+       fetch("/api/table-sort/system-modules", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids, sort_key: k, sort_dir: s.dir}) }).catch(function(e){console.error(e);});
      };
    });
-   }
-  }).catch(function(err){
-   console.error(err);
-   tbody.innerHTML='<tr><td colspan="4" class="error">Ошибка загрузки</td></tr>';
-  });
  }
-
- // ====== ИЗОЛИРОВАННОЕ МОДАЛЬНОЕ ОКНО МОДУЛЯ ======
- function openModuleModal(id, callback) {
-   var isEdit = !!id;
-   var m = document.createElement('div');
-   m.className = 'modal';
-   m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:5000;';
-   m.innerHTML = '<div class="modal-content" style="max-width:500px;max-height:90vh;overflow-y:auto;">' +
-     '<span class="modal-close">&times;</span>' +
-     '<h3>'+(isEdit?'Редактировать модуль':'Добавить модуль системы')+'</h3>' +
-     '<form id="moduleForm">' +
-       '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="moduleName" required></div>' +
-       '<div class="form-group"><label>Описание:</label><textarea id="moduleDescription" rows="3"></textarea></div>' +
-       '<div class="form-actions">' +
-         '<button type="submit" class="btn btn-primary">Сохранить</button>' +
-         '<button type="button" class="btn btn-secondary cancel-module-btn">Отмена</button>' +
-       '</div>' +
-     '</form>' +
-   '</div>';
-   document.body.appendChild(m);
-
-   function closeModal() { m.remove(); }
-   m.querySelector('.modal-close').addEventListener('click', closeModal);
-   m.querySelector('.cancel-module-btn').addEventListener('click', closeModal);
-   m.addEventListener('click', function(e) { if(e.target === m) closeModal(); });
-
-   var form = m.querySelector('#moduleForm');
-   if (isEdit) {
-     fetch('/api/system-modules/'+id).then(function(r){ return r.json(); }).then(function(item){
-       form.moduleName.value = item.name;
-       form.moduleDescription.value = item.description || '';
-     }).catch(function(e){ alert('Ошибка загрузки данных'); closeModal(); });
-   }
-
-   form.addEventListener('submit', function(e){
-     e.preventDefault();
-     var name = form.moduleName.value.trim();
-     if (!name) { alert('Введите название'); return; }
-     var body = {
-       name: name,
-       description: form.moduleDescription.value.trim()
-     };
-     var url = isEdit ? '/api/system-modules/'+id : '/api/system-modules';
-     var method = isEdit ? 'PUT' : 'POST';
-     fetch(url, {
-       method: method,
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify(body)
-     }).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message); }); })
-     .then(function(){
-       closeModal();
-       loadModules();
-       if (callback) callback();
-     }).catch(function(e){ alert(e.message); });
+ function loadSortFromDB(){
+   var tbody = document.getElementById("modulesBody");
+   fetch("/api/table-sort/system-modules").then(function(r){ return r.json(); }).then(function(saved){
+     if (saved && saved.sort_order && saved.sort_order.length > 0) {
+       saved.sort_order.forEach(function(id) {
+         var row = tbody.querySelector("tr[data-id=\""+id+"\"]");
+         if (row) tbody.appendChild(row);
+       });
+       updateStatusLine(saved.sort_order);
+     }
    });
  }
-
- document.getElementById('addModuleBtn').addEventListener('click', function(){
-   openModuleModal(null);
+ document.getElementById("addModuleBtn").addEventListener("click", function(){
+   var name = prompt("Название:"); if (!name || !name.trim()) return;
+   fetch("/api/system-modules", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name: name.trim()}) }).then(loadModules);
  });
-
- window.editSystemModule = function(id){
-   openModuleModal(id);
+ window.editModule = function(id){
+   var name = prompt("Новое название:"); if (!name || !name.trim()) return;
+   fetch("/api/system-modules/"+id, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name: name.trim()}) }).then(loadModules);
  };
-
- window.deleteSystemModule = function(id){
-  if(!confirm('Удалить модуль?')) return;
-  fetch('/api/system-modules/'+id, { method:'DELETE' })
-  .then(loadModules)
-  .catch(function(e){ alert(e.message); });
+ window.deleteModule = function(id){
+   if(!confirm("Удалить?")) return;
+   fetch("/api/system-modules/"+id, { method:"DELETE" }).then(loadModules);
  };
-
- document.getElementById('exportModulesBtn').addEventListener('click', async function(){
-  var r=await fetch('/api/system-modules/export');
-  var b=await r.blob();
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(b);
-  a.download='system_modules.xlsx';
-  a.click();
+ document.getElementById("exportModulesBtn").addEventListener("click", async function(){
+   var r = await fetch("/api/system-modules/export"); var b = await r.blob();
+   var a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "modules.xlsx"; a.click();
  });
-
- document.getElementById('importModulesBtn').addEventListener('click', function(){
-  document.getElementById('importModulesFile').click();
+ document.getElementById("importModulesBtn").addEventListener("click", function(){ document.getElementById("importModulesFile").click(); });
+ document.getElementById("importModulesFile").addEventListener("change", async function(){
+   var fd = new FormData(); fd.append("file", this.files[0]);
+   await fetch("/api/system-modules/import", { method:"POST", body:fd }); loadModules(); this.value="";
  });
-
- document.getElementById('importModulesFile').addEventListener('change', async function(){
-  var fd=new FormData();
-  fd.append('file', this.files[0]);
-  await fetch('/api/system-modules/import', { method:'POST', body:fd });
-  loadModules();
-  this.value='';
- });
-
- applyPermissions();
  loadModules();
 })();
 </script>

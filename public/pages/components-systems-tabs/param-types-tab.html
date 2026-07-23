@@ -1,153 +1,161 @@
 <div id="tab-param-types" class="tab-content">
   <div style="margin-bottom:10px;">
-    <button id="addParamTypeBtn" class="btn btn-primary" style="display:none;">Добавить тип параметров</button>
-    <button id="exportParamTypesBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
+    <button id="addParamTypeBtn" class="btn btn-primary" style="display:none;">Добавить тип параметра</button>
+    <button id="exportParamTypesBtn" class="btn btn-secondary" style="display:none;">Экспорт</button>
     <input type="file" id="importParamTypesFile" style="display:none" accept=".xlsx,.xls">
-    <button id="importParamTypesBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
+    <button id="importParamTypesBtn" class="btn btn-secondary" style="display:none;">Импорт</button>
   </div>
   <div class="table-container">
     <table class="data-table">
-      <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="value">Значение</th><th id="paramTypesActionsCol" style="display:none;">Действия</th></tr></thead>
-      <tbody id="paramTypesBody"><tr><td colspan="4" class="loading">Загрузка...</td></tr></tbody>
+      <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th id="paramTypesActionsCol" style="display:none;">Действия</th></tr></thead>
+      <tbody id="paramTypesBody"><tr><td colspan="5" class="loading">Загрузка...</td></tr></tbody>
     </table>
   </div>
-  <div id="paramTypesEmpty" class="empty-state" style="display:none;"><p>Типов параметров нет</p></div>
 </div>
 <script>
 (function() {
- var currentUser=JSON.parse(localStorage.getItem('user') || 'null');
- var isAdmin=currentUser && currentUser.role==='admin';
-
+ var user = JSON.parse(localStorage.getItem("user") || "null");
+ var isAdmin = user && user.role === "admin";
+ applyPermissions();
  function applyPermissions(){
-  var btns=['addParamTypeBtn','exportParamTypesBtn','importParamTypesBtn'];
-  btns.forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display=isAdmin?'':'none'; });
-  var col=document.getElementById('paramTypesActionsCol');
-  if(col) col.style.display=isAdmin?'':'none';
+  ["addParamTypeBtn","exportParamTypesBtn","importParamTypesBtn"].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = isAdmin ? "" : "none"; });
+  var col = document.getElementById("paramTypesActionsCol");
+  if(col) col.style.display = isAdmin ? "" : "none";
  }
-
- function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
-
+ function esc(s){ var d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+ function updateStatusLine(ids) {
+   var sl = document.getElementById("sortStatusLine");
+   if (!sl) {
+     sl = document.createElement("div"); sl.id = "sortStatusLine";
+     sl.style.cssText = "margin-top:8px;font-size:12px;color:#555;";
+     var btnDiv = document.querySelector("#tab-param-types > div:first-child");
+     if (btnDiv) btnDiv.parentNode.insertBefore(sl, btnDiv.nextSibling);
+   }
+   sl.textContent = ids.length + ": " + ids.join(" - ");
+ }
  function loadParamTypes(){
-  var tbody=document.getElementById('paramTypesBody');
-  if(!tbody) return;
-  fetch('/api/system-parameter-types?_='+Date.now()+'&sort='+(JSON.parse(localStorage.getItem('param_types_sort')||'{}').key||'name')+'&order='+(JSON.parse(localStorage.getItem('param_types_sort')||'{}').dir||'asc')).then(function(r){ if(!r.ok) throw new Error('Ошибка'); return r.json(); })
-  .then(function(data){
-   var empty=document.getElementById('paramTypesEmpty');
-   if(!data.length){
-    if(empty) empty.style.display='';
-    tbody.innerHTML='';
-   }else{
-    if(empty) empty.style.display='none';
-    var html='';
-    data.forEach(function(item){
-     html+='<tr data-id="'+item.id+'"><td class="drag-handle" draggable="true">⠿</td><td>'+item.id+'</td><td>'+esc(item.name)+'</td><td>'+esc(item.value || '')+'</td>';
-     if(isAdmin){
-      html+='<td><button class="btn btn-sm btn-edit" onclick="editParamType('+item.id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteParamType('+item.id+')">🗑️</button></td>';
+   var tbody = document.getElementById("paramTypesBody");
+   if(!tbody) return;
+   fetch("/api/system-parameter-types?_="+Date.now())
+   .then(function(r){ return r.json(); })
+   .then(function(data){
+     if(!data.length){ tbody.innerHTML = "<tr><td colspan=5>No param types</td></tr>"; return; }
+     var html = "";
+     for (var i = 0; i < data.length; i++) {
+       var item = data[i];
+       html += "<tr draggable=\"false\" data-id=\""+item.id+"\"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+esc(item.name)+"</td><td>"+esc(item.description||"")+"</td>";
+       if(isAdmin) html += "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editParamType("+item.id+")\">\u270F\uFE0F</button> <button class=\"btn btn-sm btn-delete\" onclick=\"deleteParamType("+item.id+")\">\uD83D\uDDD1\uFE0F</button></td>";
+       html += "</tr>";
      }
-     html+='</tr>';
-    });
-    tbody.innerHTML=html;
-  setTimeout(function(){ initDragAndSort(tbody.closest('table'), 'spt_sort', '/api/system-parameter-types/reorder'); }, 100);
-   document.querySelectorAll('#tab-param-types th[data-sort]').forEach(function(th) {
+     tbody.innerHTML = html;
+     initDragAndSort();
+     initSortableHeaders();
+     loadSortFromDB();
+     updateStatusLine(data.map(function(x){return x.id;}));
+   }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=5>Error</td></tr>"; });
+ }
+ function initDragAndSort(){
+   var tbody = document.getElementById("paramTypesBody");
+   var table = tbody.closest("table");
+   if (!table || table.dataset.dragInit) return;
+   table.dataset.dragInit = "1";
+   var dragInfo = null;
+   tbody.addEventListener("mousedown", function(e) {
+     var handle = e.target.closest(".drag-handle");
+     if (!handle) return;
+     e.preventDefault();
+     var row = handle.closest("tr");
+     if (!row) return;
+     dragInfo = {row: row, startY: e.clientY};
+     row.style.opacity = "0.5";
+   });
+   document.addEventListener("mousemove", function(e) {
+     if (!dragInfo) return;
+     var rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
+     var target = null;
+     for (var i = 0; i < rows.length; i++) {
+       var rect = rows[i].getBoundingClientRect();
+       if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; }
+     }
+     if (target && target !== dragInfo.row) {
+       var ti = rows.indexOf(target), ri = rows.indexOf(dragInfo.row);
+       if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
+       else tbody.insertBefore(dragInfo.row, target);
+     }
+   });
+   document.addEventListener("mouseup", function() {
+     if (!dragInfo) return;
+     dragInfo.row.style.opacity = "";
+     var ids = [];
+     tbody.querySelectorAll("tr[data-id]").forEach(function(tr) { var id = parseInt(tr.dataset.id); if (id) ids.push(id); });
+     localStorage.setItem("paramTypes_order", JSON.stringify(ids));
+     updateStatusLine(ids);
+     fetch("/api/table-sort/system-parameter-types", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids}) }).catch(function(e){console.error(e);});
+     fetch("/api/system-parameter-types/reorder", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ids: ids}) }).catch(function(e){console.error(e);});
+     dragInfo = null;
+   });
+ }
+ function initSortableHeaders(){
+   var tbody = document.getElementById("paramTypesBody");
+   var thead = document.querySelector("#tab-param-types thead tr");
+   thead.querySelectorAll("th[data-sort]").forEach(function(th) {
+     th.style.cursor = "pointer";
      th.onclick = function() {
        var k = this.dataset.sort;
-       var s = JSON.parse(localStorage.getItem('param_types_sort') || '{}');
-       s.dir = s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'asc';
+       var s = JSON.parse(localStorage.getItem("paramTypes_sort") || "{}");
+       s.dir = s.key === k ? (s.dir === "asc" ? "desc" : "asc") : "asc";
        s.key = k;
-       localStorage.setItem('param_types_sort', JSON.stringify(s));
-       loadParamTypes();
+       localStorage.setItem("paramTypes_sort", JSON.stringify(s));
+       var rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
+       var colIdx = Array.from(thead.querySelectorAll("th")).findIndex(function(th) { return th.dataset.sort === k; });
+       if (colIdx < 0) return;
+       rows.sort(function(a, b) {
+         var va = (a.cells[colIdx]?.textContent || "").trim();
+         var vb = (b.cells[colIdx]?.textContent || "").trim();
+         var na = parseFloat(va.replace(/,/g, ".")), nb = parseFloat(vb.replace(/,/g, "."));
+         if (!isNaN(na) && !isNaN(nb)) return s.dir === "asc" ? na - nb : nb - na;
+         return s.dir === "asc" ? va.localeCompare(vb, "ru") : vb.localeCompare(va, "ru");
+       });
+       rows.forEach(function(row) { tbody.appendChild(row); });
+       var ids = rows.map(function(r) { return parseInt(r.dataset.id); }).filter(Boolean);
+       updateStatusLine(ids);
+       fetch("/api/table-sort/system-parameter-types", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids, sort_key: k, sort_dir: s.dir}) }).catch(function(e){console.error(e);});
      };
    });
-   }
-  }).catch(function(err){
-   console.error(err);
-   tbody.innerHTML='<tr><td colspan="4" class="error">Ошибка загрузки</td></tr>';
-  });
  }
-
- // ====== Изолированное модальное окно ======
- function openParamTypeModal(id, callback) {
-   var isEdit = !!id;
-   var m = document.createElement('div');
-   m.className = 'modal';
-   m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:5000;';
-   m.innerHTML = '<div class="modal-content" style="max-width:500px;">' +
-     '<span class="modal-close">&times;</span>' +
-     '<h3>'+(isEdit?'Редактировать тип параметра':'Добавить тип параметра')+'</h3>' +
-     '<form id="paramTypeForm">' +
-       '<div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="paramTypeName" required></div>' +
-       '<div class="form-group"><label>Значение:</label><input type="text" id="paramTypeValue"></div>' +
-       '<div class="form-actions">' +
-         '<button type="submit" class="btn btn-primary">Сохранить</button>' +
-         '<button type="button" class="btn btn-secondary cancel-btn">Отмена</button>' +
-       '</div>' +
-     '</form>' +
-   '</div>';
-   document.body.appendChild(m);
-
-   function closeModal() { m.remove(); }
-   m.querySelector('.modal-close').addEventListener('click', closeModal);
-   m.querySelector('.cancel-btn').addEventListener('click', closeModal);
-   m.addEventListener('click', function(e) { if(e.target === m) closeModal(); });
-
-   var form = m.querySelector('#paramTypeForm');
-   if (isEdit) {
-     fetch('/api/system-parameter-types/'+id).then(function(r){ return r.json(); }).then(function(t){
-       form.paramTypeName.value = t.name;
-       form.paramTypeValue.value = t.value || '';
-     }).catch(function(e){ alert('Ошибка загрузки данных'); closeModal(); });
-   }
-
-   form.addEventListener('submit', function(e){
-     e.preventDefault();
-     var name = form.paramTypeName.value.trim();
-     if (!name) { alert('Введите название'); return; }
-     var body = { name: name, value: form.paramTypeValue.value.trim() };
-     var url = isEdit ? '/api/system-parameter-types/'+id : '/api/system-parameter-types';
-     var method = isEdit ? 'PUT' : 'POST';
-     fetch(url, {
-       method: method,
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify(body)
-     }).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message); }); })
-     .then(function(){
-       closeModal();
-       loadParamTypes();
-       if (callback) callback();
-     }).catch(function(e){ alert(e.message); });
+ function loadSortFromDB(){
+   var tbody = document.getElementById("paramTypesBody");
+   fetch("/api/table-sort/system-parameter-types").then(function(r){ return r.json(); }).then(function(saved){
+     if (saved && saved.sort_order && saved.sort_order.length > 0) {
+       saved.sort_order.forEach(function(id) {
+         var row = tbody.querySelector("tr[data-id=\""+id+"\"]");
+         if (row) tbody.appendChild(row);
+       });
+       updateStatusLine(saved.sort_order);
+     }
    });
  }
-
- document.getElementById('addParamTypeBtn').addEventListener('click', function(){ openParamTypeModal(null); });
- window.editParamType = function(id){ openParamTypeModal(id); };
- window.deleteParamType = function(id){
-  if(!confirm('Удалить?')) return;
-  fetch('/api/system-parameter-types/'+id, { method:'DELETE' })
-  .then(loadParamTypes)
-  .catch(function(e){ alert(e.message); });
+ document.getElementById("addParamTypeBtn").addEventListener("click", function(){
+   var name = prompt("Название:"); if (!name || !name.trim()) return;
+   fetch("/api/system-parameter-types", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name: name.trim()}) }).then(loadParamTypes);
+ });
+ window.editParamType = function(id){
+   var name = prompt("Новое название:"); if (!name || !name.trim()) return;
+   fetch("/api/system-parameter-types/"+id, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name: name.trim()}) }).then(loadParamTypes);
  };
-
- // Экспорт/импорт
- document.getElementById('exportParamTypesBtn').addEventListener('click', async function(){
-  var r=await fetch('/api/system-parameter-types/export');
-  var b=await r.blob();
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(b);
-  a.download='system_parameter_types.xlsx';
-  a.click();
+ window.deleteParamType = function(id){
+   if(!confirm("Удалить?")) return;
+   fetch("/api/system-parameter-types/"+id, { method:"DELETE" }).then(loadParamTypes);
+ };
+ document.getElementById("exportParamTypesBtn").addEventListener("click", async function(){
+   var r = await fetch("/api/system-parameter-types/export"); var b = await r.blob();
+   var a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "param_types.xlsx"; a.click();
  });
- document.getElementById('importParamTypesBtn').addEventListener('click', function(){
-  document.getElementById('importParamTypesFile').click();
+ document.getElementById("importParamTypesBtn").addEventListener("click", function(){ document.getElementById("importParamTypesFile").click(); });
+ document.getElementById("importParamTypesFile").addEventListener("change", async function(){
+   var fd = new FormData(); fd.append("file", this.files[0]);
+   await fetch("/api/system-parameter-types/import", { method:"POST", body:fd }); loadParamTypes(); this.value="";
  });
- document.getElementById('importParamTypesFile').addEventListener('change', async function(){
-  var fd=new FormData();
-  fd.append('file', this.files[0]);
-  await fetch('/api/system-parameter-types/import', { method:'POST', body:fd });
-  loadParamTypes();
-  this.value='';
- });
-
- applyPermissions();
  loadParamTypes();
 })();
 </script>
