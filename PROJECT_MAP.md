@@ -396,3 +396,15 @@ tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardro
 
 **Дамп БД:** bd_calc_20260723_093543.sql
 **Файлы:** calc_wardrobe_20260723_093543.tar.gz
+
+## 20260723_095854 — components-tab: drag-and-drop + статус-строка + БД
+### Вкладка "Компоненты систем" (components-tab.html)
+- ✅ Столбец с иконками переноса ⠿
+- ✅ Drag-and-drop (mousedown/move/up)
+- ✅ Сохранение порядка в БД (user_table_sort, table_name='system-components')
+- ✅ Статус-строка под кнопками
+- ✅ Сортировка по клику работает
+- ❌ Фильтры — будут добавлены позже
+
+### Дамп БД: bd_calc_20260723_095854.sql
+### Файлы: calc_wardrobe_20260723_095854.tar.gz

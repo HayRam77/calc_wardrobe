@@ -26,7 +26,17 @@
  function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
  function loadComponents(){
   var tbody=document.getElementById('componentsBody');
-   window.loadComponents = loadComponents; // экспорт
+   function updateStatusLine(ids) {
+    var sl = document.getElementById('sortStatusLine');
+    if (!sl) {
+      sl = document.createElement('div'); sl.id = 'sortStatusLine';
+      sl.style.cssText = 'margin-top:8px;font-size:12px;color:#555;';
+      var btnDiv = document.querySelector('#tab-components > div:first-child');
+      if (btnDiv) btnDiv.parentNode.insertBefore(sl, btnDiv.nextSibling);
+    }
+    sl.textContent = ids.length + ': ' + ids.join(' - ');
+  }
+window.loadComponents = loadComponents; // экспорт
   if(!tbody) return;
   fetch('/api/system-components?_='+Date.now()+'&sort='+(JSON.parse(localStorage.getItem('components_sort')||'{}').key||'name')+'&order='+(JSON.parse(localStorage.getItem('components_sort')||'{}').dir||'asc'))
   .then(function(res){ if(!res.ok) throw new Error('Ошибка'); return res.json(); })
@@ -47,13 +57,16 @@
      }
      var hasLinks = item.has_blocks || item.has_materials;
      var nameHtml = hasLinks ? '<span class="comp-name-link" style="cursor:pointer;text-decoration:underline;"><strong>'+esc(item.name)+'</strong></span>' : esc(item.name);
-     html+='<tr title="'+esc(item.description || '')+'" data-id="'+item.id+'"'+(hasLinks ? ' data-has-links="1"' : '')+'><td>'+item.id+'</td><td>'+esc(item.module_name || '')+'</td><td>'+nameHtml+'</td><td>'+esc(item.type_name || '')+'</td><td>'+esc(item.ln || '')+'</td><td>'+esc(item.tm || '')+'</td><td>'+paramsHtml+'</td>';
+     html+='<tr draggable="false" title="'+esc(item.description || '')+'" data-id="'+item.id+'"'+(hasLinks ? ' data-has-links="1"' : '')+'><td class="drag-handle" style="cursor:grab;width:1%;">\u282F</td><td>'+item.id+'</td><td>'+esc(item.module_name || '')+'</td><td>'+nameHtml+'</td><td>'+esc(item.type_name || '')+'</td><td>'+esc(item.ln || '')+'</td><td>'+esc(item.tm || '')+'</td><td>'+paramsHtml+'</td>';
      if(isAdmin){
       html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent('+item.id+')">✏️</button> <button class="btn btn-sm btn-duplicate" onclick="duplicateSystemComponent('+item.id+')">📋</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent('+item.id+')">🗑️</button></td>';
      }
      html+='</tr>';
     });
     tbody.innerHTML=html;
+  var ids = data.map(function(x){return x.id;});
+  updateStatusLine(ids);
+  
 
   var compTable = tbody.closest('table');
   if (compTable) {
@@ -92,31 +105,40 @@
     if (compSortKey) setTimeout(function() { applyCompSort(compSortKey, compSortDir); }, 200);
     if (!compTable.dataset.dragInit) {
       compTable.dataset.dragInit = '1';
-      var draggedRow = null;
-      tbody.addEventListener('dragstart', function(e) {
-        var h2 = e.target.closest('.drag-handle');
-        if (!h2) { e.preventDefault(); return; }
-        draggedRow = h2.closest('tr');
-        if (draggedRow) draggedRow.style.opacity = '0.5';
-      });
-      tbody.addEventListener('dragend', function() { if (draggedRow) draggedRow.style.opacity = ''; draggedRow = null; });
-      tbody.addEventListener('dragover', function(e) { e.preventDefault(); });
-      tbody.addEventListener('drop', function(e) {
+      var dragInfo = null;
+      tbody.addEventListener('mousedown', function(e) {
+        var handle = e.target.closest('.drag-handle');
+        if (!handle) return;
         e.preventDefault();
-        var target = e.target.closest('tr');
-        if (!target || !draggedRow || target === draggedRow) return;
+        var row = handle.closest('tr');
+        if (!row) return;
+        dragInfo = {row: row, startY: e.clientY};
+        row.style.opacity = '0.5';
+      });
+      document.addEventListener('mousemove', function(e) {
+        if (!dragInfo) return;
         var rows = Array.from(tbody.querySelectorAll('tr'));
-        var from = rows.indexOf(draggedRow), to = rows.indexOf(target);
-        if (from < 0 || to < 0) return;
-        if (from < to) tbody.insertBefore(draggedRow, target.nextSibling);
-        else tbody.insertBefore(draggedRow, target);
-        var items = [];
-        tbody.querySelectorAll('tr').forEach(function(tr, idx) {
-          var id = tr.dataset.id;
-          if (id) items.push({ id: parseInt(id), position: idx });
-        });
-        fetch('/api/system-components/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
-        .catch(function(e) { console.error(e); });
+        var target = null;
+        for (var i = 0; i < rows.length; i++) {
+          var rect = rows[i].getBoundingClientRect();
+          if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; }
+        }
+        if (target && target !== dragInfo.row) {
+          var ti = rows.indexOf(target), ri = rows.indexOf(dragInfo.row);
+          if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
+          else tbody.insertBefore(dragInfo.row, target);
+        }
+      });
+      document.addEventListener('mouseup', function() {
+        if (!dragInfo) return;
+        dragInfo.row.style.opacity = '';
+        var ids = [];
+        tbody.querySelectorAll('tr[data-id]').forEach(function(tr) { var id = parseInt(tr.dataset.id); if (id) ids.push(id); });
+        localStorage.setItem('components_order', JSON.stringify(ids));
+        updateStatusLine(ids);
+        fetch('/api/table-sort/system-components', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sort_order: ids}) }).catch(function(e){console.error(e);});
+        fetch('/api/system-components/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids }) }).catch(function(e) { console.error(e); });
+        dragInfo = null;
       });
     }
   }
@@ -152,7 +174,7 @@
    }
   }).catch(function(err){
    console.error(err);
-   tbody.innerHTML='<tr><td colspan="8" class="error">Ошибка загрузки</td></tr>';
+   tbody.innerHTML='<tr><td colspan="9" class="error">Ошибка загрузки</td></tr>';
   });
  }
  var componentTooltipCache = {};
@@ -279,6 +301,10 @@ document.getElementById('addComponentBtn').addEventListener('click', function(){
   this.value='';
  });
  applyPermissions();
+ 
+
+
+
  loadComponents();
 })();
 
@@ -297,5 +323,15 @@ window.duplicateSystemComponent = function(id) {
 };
 
 
+function updateStatusLine(ids) {
+    var sl = document.getElementById('sortStatusLine');
+    if (!sl) {
+      sl = document.createElement('div'); sl.id = 'sortStatusLine';
+      sl.style.cssText = 'margin-top:8px;font-size:12px;color:#555;';
+      var btnDiv = document.querySelector('#tab-components > div:first-child');
+      if (btnDiv) btnDiv.parentNode.insertBefore(sl, btnDiv.nextSibling);
+    }
+    sl.textContent = ids.length + ': ' + ids.join(' - ');
+  }
 window.loadComponents = loadComponents;
 </script>
