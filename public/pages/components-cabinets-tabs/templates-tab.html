@@ -1,0 +1,168 @@
+<div id="tab-templates" class="tab-content">
+  <div style="margin-bottom:10px;">
+    <button id="addTemplateBtn" class="btn btn-primary" style="display:none;">Добавить компонент</button>
+    <button id="exportTemplatesBtn" class="btn btn-secondary" style="display:none;">Экспорт</button>
+    <input type="file" id="importTemplatesFile" style="display:none" accept=".xlsx,.xls">
+    <button id="importTemplatesBtn" class="btn btn-secondary" style="display:none;">Импорт</button>
+  </div>
+  <div class="table-container">
+    <table class="data-table">
+      <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="type_name" style="position:relative;"><span id="typeFilterIcon" style="cursor:pointer;font-size:14px;" title="Фильтр по типу">\u2699</span> Тип<div id="typeDropdown" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:1000;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="name" style="position:relative;"><span id="nameFilterIcon" style="cursor:pointer;font-size:14px;" title="Фильтр по названию">\u2699</span> Название<div id="nameDropdown" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:1000;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="manufacturer_name" style="position:relative;"><span id="manFilterIcon" style="cursor:pointer;font-size:14px;" title="Фильтр по производителю">\u2699</span> Производитель<div id="manDropdown" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:1000;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="article">Артикул</th><th data-sort="price">Цена</th><th data-sort="weight_grams">Вес</th><th data-sort="power_watts">Q</th><th data-sort="ln">LN</th><th>TM</th><th>Ссылка</th><th id="templatesActionsCol" style="display:none;">Действия</th></tr></thead>
+      <tbody id="templatesBody"><tr><td colspan="13" class="loading">Загрузка...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+<script>
+(function() {
+ var user = JSON.parse(localStorage.getItem("user") || "null");
+ var isAdmin = user && user.role === "admin";
+ applyPermissions();
+ function applyPermissions(){
+  ["addTemplateBtn","exportTemplatesBtn","importTemplatesBtn"].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = isAdmin ? "" : "none"; });
+  var col = document.getElementById("templatesActionsCol");
+  if(col) col.style.display = isAdmin ? "" : "none";
+ }
+ function esc(s){ var d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+ function updateStatusLine(ids) {
+   var sl = document.getElementById("sortStatusLine");
+   if (!sl) { sl = document.createElement("div"); sl.id = "sortStatusLine"; sl.style.cssText = "margin-top:8px;font-size:12px;color:#555;"; var btnDiv = document.querySelector("#tab-templates > div:first-child"); if (btnDiv) btnDiv.parentNode.insertBefore(sl, btnDiv.nextSibling); }
+   sl.textContent = ids.length + ": " + ids.join(" - ");
+ }
+ function loadTemplates(){
+   var tbody = document.getElementById("templatesBody");
+   if(!tbody) return;
+   fetch("/api/block-templates?_="+Date.now())
+   .then(function(r){ return r.json(); })
+   .then(function(data){
+     if(!data.length){ tbody.innerHTML = "<tr><td colspan=13>No templates</td></tr>"; return; }
+     var html = "";
+     for (var i = 0; i < data.length; i++) {
+       var item = data[i];
+       html += "<tr draggable=\"false\" data-id=\""+item.id+"\"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+esc(item.type_name||"")+"</td><td>"+esc(item.name)+"</td><td>"+esc(item.manufacturer_name||"")+"</td><td>"+esc(item.article||"")+"</td><td>"+(item.price||"")+"</td><td>"+(item.weight_grams||"")+"</td><td>"+(item.power_watts||"")+"</td><td>"+esc(item.ln||"")+"</td><td>"+(item.tm||"")+"</td><td>"+(item.url?"<a href=\""+esc(item.url)+"\" target=_blank>\uD83D\uDD17</a>":"")+"</td>";
+       if(isAdmin) html += "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editTemplate("+item.id+")\">\u270F\uFE0F</button> <button class=\"btn btn-sm btn-delete\" onclick=\"deleteTemplate("+item.id+")\">\uD83D\uDDD1\uFE0F</button></td>";
+       html += "</tr>";
+     }
+     tbody.innerHTML = html;
+     updateStatusLine(data.map(function(x){return x.id;}));
+     initDrag();
+     initSort();
+     initFilters();
+     loadSortFromDB();
+   }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=13>Error</td></tr>"; });
+ }
+ function initDrag(){
+   var tbody = document.getElementById("templatesBody");
+   var table = tbody.closest("table");
+   if (!table || table.dataset.dragInit) return;
+   table.dataset.dragInit = "1";
+   var dragInfo = null;
+   tbody.addEventListener("mousedown", function(e) {
+     var handle = e.target.closest(".drag-handle"); if (!handle) return;
+     e.preventDefault(); var row = handle.closest("tr"); if (!row) return;
+     dragInfo = {row: row, startY: e.clientY}; row.style.opacity = "0.5";
+   });
+   document.addEventListener("mousemove", function(e) {
+     if (!dragInfo) return;
+     var rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
+     var target = null;
+     for (var i = 0; i < rows.length; i++) { var rect = rows[i].getBoundingClientRect(); if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; } }
+     if (target && target !== dragInfo.row) { var ti = rows.indexOf(target), ri = rows.indexOf(dragInfo.row); if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling); else tbody.insertBefore(dragInfo.row, target); }
+   });
+   document.addEventListener("mouseup", function() {
+     if (!dragInfo) return; dragInfo.row.style.opacity = "";
+     var ids = []; tbody.querySelectorAll("tr[data-id]").forEach(function(tr) { var id = parseInt(tr.dataset.id); if (id) ids.push(id); });
+     updateStatusLine(ids);
+     fetch("/api/table-sort/block-templates", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids}) }).catch(function(e){console.error(e);});
+     fetch("/api/block-templates/sort-order", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({items: ids.map(function(id,idx){return {id:id,position:idx};})}) }).catch(function(e){console.error(e);});
+     dragInfo = null;
+   });
+ }
+ function initSort(){
+   var tbody = document.getElementById("templatesBody");
+   var thead = document.querySelector("#tab-templates thead tr");
+   thead.querySelectorAll("th[data-sort]").forEach(function(th) {
+     th.style.cursor = "pointer";
+     th.onclick = function() {
+       if (this.querySelector("[id*=FilterIcon]") && (event.target.closest("[id*=FilterIcon]") || event.target.closest("[id*=Dropdown]"))) return;
+       var k = this.dataset.sort;
+       var s = JSON.parse(localStorage.getItem("cab_templates_sort") || "{}");
+       s.dir = s.key === k ? (s.dir === "asc" ? "desc" : "asc") : "asc"; s.key = k;
+       localStorage.setItem("cab_templates_sort", JSON.stringify(s));
+       var rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
+       var colIdx = Array.from(thead.querySelectorAll("th")).findIndex(function(th) { return th.dataset.sort === k; });
+       if (colIdx < 0) return;
+       rows.sort(function(a, b) {
+         var va = (a.cells[colIdx]?.textContent || "").trim(), vb = (b.cells[colIdx]?.textContent || "").trim();
+         var na = parseFloat(va.replace(/,/g, ".")), nb = parseFloat(vb.replace(/,/g, "."));
+         if (!isNaN(na) && !isNaN(nb)) return s.dir === "asc" ? na - nb : nb - na;
+         return s.dir === "asc" ? va.localeCompare(vb, "ru") : vb.localeCompare(va, "ru");
+       });
+       rows.forEach(function(row) { tbody.appendChild(row); });
+       var ids = rows.map(function(r) { return parseInt(r.dataset.id); }).filter(Boolean);
+       updateStatusLine(ids);
+       fetch("/api/table-sort/block-templates", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids, sort_key: k, sort_dir: s.dir}) }).catch(function(e){console.error(e);});
+     };
+   });
+ }
+ var selectedTypes = JSON.parse(localStorage.getItem("cab_templates_type_filter") || "[]");
+ var selectedNames = JSON.parse(localStorage.getItem("cab_templates_name_filter") || "[]");
+ var selectedMans = JSON.parse(localStorage.getItem("cab_templates_man_filter") || "[]");
+ function initFilters(){
+   initFilter("typeDropdown", "typeFilterIcon", 2, selectedTypes, "cab_templates_type_filter");
+   initFilter("nameDropdown", "nameFilterIcon", 3, selectedNames, "cab_templates_name_filter");
+   initFilter("manDropdown", "manFilterIcon", 4, selectedMans, "cab_templates_man_filter");
+   rebuildFilters();
+   applyAllFilters();
+ }
+ function initFilter(dropdownId, iconId, colIdx, selectedList, storageKey) {
+   var dd = document.getElementById(dropdownId), icon = document.getElementById(iconId);
+   if (!dd || !icon) return;
+   icon.addEventListener("click", function(e) { e.stopPropagation();
+     var modal = document.createElement("div");
+     modal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;";
+     modal.innerHTML = "<div style=\"background:#fff;border-radius:8px;padding:20px;max-width:500px;max-height:80vh;overflow-y:auto;\"><h3 style=\"margin-top:0;\">Фильтр</h3><div id=\"modalFilterContent_"+dropdownId+"\"></div><button style=\"margin-top:10px;padding:8px 16px;background:#1a5f7a;color:#fff;border:none;border-radius:4px;cursor:pointer;\">Закрыть</button></div>";
+     document.body.appendChild(modal);
+     var content = modal.querySelector("#modalFilterContent_"+dropdownId);
+     content.appendChild(dd);
+     dd.style.display = "block"; dd.style.position = "static"; dd.style.boxShadow = "none"; dd.style.border = "none"; dd.style.maxHeight = "60vh";
+     modal.addEventListener("click", function(ev) { if (ev.target === modal) { dd.style.display = "none"; modal.remove(); } });
+     modal.querySelector("button").addEventListener("click", function() { dd.style.display = "none"; modal.remove(); });
+   });
+   window._f = window._f || {}; window._f[dropdownId] = { dd: dd, icon: icon, colIdx: colIdx, selectedList: selectedList, storageKey: storageKey };
+ }
+ function rebuildFilters() {
+   var tbody = document.getElementById("templatesBody");
+   if (!tbody || !window._f) return;
+   Object.keys(window._f).forEach(function(key) {
+     var f = window._f[key], values = {};
+     tbody.querySelectorAll("tr[data-id]").forEach(function(tr) { var v = (tr.cells[f.colIdx]?.textContent || "").trim() || "-"; values[v] = 1; });
+     f.dd.innerHTML = Object.keys(values).sort().map(function(v) { var ch = f.selectedList.indexOf(v) >= 0 ? " checked" : ""; return "<label style=\"display:block;font-size:13px;cursor:pointer;white-space:nowrap;\"><input type=\"checkbox\" class=\"fcb-"+key+"\" value=\""+v.replace(/"/g,"&quot;")+"\""+ch+"> "+v+"</label>"; }).join("");
+     f.dd.querySelectorAll(".fcb-"+key).forEach(function(cb) { cb.addEventListener("change", function() { f.selectedList.length = 0; f.dd.querySelectorAll(".fcb-"+key+":checked").forEach(function(c) { f.selectedList.push(c.value); }); localStorage.setItem(f.storageKey, JSON.stringify(f.selectedList)); applyAllFilters(); f.icon.textContent = f.selectedList.length > 0 ? "\u2699\uFE0F" : "\u2699"; saveFilterToDB(); }); });
+   });
+ }
+ function applyAllFilters() {
+   var tb = document.getElementById("templatesBody"); if (!tb) return;
+   tb.querySelectorAll("tr[data-id]").forEach(function(tr) {
+     var type = (tr.cells[2]?.textContent || "").trim() || "-", name = (tr.cells[3]?.textContent || "").trim() || "-", man = (tr.cells[4]?.textContent || "").trim() || "-";
+     if (selectedTypes.length > 0 && selectedTypes.indexOf(type) < 0) { tr.style.display = "none"; return; }
+     if (selectedNames.length > 0 && selectedNames.indexOf(name) < 0) { tr.style.display = "none"; return; }
+     if (selectedMans.length > 0 && selectedMans.indexOf(man) < 0) { tr.style.display = "none"; return; }
+     tr.style.display = "";
+   });
+ }
+ function saveFilterToDB() { fetch("/api/table-sort/block-templates", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({filter_data: {types: selectedTypes, names: selectedNames, manufacturers: selectedMans}}) }).catch(function(e){console.error(e);}); }
+ function loadSortFromDB(){
+   var tbody = document.getElementById("templatesBody");
+   fetch("/api/table-sort/block-templates").then(function(r){ return r.json(); }).then(function(saved){
+     if (saved && saved.sort_order && saved.sort_order.length > 0) { saved.sort_order.forEach(function(id) { var row = tbody.querySelector("tr[data-id=\""+id+"\"]"); if (row) tbody.appendChild(row); }); updateStatusLine(saved.sort_order); }
+   });
+ }
+ window.editTemplate = function(id){ if(typeof BlockTemplateModal !== "undefined"){ BlockTemplateModal.open(function(){ loadTemplates(); }, id); } };
+ window.deleteTemplate = function(id){ if(!confirm("Delete?")) return; fetch("/api/block-templates/"+id, { method:"DELETE" }).then(loadTemplates); };
+ document.getElementById("addTemplateBtn").addEventListener("click", function(){ if(typeof BlockTemplateModal !== "undefined"){ BlockTemplateModal.open(function(){ loadTemplates(); }); } });
+ document.getElementById("exportTemplatesBtn").addEventListener("click", async function(){ var r = await fetch("/api/block-templates/export"); var b = await r.blob(); var a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "block_templates.xlsx"; a.click(); });
+ document.getElementById("importTemplatesBtn").addEventListener("click", function(){ document.getElementById("importTemplatesFile").click(); });
+ document.getElementById("importTemplatesFile").addEventListener("change", async function(){ var fd = new FormData(); fd.append("file", this.files[0]); await fetch("/api/block-templates/import", { method:"POST", body:fd }); loadTemplates(); this.value=""; });
+ loadTemplates();
+})();
+</script>
