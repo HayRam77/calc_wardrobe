@@ -176,7 +176,7 @@ sidebar.querySelectorAll('a').forEach(function(link) {
 });
 
 function loadModuleComponents() {
-  var ds = document.createElement('script'); ds.src = '/js/modules/dragsort.js'; document.head.appendChild(ds);
+  var ds = document.createElement('script'); ds.src = '/js/modules/table-sort-db.js'; ds.async = false; document.head.appendChild(ds); var ds = document.createElement('script'); ds.src = '/js/modules/table-sort-db.js'; ds.async = false; document.head.appendChild(ds); var ds = document.createElement('script'); ds.src = '/js/modules/dragsort.js'; document.head.appendChild(ds);
     if (window._modulesLoaded) return;
     window._modulesLoaded = true;
 

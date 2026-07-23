@@ -89,7 +89,7 @@
             renderSystems(data);
             var ids = data.map(function(x){return x.id;});
             var sl = document.getElementById("sortStatusLine");
-            if(!sl){sl=document.createElement("div");sl.id="sortStatusLine";sl.style.cssText="margin-top:8px;font-size:12px;color:#555;";var tc=document.querySelector(".table-container");if(tc)tc.parentNode.insertBefore(sl,tc.nextSibling);}
+            if(!sl){sl=document.createElement("div");sl.id="sortStatusLine";sl.style.cssText="margin-top:8px;font-size:12px;color:#555;";var btnDiv=document.querySelector(".page-content > div:first-child");if(btnDiv)btnDiv.parentNode.insertBefore(sl,btnDiv.nextSibling);}
             sl.textContent=ids.length+": "+ids.join(" - ");
         });
     }
@@ -147,14 +147,10 @@
             renderSystems(data);
             var sortedIds = data.map(function(item){return item.id;});
             localStorage.setItem('systems_order', JSON.stringify(sortedIds));
-            var sl2 = document.getElementById('sortStatusLine');
-            if(sl2) sl2.textContent = sortedIds.length + ': ' + sortedIds.join(' - ');
-            fetch('/api/table-sort/systems',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sort_order:sortedIds, sort_key:sysSortKey, sort_dir:sysSortDir})}).catch(function(e){console.error(e);});
-            var sortedIds = data.map(function(item){return item.id;});
-            localStorage.setItem('systems_order', JSON.stringify(sortedIds));
             var sl = document.getElementById('sortStatusLine');
             if(sl) sl.textContent = sortedIds.length + ': ' + sortedIds.join(' - ');
             fetch('/api/table-sort/systems',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sort_order:sortedIds, sort_key:sysSortKey, sort_dir:sysSortDir})}).catch(function(e){console.error(e);});
+
             table.querySelectorAll('th').forEach(function(h) { h.classList.remove('sorted-asc', 'sorted-desc'); });
             th.classList.add(sysSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
         });
@@ -333,8 +329,8 @@
                 if(id){items.push({id:id,position:idx});ids.push(id);}
             });
             localStorage.setItem('systems_order', JSON.stringify(ids));
-            var sl=document.getElementById('sortStatusLine');
-            if(sl) sl.textContent=ids.length+': '+ids.join(' - ');
+            var sl = document.getElementById('sortStatusLine');
+            if(sl) sl.textContent = ids.length + ': ' + ids.join(' - ');
             fetch('/api/table-sort/systems',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sort_order:ids})}).catch(function(e){console.error(e);});
             fetch('/api/systems/sort-order',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items})}).catch(function(e){console.error(e);});
             dragInfo=null;
