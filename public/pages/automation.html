@@ -97,7 +97,7 @@
         if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="6">Нет систем</td></tr>'; return; }
         tbody.innerHTML = filtered.map(function(s) {
             var cabHtml = (s.cabinet_names||'').split(', ').filter(Boolean).map(function(n,i){var ids=(s.cabinet_ids||'').split(',');return '<a href="/cabinet/'+(ids[i]||'')+'" target="_blank" style="color:#1a5f7a;">'+esc(n)+'</a>';}).join(', ')||'-';
-            return '<tr data-id="'+s.id+'"><td class="drag-handle" style="cursor:grab;">⠿</td><td>'+s.id+'</td><td>'+cabHtml+'</td><td><a href="#" style="color:#1a5f7a;text-decoration:underline;cursor:pointer;" onclick="openSystemModal('+s.id+')">'+esc(s.name)+'</a></td><td>'+esc(s.description||'')+'</td>' +
+            return '<tr data-id="'+s.id+'"><td class="drag-handle" style="cursor:grab;">⠿</td><td>'+s.id+'</td><td>'+cabHtml+'</td><td><a href="#" style="color:#1a5f7a;text-decoration:underline;cursor:pointer;" onclick="openSystemModal('+s.id+');return false;">'+esc(s.name)+'</a></td><td>'+esc(s.description||'')+'</td>' +
                 (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')">🗑️</button></td>' : '') + '</tr>';
         }).join('');
 
@@ -255,34 +255,78 @@
 
     window.editSystem = function(id) { fetch('/api/systems/' + id).then(function(r) { return r.json(); }).then(function(s) { openSystemForm(s); }); };
 
+    // УЛУЧШЕННОЕ МОДАЛЬНОЕ ОКНО ПРОСМОТРА И УПРАВЛЕНИЯ КОМПОНЕНТАМИ СИСТЕМЫ
     window.openSystemModal = function(sysId) {
-        var modal = document.createElement('div'); modal.className = 'modal'; modal.style.cssText = 'display:flex;z-index:3000;';
-        modal.innerHTML = '<div class="modal-content" style="max-width:95vw;max-height:90vh;overflow-y:auto;"><span class="modal-close">&times;</span><h3 id="sysModTitle">Система</h3><div id="sysModBody">Загрузка...</div></div>';
+        var modal = document.createElement('div'); 
+        modal.className = 'modal'; 
+        modal.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3000;';
+        modal.innerHTML = '<div class="modal-content" style="max-width:900px;width:95vw;max-height:90vh;overflow-y:auto;position:relative;"><span class="modal-close" style="position:absolute;top:15px;right:20px;font-size:24px;cursor:pointer;">&times;</span><h3 id="sysModTitle" style="margin-top:0;display:flex;justify-content:space-between;align-items:center;padding-right:30px;"><span>Система</span></h3><div id="sysModBody">Загрузка...</div></div>';
         document.body.appendChild(modal);
-        modal.querySelector('.modal-close').onclick = function(){ modal.remove(); };
-        modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
-        modal._loadSysData = loadSysData;
 
-        function loadSysData() { window._currentSysLoadFn = loadSysData;
-            document.getElementById('sysModBody').innerHTML = 'Загрузка...';
-            fetch('/api/systems/' + sysId).then(function(r){ return r.json(); }).then(function(data){
-                document.getElementById('sysModTitle').textContent = 'Система: ' + (data.name || '');
+        var closeModal = function() { modal.remove(); };
+        modal.querySelector('.modal-close').onclick = closeModal;
+        modal.addEventListener('click', function(e){ if(e.target === modal) closeModal(); });
+
+        function loadSysData() { 
+            window._currentSysLoadFn = loadSysData;
+            var bodyEl = modal.querySelector('#sysModBody');
+            var titleEl = modal.querySelector('#sysModTitle');
+            bodyEl.innerHTML = '<p style="color:#666;">Загрузка компонентов...</p>';
+
+            fetch('/api/systems/' + sysId + '?_=' + Date.now()).then(function(r){ return r.json(); }).then(function(data){
+                titleEl.innerHTML = '<span>Система: ' + esc(data.name || '') + '</span>' +
+                    '<button class="btn btn-sm btn-delete" id="clearSysCompsBtn" style="font-size:12px;margin-left:15px;" title="Очистить все компоненты системы">🗑️ Очистить</button>';
+                
+                var clearBtn = titleEl.querySelector('#clearSysCompsBtn');
+                if (clearBtn) {
+                    clearBtn.onclick = function() {
+                        if (!confirm('Удалить ВСЕ компоненты из этой системы? Это действие нельзя отменить.')) return;
+                        fetch('/api/systems/' + sysId + '/components', { method: 'DELETE' })
+                            .then(function(r){ return r.json(); })
+                            .then(function(res){
+                                alert('✅ ' + (res.message || 'Система очищена'));
+                                loadSysData();
+                                if (typeof loadSystems === 'function') loadSystems();
+                            })
+                            .catch(function(e){ alert('Ошибка: ' + e.message); });
+                    };
+                }
+
+                var h = '';
                 if (!data.components || !data.components.length) {
-                    document.getElementById('sysModBody').innerHTML = '<p>Нет компонентов</p>';
+                    h += '<p style="color:#888;margin-bottom:15px;">К системе не привязано ни одного компонента.</p>';
                 } else {
-                    var h = '<div class="table-container"><table class="data-table"><thead><tr><th>Компонент</th><th>Тип</th><th>Модуль</th><th>Действия</th></tr></thead><tbody>';
+                    h += '<div class="table-container" style="margin-bottom:15px;"><table class="data-table"><thead><tr><th>ID</th><th>Компонент</th><th>Тип</th><th>Модуль</th><th>Кол-во</th><th>Действия</th></tr></thead><tbody>';
                     data.components.forEach(function(c){
-                        h += '<tr><td>'+esc(c.name)+'</td><td>'+esc(c.type_name||'')+'</td><td>'+esc(c.module_name||'-')+'</td>'+
-                            '<td><button class="btn btn-sm btn-edit" onclick="editSysCompInModal('+c.component_id+')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteCompFromSys('+sysId+','+c.link_id+')">🗑️</button></td></tr>';
+                        h += '<tr>' +
+                            '<td>' + c.id + '</td>' +
+                            '<td><strong>' + esc(c.name) + '</strong></td>' +
+                            '<td>' + esc(c.type_name || '-') + '</td>' +
+                            '<td>' + esc(c.module_name || '-') + '</td>' +
+                            '<td>' + (c.quantity || 1) + '</td>' +
+                            '<td>' +
+                                '<button class="btn btn-sm btn-edit" onclick="editSysCompInModal(' + c.id + ')">✏️</button> ' +
+                                '<button class="btn btn-sm btn-delete" onclick="deleteCompFromSys(' + sysId + ',' + c.link_id + ')">🗑️</button>' +
+                            '</td>' +
+                        '</tr>';
                     });
                     h += '</tbody></table></div>';
-                    h += '<div style="margin-top:10px;display:flex;gap:10px;"><button class="btn btn-primary btn-sm" id="attachCompToSysBtn">+ Привязать компонент</button><button class="btn btn-secondary btn-sm" id="addCompToSysBtn">+ Добавить компонент</button></div>';
-                    document.getElementById('sysModBody').innerHTML = h;
-                    document.getElementById('attachCompToSysBtn').onclick = function(){ attachCompToSys(sysId, loadSysData); };
-                    document.getElementById('addCompToSysBtn').onclick = function(){ addCompToSys(sysId, loadSysData); };
                 }
+
+                h += '<div style="display:flex;gap:10px;justify-content:flex-start;">' +
+                    '<button class="btn btn-primary btn-sm" id="attachCompToSysBtn">+ Привязать</button>' +
+                    '<button class="btn btn-secondary btn-sm" id="addCompToSysBtn">+ Создать</button>' +
+                '</div>';
+
+                bodyEl.innerHTML = h;
+
+                modal.querySelector('#attachCompToSysBtn').onclick = function(){ attachCompToSys(sysId, loadSysData); };
+                modal.querySelector('#addCompToSysBtn').onclick = function(){ addCompToSys(sysId, loadSysData); };
+            }).catch(function(err){
+                bodyEl.innerHTML = '<p style="color:red;">Ошибка загрузки данных системы: ' + esc(err.message) + '</p>';
             });
         }
+
         loadSysData();
     };
 
@@ -291,27 +335,37 @@
         fetch('/api/systems/link/' + linkId, { method: 'DELETE' })
         .then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
             if (window._currentSysLoadFn) window._currentSysLoadFn();
+            if (typeof loadSystems === 'function') loadSystems();
         })
         .catch(function(e){ alert(e.message); });
     };
 
     window.editSysCompInModal = function(compId) {
-        if (typeof SystemCompModal !== 'undefined') SystemCompModal.open(compId, function(){});
+        if (typeof SystemCompModal !== 'undefined') {
+            SystemCompModal.open(compId, function(){
+                if (window._currentSysLoadFn) window._currentSysLoadFn();
+            });
+        }
     };
 
     function attachCompToSys(sysId, refreshFn) {
-        var m = document.createElement('div'); m.className = 'modal'; m.style.cssText = 'display:flex;z-index:4000;';
-        m.innerHTML = '<div class="modal-content" style="max-width:500px;"><span class="modal-close">&times;</span><h3>Привязать компонент</h3><select id="attSel" style="width:100%;"><option value="">-- выберите --</option></select><div style="margin-top:10px;"><label>Кол-во:</label><input type="number" id="attQty" value="1" min="1" style="width:80px;"></div><div style="margin-top:15px;"><button id="attOk" class="btn btn-primary">Привязать</button> <button class="btn btn-secondary" onclick="this.closest(\'.modal\').remove()">Отмена</button></div></div>';
+        var m = document.createElement('div'); m.className = 'modal'; m.style.cssText = 'display:flex;justify-content:center;align-items:center;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:4000;';
+        m.innerHTML = '<div class="modal-content" style="max-width:500px;width:90vw;"><span class="modal-close" style="position:absolute;top:10px;right:15px;font-size:20px;cursor:pointer;">&times;</span><h3>Привязать компонент</h3><select id="attSel" class="form-control" style="width:100%;"><option value="">-- выберите --</option></select><div style="margin-top:10px;"><label>Кол-во:</label><input type="number" id="attQty" class="form-control" value="1" min="1" style="width:100px;"></div><div style="margin-top:15px;display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary cancel-att-btn">Отмена</button><button id="attOk" class="btn btn-primary">Привязать</button></div></div>';
         document.body.appendChild(m);
-        m.querySelector('.modal-close').onclick = function(){ m.remove(); };
-        m.addEventListener('click', function(e){ if(e.target===m) m.remove(); });
+        
+        var closeAttModal = function() { m.remove(); };
+        m.querySelector('.modal-close').onclick = closeAttModal;
+        m.querySelector('.cancel-att-btn').onclick = closeAttModal;
+        m.addEventListener('click', function(e){ if(e.target===m) closeAttModal(); });
+
         fetch('/api/system-components').then(function(r){ return r.json(); }).then(function(comps){
-            var sel = document.getElementById('attSel');
+            var sel = m.querySelector('#attSel');
             comps.forEach(function(c){ sel.innerHTML += '<option value="'+c.id+'">'+c.name+(c.type_name?' ('+c.type_name+')':'')+'</option>'; });
         });
-        document.getElementById('attOk').onclick = function(){
-            var compId = document.getElementById('attSel').value;
-            var qty = parseInt(document.getElementById('attQty').value) || 1;
+
+        m.querySelector('#attOk').onclick = function(){
+            var compId = m.querySelector('#attSel').value;
+            var qty = parseInt(m.querySelector('#attQty').value) || 1;
             if (!compId) { alert('Выберите компонент'); return; }
             fetch('/api/systems/'+sysId+'/components',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({component_id:parseInt(compId),quantity:qty})})
             .then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message); }); m.remove(); refreshFn(); })
@@ -334,7 +388,7 @@
         }
     }
 
-    window.deleteSystem = function(id) { if (!confirm('Удалить?')) return; fetch('/api/systems/' + id, { method: 'DELETE' }).then(loadSystems); };
+    window.deleteSystem = function(id) { if (!confirm('Удалить систему?')) return; fetch('/api/systems/' + id, { method: 'DELETE' }).then(loadSystems); };
     document.getElementById('exportBtn').addEventListener('click', async function() { var r = await fetch('/api/systems/export'); var b = await r.blob(); var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'systems.xlsx'; a.click(); });
     document.getElementById('importBtn').addEventListener('click', function() { document.getElementById('importFile').click(); });
     document.getElementById('importFile').addEventListener('change', async function() { var fd = new FormData(); fd.append('file', this.files[0]); await fetch('/api/systems/import', { method: 'POST', body: fd }); loadSystems(); this.value = ''; });
