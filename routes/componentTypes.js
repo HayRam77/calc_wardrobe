@@ -7,18 +7,6 @@ const XLSX = require('xlsx');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
-router.post('/reorder', auth, isAdmin, async (req, res) => {
-  try {
-    var items = req.body.items;
-    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
-    for (var i = 0; i < items.length; i++) {
-      var id = parseInt(items[i].id), pos = parseInt(items[i].position);
-      if (isNaN(id) || isNaN(pos)) continue;
-      await pool.query('UPDATE component_types SET position = $1 WHERE id = $2', [pos, id]);
-    }
-    res.json({ message: 'ok' });
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
-});
 
 router.get('/export', auth, async (req, res) => {
   try {
@@ -54,5 +42,45 @@ router.get('/:id', auth, async (req, res) => { try { const r = await pool.query(
 router.post('/', auth, isAdmin, async (req, res) => { try { const r = await pool.query('INSERT INTO component_types (name, description) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET description=$2 RETURNING *', [req.body.name, req.body.description || null]); res.status(201).json(r.rows[0]); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
 router.put('/:id', auth, isAdmin, async (req, res) => { try { const r = await pool.query('UPDATE component_types SET name=$1, description=$2 WHERE id=$3 RETURNING *', [req.body.name, req.body.description || null, req.params.id]); res.json(r.rows[0]); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
 router.delete('/:id', auth, isAdmin, async (req, res) => { try { await pool.query('DELETE FROM component_types WHERE id = $1', [req.params.id]); res.json({ message: 'Удалён' }); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
+
+router.post('/reorder', auth, isAdmin, async (req, res) => {
+  try {
+    const rawList = req.body.items || req.body.ids;
+    if (!rawList || !Array.isArray(rawList)) {
+      return res.status(400).json({ message: 'items or ids array required' });
+    }
+    for (let i = 0; i < rawList.length; i++) {
+      const item = rawList[i];
+      const id = typeof item === 'object' ? parseInt(item.id) : parseInt(item);
+      const pos = typeof item === 'object' ? parseInt(item.position) : i;
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE component_types SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) {
+    console.error('Ошибка сортировки:', err);
+    res.status(500).json({ message: 'Ошибка сортировки' });
+  }
+});
+
+router.put('/sort-order', auth, isAdmin, async (req, res) => {
+  try {
+    const rawList = req.body.items || req.body.ids;
+    if (!rawList || !Array.isArray(rawList)) {
+      return res.status(400).json({ message: 'items or ids array required' });
+    }
+    for (let i = 0; i < rawList.length; i++) {
+      const item = rawList[i];
+      const id = typeof item === 'object' ? parseInt(item.id) : parseInt(item);
+      const pos = typeof item === 'object' ? parseInt(item.position) : i;
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE component_types SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) {
+    console.error('Ошибка сортировки:', err);
+    res.status(500).json({ message: 'Ошибка сортировки' });
+  }
+});
 
 module.exports = router;

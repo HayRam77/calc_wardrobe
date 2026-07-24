@@ -534,3 +534,15 @@ tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardro
 
 ### Дамп БД: bd_calc_20260723_1930*.sql
 ### Файлы: calc_wardrobe_20260723_1930*.tar.gz
+
+## 24.07.2026 — Комплексная оптимизация БД, бэкенда, SPA-страниц и роутинга
+### Реализовано:
+- БД: Смена владельцев объектов на hrroot; консолидация полей LN/TM напрямую в таблицы сущностей; удаление устаревших EAV-таблиц (ln_values, tm_values) и 8 неиспользуемых таблиц (consumables, breakers и др.).
+- Бэкенд: Ликвидация N+1 запросов за счет SQL json_agg в systems.js и systemComponents.js; универсальная поддержка items и ids во всех роутах /reorder; увеличение лимита запросов до 50MB; настройка пула pg.Pool (config/db.js); обработчик 404 JSON для /api/*; поддержка dotenv.
+- Фронтенд: Полное удаление отладочных строк #sortStatusLine и .comp-status-line; устранение утечек памяти при Drag-and-Drop; сохранение и авто-восстановление сортировки по клику на заголовки из БД; удаление location.reload() из модальных окон для сохранения SPA-роутинга; единый глобальный дебоунс тултипов цепочек связей.
+- Файловая структура: Удалены файлы-дубликаты (block-templates.js, component-types.js).
+### Файлы:
+- server.js, config/db.js, routes/table-sort.js, routes/systems.js, routes/systemComponents.js, routes/blockTemplates.js, routes/materials.js, routes/cabinets.js, routes/projects.js, routes/systemComponentTypes.js, routes/systemModules.js, routes/systemParameters.js, routes/systemParameterTypes.js, routes/componentTypes.js, routes/parameters.js, routes/manufacturers.js
+- public/index.html, public/pages/cabinet.html, public/pages/automation.html, public/pages/manufacturers.html, public/pages/consumables.html, public/pages/cabinets-list.html, public/pages/home.html, public/pages/project.html, public/pages/admin.html
+- public/pages/components-systems.html, public/pages/components-cabinets.html, все дочерние вкладки
+- public/components/ (block-template-modal.html, material-modal.html, system-comp-modal.html, system-comp-edit.html, params-modal.html, param-types-modal.html, types-modal.html, modules-modal.html)

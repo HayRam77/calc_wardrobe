@@ -22,4 +22,44 @@ router.post('/', auth, isAdmin, async (req, res) => { try { const r = await pool
 router.put('/:id', auth, isAdmin, async (req, res) => { try { const r = await pool.query('UPDATE system_parameters SET name=$1, type=$2, description=$3, ln=$4, tm=$5 WHERE id=$6 RETURNING *', [req.body.name, req.body.type || null, req.body.description || null, req.body.ln || null, req.body.tm || null, req.params.id]); res.json(r.rows[0]); } catch (e) { console.error(e); res.status(500).json({ message: 'Ошибка' }); } });
 router.delete('/:id', auth, isAdmin, async (req, res) => { try { await pool.query('DELETE FROM system_parameters WHERE id = $1', [req.params.id]); res.json({ message: 'Удалён' }); } catch (e) { console.error(e); res.status(500).json({ message: 'Ошибка' }); } });
 
+router.post('/reorder', auth, isAdmin, async (req, res) => {
+  try {
+    const rawList = req.body.items || req.body.ids;
+    if (!rawList || !Array.isArray(rawList)) {
+      return res.status(400).json({ message: 'items or ids array required' });
+    }
+    for (let i = 0; i < rawList.length; i++) {
+      const item = rawList[i];
+      const id = typeof item === 'object' ? parseInt(item.id) : parseInt(item);
+      const pos = typeof item === 'object' ? parseInt(item.position) : i;
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE system_parameters SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) {
+    console.error('Ошибка сортировки:', err);
+    res.status(500).json({ message: 'Ошибка сортировки' });
+  }
+});
+
+router.put('/sort-order', auth, isAdmin, async (req, res) => {
+  try {
+    const rawList = req.body.items || req.body.ids;
+    if (!rawList || !Array.isArray(rawList)) {
+      return res.status(400).json({ message: 'items or ids array required' });
+    }
+    for (let i = 0; i < rawList.length; i++) {
+      const item = rawList[i];
+      const id = typeof item === 'object' ? parseInt(item.id) : parseInt(item);
+      const pos = typeof item === 'object' ? parseInt(item.position) : i;
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE system_parameters SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) {
+    console.error('Ошибка сортировки:', err);
+    res.status(500).json({ message: 'Ошибка сортировки' });
+  }
+});
+
 module.exports = router;

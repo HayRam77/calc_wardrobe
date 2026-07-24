@@ -15,19 +15,20 @@
 </div>
 <script>
 (function() {
- var currentUser=JSON.parse(localStorage.getItem('user') || 'null');
- var isAdmin=currentUser && currentUser.role==='admin';
+ var currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+ var isAdmin = currentUser && currentUser.role === 'admin';
  applyPermissions();
 
  function applyPermissions(){
-  var btns=['addComponentBtn','exportComponentsBtn','importComponentsBtn'];
-  btns.forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display=isAdmin?'':'none'; });
-  var col=document.getElementById('componentsActionsCol');
-  if(col) col.style.display=isAdmin?'':'none';
+  var btns = ['addComponentBtn','exportComponentsBtn','importComponentsBtn'];
+  btns.forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = isAdmin ? '' : 'none'; });
+  var col = document.getElementById('componentsActionsCol');
+  if(col) col.style.display = isAdmin ? '' : 'none';
  }
 
- function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+ function esc(s){ var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
+ // Управление перетаскиванием (Drag-and-Drop)
  function setupDragAndDrop(tbody) {
    var dragInfo = null;
    function onMouseMove(e) {
@@ -75,66 +76,166 @@
    });
  }
 
- function loadComponents(){
-  var tbody=document.getElementById('componentsBody');
-  window.loadComponents = loadComponents;
-  if(!tbody) return;
-  fetch('/api/system-components?_='+Date.now())
-  .then(function(res){ if(!res.ok) throw new Error('Ошибка'); return res.json(); })
-  .then(function(data){
-   var empty=document.getElementById('componentsEmpty');
-   if(!data.length){
-    if(empty) empty.style.display='';
-    tbody.innerHTML='';
-   }else{
-    if(empty) empty.style.display='none';
-    var html='';
-    data.forEach(function(item){
-     var paramsHtml='-';
-     if(item.params && item.params.length){
-      paramsHtml=item.params.map(function(p){
-       return esc(p.name)+(p.type?' ('+esc(p.type)+')':'')+': '+esc(p.value);
-      }).join('<br>');
+ // Функция применения сортировки к таблице
+ function applyHeaderSort(key, dir, saveToDb) {
+   var thead = document.querySelector('#tab-components thead tr');
+   var tbody = document.getElementById('componentsBody');
+   if (!thead || !tbody || !key) return;
+
+   var th = thead.querySelector('th[data-sort="' + key + '"]');
+   if (!th) return;
+
+   thead.querySelectorAll('th[data-sort]').forEach(function(t) { 
+     t.dataset.sortDir = ''; 
+     t.classList.remove('sorted-asc', 'sorted-desc'); 
+   });
+
+   th.dataset.sortDir = dir;
+   th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+
+   var allTh = Array.from(thead.querySelectorAll('th'));
+   var colIdx = allTh.indexOf(th);
+   if (colIdx < 0) return;
+
+   var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+   rows.sort(function(a, b) {
+     var va = (a.cells[colIdx]?.textContent || '').trim();
+     var vb = (b.cells[colIdx]?.textContent || '').trim();
+     var na = parseFloat(va.replace(',', '.'));
+     var nb = parseFloat(vb.replace(',', '.'));
+     if (!isNaN(na) && !isNaN(nb) && va == na.toString() && vb == nb.toString()) {
+       return dir === 'asc' ? na - nb : nb - na;
+     }
+     return dir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+   });
+
+   rows.forEach(function(row) { tbody.appendChild(row); });
+
+   if (saveToDb !== false) {
+     var ids = rows.map(function(r) { return parseInt(r.dataset.id); }).filter(Boolean);
+     localStorage.setItem('components_sort', JSON.stringify({ key: key, dir: dir }));
+     fetch('/api/table-sort/system-components', {
+       method: 'PUT',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ sort_order: ids, sort_key: key, sort_dir: dir })
+     }).catch(function(err) { console.error(err); });
+   }
+ }
+
+ // Инициализация кликов по заголовкам
+ function initSortableHeaders() {
+   var thead = document.querySelector('#tab-components thead tr');
+   if (!thead) return;
+
+   thead.querySelectorAll('th[data-sort]').forEach(function(th) {
+     th.style.cursor = 'pointer';
+     th.onclick = function(e) {
+       if (e.target.closest('#moduleFilterIcon') || e.target.closest('#nameFilterIcon') || e.target.closest('#typeFilterIcon') || e.target.closest('div[id*="Dropdown"]')) return;
+       e.stopPropagation();
+
+       var key = this.dataset.sort;
+       var currentDir = this.dataset.sortDir || 'asc';
+       var newDir = currentDir === 'asc' ? 'desc' : 'asc';
+
+       applyHeaderSort(key, newDir, true);
+     };
+   });
+ }
+
+ // Рендеринг строк компонентов
+ function renderRows(data) {
+   var tbody = document.getElementById('componentsBody');
+   var html = '';
+   data.forEach(function(item) {
+     var paramsHtml = '-';
+     if (item.params && item.params.length) {
+       paramsHtml = item.params.map(function(p) {
+         return esc(p.name) + (p.type ? ' (' + esc(p.type) + ')' : '') + ': ' + esc(p.value);
+       }).join('<br>');
      }
      var hasLinks = item.has_blocks || item.has_materials;
-     var nameHtml = hasLinks ? '<span class="comp-name-link" style="cursor:pointer;text-decoration:underline;"><strong>'+esc(item.name)+'</strong></span>' : esc(item.name);
-     html+='<tr draggable="false" title="'+esc(item.description || '')+'" data-id="'+item.id+'"'+(hasLinks ? ' data-has-links="1"' : '')+'><td class="drag-handle" style="cursor:grab;width:1%;">\u282F</td><td>'+item.id+'</td><td>'+esc(item.module_name || '')+'</td><td>'+nameHtml+'</td><td>'+esc(item.type_name || '')+'</td><td>'+esc(item.ln || '')+'</td><td>'+esc(item.tm || '')+'</td><td>'+paramsHtml+'</td>';
-     if(isAdmin){
-      html+='<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent('+item.id+')">\u270F\uFE0F</button> <button class="btn btn-sm btn-duplicate" onclick="duplicateSystemComponent('+item.id+')">\uD83D\uDCCB</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent('+item.id+')">\uD83D\uDDD1\uFE0F</button></td>';
+     var nameHtml = hasLinks ? '<span class="comp-name-link" style="cursor:pointer;text-decoration:underline;"><strong>' + esc(item.name) + '</strong></span>' : esc(item.name);
+     
+     html += '<tr draggable="false" title="' + esc(item.description || '') + '" data-id="' + item.id + '"' + (hasLinks ? ' data-has-links="1"' : '') + '>' +
+       '<td class="drag-handle" style="cursor:grab;width:1%;">\u282F</td>' +
+       '<td>' + item.id + '</td>' +
+       '<td>' + esc(item.module_name || '') + '</td>' +
+       '<td>' + nameHtml + '</td>' +
+       '<td>' + esc(item.type_name || '') + '</td>' +
+       '<td>' + esc(item.ln || '') + '</td>' +
+       '<td>' + esc(item.tm || '') + '</td>' +
+       '<td>' + paramsHtml + '</td>';
+     if (isAdmin) {
+       html += '<td><button class="btn btn-sm btn-edit" onclick="editSystemComponent(' + item.id + ')">\u270F\uFE0F</button> <button class="btn btn-sm btn-duplicate" onclick="duplicateSystemComponent(' + item.id + ')">\uD83D\uDCCB</button> <button class="btn btn-sm btn-delete" onclick="deleteSystemComponent(' + item.id + ')">\uD83D\uDDD1\uFE0F</button></td>';
      }
-     html+='</tr>';
-    });
-    tbody.innerHTML=html;
+     html += '</tr>';
+   });
+   tbody.innerHTML = html;
+ }
+
+ // Главная функция загрузки с восстановлением сортировки
+ function loadComponents() {
+  var tbody = document.getElementById('componentsBody');
+  window.loadComponents = loadComponents;
+  if (!tbody) return;
+
+  Promise.all([
+    fetch('/api/system-components?_=' + Date.now()).then(function(res) { if (!res.ok) throw new Error('Ошибка'); return res.json(); }),
+    fetch('/api/table-sort/system-components?_=' + Date.now()).then(function(res) { return res.json(); }).catch(function() { return {}; })
+  ]).then(function(results) {
+    var data = results[0];
+    var saved = results[1] || {};
+    var empty = document.getElementById('componentsEmpty');
+
+    if (!data.length) {
+      if (empty) empty.style.display = '';
+      tbody.innerHTML = '';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    // 1. Применяем порядок из БД (если есть)
+    if (saved.sort_order && saved.sort_order.length) {
+      var orderMap = {};
+      saved.sort_order.forEach(function(id, idx) { orderMap[id] = idx; });
+      data.sort(function(a, b) {
+        var ia = orderMap.hasOwnProperty(a.id) ? orderMap[a.id] : 999999;
+        var ib = orderMap.hasOwnProperty(b.id) ? orderMap[b.id] : 999999;
+        return ia - ib;
+      });
+    }
+
+    renderRows(data);
+    setupDragAndDrop(tbody);
+    initSortableHeaders();
+
+    // 2. Применяем сохранённую сортировку по столбцу (если есть)
+    var savedKey = saved.sort_key || (JSON.parse(localStorage.getItem('components_sort') || '{}').key);
+    var savedDir = saved.sort_dir || (JSON.parse(localStorage.getItem('components_sort') || '{}').dir) || 'asc';
+    if (savedKey) {
+      applyHeaderSort(savedKey, savedDir, false);
+    }
+
     rebuildFilters();
     applyAllFilters();
-    setupDragAndDrop(tbody);
-    
-    document.querySelectorAll('#tab-components th[data-sort]').forEach(function(th) {
-     th.onclick = function() {
-       var k = this.dataset.sort;
-       var s = JSON.parse(localStorage.getItem('components_sort') || '{}');
-       s.dir = s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'asc';
-       s.key = k;
-       localStorage.setItem('components_sort', JSON.stringify(s));
-       loadComponents();
-     };
-    });
-    
+
+    // Кэш данных и обработчики тултипа
     data.forEach(function(item) {
-     window._componentsData = window._componentsData || {};
-     window._componentsData[item.id] = item;
+      window._componentsData = window._componentsData || {};
+      window._componentsData[item.id] = item;
     });
+
     tbody.querySelectorAll('.comp-name-link').forEach(function(el) {
-     var tr = el.closest('tr');
-     var compId = parseInt(tr.dataset.id);
-     el.addEventListener('mouseenter', function(e) { if (tr && tr.dataset.hasLinks) showComponentTooltip(e, compId); });
-     el.addEventListener('mouseleave', hideComponentTooltip);
-     el.addEventListener('mousemove', moveComponentTooltip);
+      var tr = el.closest('tr');
+      var compId = parseInt(tr.dataset.id);
+      el.addEventListener('mouseenter', function(e) { if (tr && tr.dataset.hasLinks) showComponentTooltip(e, compId); });
+      el.addEventListener('mouseleave', hideComponentTooltip);
+      el.addEventListener('mousemove', moveComponentTooltip);
     });
-   }
-  }).catch(function(err){
-   console.error(err);
-   tbody.innerHTML='<tr><td colspan="9" class="error">Ошибка загрузки</td></tr>';
+
+  }).catch(function(err) {
+    console.error(err);
+    tbody.innerHTML = '<tr><td colspan="9" class="error">Ошибка загрузки</td></tr>';
   });
  }
 

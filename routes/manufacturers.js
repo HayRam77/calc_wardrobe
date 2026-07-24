@@ -50,19 +50,6 @@ router.post('/', async (req, res) => {
 });
 
 // Обновить производителя
-router.put('/sort-order', async (req, res) => {
-  try {
-    var items = req.body.items;
-    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
-    for (var i = 0; i < items.length; i++) {
-      var id = parseInt(items[i].id);
-      var pos = parseInt(items[i].position);
-      if (isNaN(id) || isNaN(pos)) continue;
-      await pool.query('UPDATE manufacturers SET position = $1 WHERE id = $2', [pos, id]);
-    }
-    res.json({ message: 'ok' });
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
-});
 
 router.put('/:id', async (req, res) => {
   try {
@@ -119,6 +106,46 @@ router.post('/import', upload.single('file'), async (req, res) => {
     }
     res.json({ message: `Импортировано ${imported} записей` });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/reorder', auth, isAdmin, async (req, res) => {
+  try {
+    const rawList = req.body.items || req.body.ids;
+    if (!rawList || !Array.isArray(rawList)) {
+      return res.status(400).json({ message: 'items or ids array required' });
+    }
+    for (let i = 0; i < rawList.length; i++) {
+      const item = rawList[i];
+      const id = typeof item === 'object' ? parseInt(item.id) : parseInt(item);
+      const pos = typeof item === 'object' ? parseInt(item.position) : i;
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE manufacturers SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) {
+    console.error('Ошибка сортировки:', err);
+    res.status(500).json({ message: 'Ошибка сортировки' });
+  }
+});
+
+router.put('/sort-order', auth, isAdmin, async (req, res) => {
+  try {
+    const rawList = req.body.items || req.body.ids;
+    if (!rawList || !Array.isArray(rawList)) {
+      return res.status(400).json({ message: 'items or ids array required' });
+    }
+    for (let i = 0; i < rawList.length; i++) {
+      const item = rawList[i];
+      const id = typeof item === 'object' ? parseInt(item.id) : parseInt(item);
+      const pos = typeof item === 'object' ? parseInt(item.position) : i;
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE manufacturers SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) {
+    console.error('Ошибка сортировки:', err);
+    res.status(500).json({ message: 'Ошибка сортировки' });
+  }
 });
 
 module.exports = router;
