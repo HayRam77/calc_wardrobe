@@ -133,9 +133,10 @@ window.fetch = function(url, options) {
 
 function navigateTo(url) { history.pushState(null, '', url); loadPage(url); }
 window.loadPage = loadPage;
+
 async function loadPage(url) {
   var container = document.getElementById('contentContainer');
-  container.innerHTML = '<p>Загрузка...</p>';
+  container.innerHTML = '<p style="padding:15px;color:#666;">Загрузка...</p>';
   var titles = { '/': 'Проекты', '/automation': 'Системы автоматизации', '/components-systems': 'Компоненты систем', '/components-cabinets': 'Компоненты шкафов', '/cabinets-list': 'Все шкафы', '/manufacturers': 'Производители', '/consumables': 'Расходные материалы', '/admin': 'Администрирование' };
 
   if (url.startsWith('/project/')) { pageTitle.textContent = 'Проект'; document.title = 'Проект - Конфигуратор вентиляции'; }
@@ -168,7 +169,7 @@ async function loadPage(url) {
     });
     loadModuleComponents();
     setTimeout(function() { if (typeof window.pageInit === 'function' && !window._pageInitDone) { window._pageInitDone = true; window.pageInit(); } }, 100);
-  } catch (e) { container.innerHTML = '<p>Ошибка загрузки страницы</p>'; }
+  } catch (e) { container.innerHTML = '<p style="color:red;padding:15px;">Ошибка загрузки страницы</p>'; }
 }
 
 sidebar.querySelectorAll('a').forEach(function(link) {
@@ -176,11 +177,14 @@ sidebar.querySelectorAll('a').forEach(function(link) {
 });
 
 function loadModuleComponents() {
-  var ds = document.createElement('script'); ds.src = '/js/modules/table-sort-db.js'; ds.async = false; document.head.appendChild(ds); var ds = document.createElement('script'); ds.src = '/js/modules/table-sort-db.js'; ds.async = false; document.head.appendChild(ds); var ds = document.createElement('script'); ds.src = '/js/modules/dragsort.js'; document.head.appendChild(ds);
     if (window._modulesLoaded) return;
     window._modulesLoaded = true;
 
-    // Последовательная загрузка всех компонентов без дублирования
+    // Однократное безопасное подключение глобальных JS модулей
+    var tsScript = document.createElement('script'); tsScript.src = '/js/modules/table-sort-db.js'; document.head.appendChild(tsScript);
+    var dsScript = document.createElement('script'); dsScript.src = '/js/modules/dragsort.js'; document.head.appendChild(dsScript);
+
+    // Последовательная однократная загрузка модальных компонентов
     fetch('/components/block-template-modal.html?_=' + Date.now())
       .then(r => r.text())
       .then(html => {
@@ -236,66 +240,6 @@ window.addEventListener('load', function() {
   if (token && user) { currentUser = user; updateUserUI(); loadPage(location.pathname || '/'); }
   else { window.location.href = '/login.html'; }
 });
-
-window.makeDraggable = function(table, apiTable) {
-    if (!table) return;
-    if (table.dataset.dragInitialized === '1') return;
-    table.dataset.dragInitialized = '1';
-    var tbody = table.querySelector('tbody') || table;
-    var draggedRow = null;
-    tbody.addEventListener('dragstart', function(e) {
-        var handle = e.target.closest('.drag-handle');
-        if (!handle) { e.preventDefault(); return; }
-        draggedRow = handle.closest('tr');
-        if (!draggedRow) return;
-        draggedRow.style.opacity = '0.5';
-        e.dataTransfer.effectAllowed = 'move';
-    });
-    tbody.addEventListener('dragend', function(e) {
-        if (draggedRow) draggedRow.style.opacity = '';
-        draggedRow = null;
-    });
-    tbody.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-    });
-    tbody.addEventListener('drop', function(e) {
-        e.preventDefault();
-        var target = e.target.closest('tr');
-        if (!target || !draggedRow || target === draggedRow) return;
-        var rows = Array.from(tbody.querySelectorAll('tr'));
-        var from = rows.indexOf(draggedRow);
-        var to = rows.indexOf(target);
-        if (from < 0 || to < 0) return;
-        if (from < to) { tbody.insertBefore(draggedRow, target.nextSibling); }
-        else { tbody.insertBefore(draggedRow, target); }
-        var items = [];
-        tbody.querySelectorAll('tr').forEach(function(tr, idx) {
-            var id = tr.dataset.id;
-            if (id) items.push({ id: parseInt(id), position: idx });
-        });
-        console.log('SORT sending:', { table: apiTable, items: items });
-        fetch('/api/cabinets/sort-order', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ table: apiTable, items: items })
-        }).then(function(r) {
-                if (r.ok && apiTable === 'cabinet_systems') {
-                    // Перерисовать компоненты систем в новом порядке
-                    if (typeof window.loadSystemComponents === 'function') {
-                        window.loadSystemComponents();
-                    }
-                }
-            }).then(function(r) {
-                if (r && r.ok && apiTable === 'cabinet_systems') {
-                    if (typeof window.loadSystemComponents === 'function') {
-                        window.loadSystemComponents();
-                    }
-                }
-            }).catch(function(e){ console.error('Sort error:', e); });
-    });
-};
-
 </script>
 </body>
 </html>

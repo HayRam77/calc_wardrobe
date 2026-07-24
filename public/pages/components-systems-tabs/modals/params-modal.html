@@ -1,10 +1,28 @@
 <form id="paramForm">
-  <div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="paramName" required></div>
-  <div class="form-group"><label>Тип:</label><input type="text" id="paramType"></div>
-  <div class="form-group"><label>Описание:</label><textarea id="paramDescription" rows="3"></textarea></div>
-  <div class="form-row" style="display:flex;gap:10px;">
-    <div class="form-group" style="flex:1;"><label>LN</label><input type="text" id="paramLn"></div>
-    <div class="form-group" style="flex:1;"><label>TM</label><input type="text" id="paramTm"></div>
+  <div class="form-group">
+    <label for="paramName">Название <span style="color:red;">*</span></label>
+    <input type="text" id="paramName" class="form-control" required>
   </div>
-  <div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal').style.display='none'">Отмена</button></div>
+  <div class="form-group">
+    <label for="paramType">Тип</label>
+    <input type="text" id="paramType" class="form-control">
+  </div>
+  <div class="form-group">
+    <label for="paramDescription">Описание</label>
+    <textarea id="paramDescription" class="form-control" rows="3"></textarea>
+  </div>
+  <div class="form-row" style="display:flex;gap:10px;">
+    <div class="form-group" style="flex:1;">
+      <label for="paramLn">LN</label>
+      <input type="number" id="paramLn" class="form-control" step="any">
+    </div>
+    <div class="form-group" style="flex:1;">
+      <label for="paramTm">TM</label>
+      <input type="number" id="paramTm" class="form-control" step="any">
+    </div>
+  </div>
+  <div class="form-actions" style="margin-top:15px;display:flex;gap:10px;justify-content:flex-end;">
+    <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal').style.display='none'">Отмена</button>
+    <button type="submit" class="btn btn-primary">Сохранить</button>
+  </div>
 </form>

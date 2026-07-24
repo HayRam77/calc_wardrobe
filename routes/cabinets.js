@@ -373,8 +373,8 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       SELECT
         pb.id, pb.template_id, pb.linked, pb.quantity,
         bt.name AS block_name,
-        COALESCE(ln.value, '') AS ln,
-        COALESCE(tm.value, '') AS tm,
+        COALESCE(bt.ln, '') AS ln,
+        COALESCE(bt.tm, '') AS tm,
         ct.name AS block_type,
         '' as system_name,
         '' as component_name,
@@ -384,8 +384,6 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       FROM project_blocks pb
       JOIN block_templates bt ON pb.template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
-      LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
-      LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
       WHERE pb.cabinet_id = $1
 
       UNION ALL
@@ -396,8 +394,8 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         true as linked,
         sbl.quantity,
         bt.name AS block_name,
-        COALESCE(ln.value, '') AS ln,
-        COALESCE(tm.value, '') AS tm,
+        COALESCE(bt.ln, '') AS ln,
+        COALESCE(bt.tm, '') AS tm,
         ct.name AS block_type,
         COALESCE(s.name, '') as system_name,
         COALESCE(sc.name, '') as component_name,
@@ -407,8 +405,6 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       FROM system_block_links sbl
       JOIN block_templates bt ON sbl.block_template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
-      LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
-      LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
       JOIN system_components sc ON sbl.system_component_id = sc.id
       JOIN system_components_link scl ON scl.component_id = sc.id
       JOIN systems s ON scl.system_id = s.id
@@ -423,8 +419,8 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         true as linked,
         sctb.quantity,
         bt.name AS block_name,
-        COALESCE(ln.value, '') AS ln,
-        COALESCE(tm.value, '') AS tm,
+        COALESCE(bt.ln, '') AS ln,
+        COALESCE(bt.tm, '') AS tm,
         ct.name AS block_type,
         COALESCE(s.name, '') as system_name,
         COALESCE(sc.name, '') as component_name,
@@ -434,8 +430,6 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       FROM system_component_type_blocks sctb
       JOIN block_templates bt ON sctb.block_template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
-      LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
-      LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
       JOIN system_components sc ON sc.type_id = sctb.type_id
       JOIN system_components_link scl ON scl.component_id = sc.id
       JOIN systems s ON scl.system_id = s.id

@@ -11,34 +11,42 @@ router.get('/', auth, async (req, res) => {
     try {
         const sort = ['id','name','type_name','manufacturer_name','module_name','ln','tm'].includes(req.query.sort) ? req.query.sort : 'name';
         const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
-        const result = await pool.query(`
+        
+        const query = `
             SELECT sc.*, sct.name as type_name, m.name as manufacturer_name, sm.name as module_name,
-                   COALESCE(ln.value, '') AS ln,
-                   COALESCE(tm.value, '') AS tm,
+                   COALESCE(sc.ln, '') AS ln,
+                   COALESCE(sc.tm, '') AS tm,
                    EXISTS(SELECT 1 FROM system_component_params WHERE component_id = sc.id) as has_params,
                    EXISTS(SELECT 1 FROM system_block_links WHERE system_component_id = sc.id) as has_blocks,
-                   EXISTS(SELECT 1 FROM system_component_materials WHERE system_component_id = sc.id) as has_materials
+                   EXISTS(SELECT 1 FROM system_component_materials WHERE system_component_id = sc.id) as has_materials,
+                   COALESCE(
+                     (
+                       SELECT json_agg(
+                         json_build_object(
+                           'parameter_id', scp.parameter_id,
+                           'name', p.name,
+                           'parameter_name', p.name,
+                           'value', scp.value,
+                           'type', scp.type
+                         )
+                       )
+                       FROM system_component_params scp
+                       JOIN system_parameters p ON scp.parameter_id = p.id
+                       WHERE scp.component_id = sc.id
+                     ), '[]'::json
+                   ) as params
             FROM system_components sc
             LEFT JOIN system_component_types sct ON sc.type_id = sct.id
             LEFT JOIN manufacturers m ON sc.manufacturer_id = m.id
             LEFT JOIN system_modules sm ON sc.module_id = sm.id
-            LEFT JOIN ln_values ln ON ln.entity_type = 'system_component' AND ln.entity_id = sc.id
-            LEFT JOIN tm_values tm ON tm.entity_type = 'system_component' AND tm.entity_id = sc.id
             ORDER BY ${['id','name','type_id','module_id','manufacturer_id','article','description'].includes(sort) ? 'sc.'+sort : sort} ${order}
-        `);
-        const components = result.rows;
-        for (let i = 0; i < components.length; i++) {
-            const paramsResult = await pool.query(
-                `SELECT scp.*, p.name as parameter_name
-                 FROM system_component_params scp
-                 JOIN system_parameters p ON scp.parameter_id = p.id
-                 WHERE scp.component_id = $1`,
-                [components[i].id]
-            );
-            components[i].params = paramsResult.rows;
-        }
-        res.json(components);
-    } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) { 
+        console.error('Ошибка получения системных компонентов:', err); 
+        res.status(500).json({ message: 'Ошибка получения компонентов' }); 
+    }
 });
 
 router.post('/reorder', auth, isAdmin, async (req, res) => {
@@ -58,13 +66,11 @@ router.get('/export', auth, async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT sc.id, sc.name, sct.name as type, sc.article, m.name as manufacturer, sc.description,
-                   COALESCE(ln.value, '') AS ln,
-                   COALESCE(tm.value, '') AS tm
+                   COALESCE(sc.ln, '') AS ln,
+                   COALESCE(sc.tm, '') AS tm
             FROM system_components sc
             LEFT JOIN system_component_types sct ON sc.type_id=sct.id
             LEFT JOIN manufacturers m ON sc.manufacturer_id=m.id
-            LEFT JOIN ln_values ln ON ln.entity_type = 'system_component' AND ln.entity_id = sc.id
-            LEFT JOIN tm_values tm ON tm.entity_type = 'system_component' AND tm.entity_id = sc.id
             ORDER BY COALESCE(sc.position, 9999), sc.name
         `);
         const ws = XLSX.utils.json_to_sheet(result.rows);
@@ -80,14 +86,12 @@ router.get('/:id', auth, async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT sc.*, sct.name as type_name, m.name as manufacturer_name, sm.name as module_name,
-                   COALESCE(ln.value, '') AS ln,
-                   COALESCE(tm.value, '') AS tm
+                   COALESCE(sc.ln, '') AS ln,
+                   COALESCE(sc.tm, '') AS tm
             FROM system_components sc
             LEFT JOIN system_component_types sct ON sc.type_id = sct.id
             LEFT JOIN manufacturers m ON sc.manufacturer_id = m.id
             LEFT JOIN system_modules sm ON sc.module_id = sm.id
-            LEFT JOIN ln_values ln ON ln.entity_type = 'system_component' AND ln.entity_id = sc.id
-            LEFT JOIN tm_values tm ON tm.entity_type = 'system_component' AND tm.entity_id = sc.id
             WHERE sc.id = $1
         `, [req.params.id]);
         if (result.rows.length === 0) return res.status(404).json({ message: 'Не найден' });
@@ -110,28 +114,11 @@ router.post('/', auth, isAdmin, async (req, res) => {
         await client.query('BEGIN');
         const { name, type_id, module_id, manufacturer_id, article, description, ln, tm, params } = req.body;
         const result = await client.query(
-            `INSERT INTO system_components (name, type_id, module_id, manufacturer_id, article, description)
-             VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-            [name, type_id||null, module_id||null, manufacturer_id||null, article||null, description||null]
+            `INSERT INTO system_components (name, type_id, module_id, manufacturer_id, article, description, ln, tm)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+            [name, type_id||null, module_id||null, manufacturer_id||null, article||null, description||null, ln||null, tm||null]
         );
         const newComp = result.rows[0];
-
-        if (ln !== undefined) {
-            await client.query(
-                `INSERT INTO ln_values (entity_type, entity_id, value)
-                 VALUES ($1, $2, $3)
-                 ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
-                ['system_component', newComp.id, ln || '']
-            );
-        }
-        if (tm !== undefined) {
-            await client.query(
-                `INSERT INTO tm_values (entity_type, entity_id, value)
-                 VALUES ($1, $2, $3)
-                 ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
-                ['system_component', newComp.id, tm || '']
-            );
-        }
 
         if (params && params.length) {
             for (const p of params) {
@@ -141,8 +128,6 @@ router.post('/', auth, isAdmin, async (req, res) => {
                 );
             }
         }
-
-        // Авто-подтягивание отключено — наследование из типа работает через API GET
 
         await client.query('COMMIT');
         res.status(201).json(newComp);
@@ -161,28 +146,12 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
         await client.query('BEGIN');
         const { name, type_id, module_id, manufacturer_id, article, description, ln, tm, params } = req.body;
         const result = await client.query(
-            `UPDATE system_components SET name=$1, type_id=$2, module_id=$3, manufacturer_id=$4, article=$5, description=$6, updated_at=CURRENT_TIMESTAMP
-             WHERE id=$7 RETURNING *`,
-            [name, type_id||null, module_id||null, manufacturer_id||null, article||null, description||null, req.params.id]
+            `UPDATE system_components 
+             SET name=$1, type_id=$2, module_id=$3, manufacturer_id=$4, article=$5, description=$6, ln=$7, tm=$8, updated_at=CURRENT_TIMESTAMP
+             WHERE id=$9 RETURNING *`,
+            [name, type_id||null, module_id||null, manufacturer_id||null, article||null, description||null, ln||null, tm||null, req.params.id]
         );
         if (result.rows.length === 0) return res.status(404).json({ message: 'Не найден' });
-
-        if (ln !== undefined) {
-            await client.query(
-                `INSERT INTO ln_values (entity_type, entity_id, value)
-                 VALUES ($1, $2, $3)
-                 ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
-                ['system_component', req.params.id, ln || '']
-            );
-        }
-        if (tm !== undefined) {
-            await client.query(
-                `INSERT INTO tm_values (entity_type, entity_id, value)
-                 VALUES ($1, $2, $3)
-                 ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
-                ['system_component', req.params.id, tm || '']
-            );
-        }
 
         await client.query('DELETE FROM system_component_params WHERE component_id=$1', [req.params.id]);
         if (params && params.length) {
@@ -191,20 +160,6 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
                     'INSERT INTO system_component_params (component_id, parameter_id, value, type) VALUES ($1,$2,$3,$4)',
                     [req.params.id, p.parameter_id, p.value||null, p.type||null]
                 );
-            }
-        }
-
-        // Авто-подтягивание материалов и блоков из типа (только новые, не дублируем существующие)
-        if (type_id) {
-            try {
-                await client.query(
-                    `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
-                     SELECT $1, material_id, quantity FROM system_component_type_materials WHERE type_id = $2`,
-                    [req.params.id, type_id]
-                );
-                // Блоки не подтягиваем автоматически при редактировании
-            } catch (inheritErr) {
-                console.error('Auto-inherit error on update:', inheritErr);
             }
         }
 
@@ -222,8 +177,6 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
 router.delete('/:id', auth, isAdmin, async (req, res) => {
     try {
         const id = req.params.id;
-        await pool.query(`DELETE FROM ln_values WHERE entity_type = 'system_component' AND entity_id = $1`, [id]);
-        await pool.query(`DELETE FROM tm_values WHERE entity_type = 'system_component' AND entity_id = $1`, [id]);
         await pool.query('DELETE FROM system_components WHERE id=$1', [id]);
         res.json({ message: 'Удалён' });
     } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
@@ -231,29 +184,25 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 
 router.get('/:id/blocks', auth, async (req, res) => {
     try {
-        // Прямые связи
         const direct = await pool.query(
             `SELECT sbl.*, bt.name, bt.article,
-                    COALESCE(ln.value, '') AS ln,
-                    COALESCE(tm.value, '') AS tm,
+                    COALESCE(bt.ln, '') AS ln,
+                    COALESCE(bt.tm, '') AS tm,
                     ct.name as type_name, m.name as manufacturer_name,
                     false as inherited
              FROM system_block_links sbl
              JOIN block_templates bt ON sbl.block_template_id = bt.id
              LEFT JOIN component_types ct ON bt.type_id = ct.id
              LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
-             LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
-             LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
              WHERE sbl.system_component_id=$1
              ORDER BY bt.name`,
             [req.params.id]
         );
 
-        // Унаследованные от типа (исключая прямые)
         const inherited = await pool.query(
             `SELECT sctb.block_template_id as id, sctb.quantity, bt.name, bt.article,
-                    COALESCE(ln.value, '') AS ln,
-                    COALESCE(tm.value, '') AS tm,
+                    COALESCE(bt.ln, '') AS ln,
+                    COALESCE(bt.tm, '') AS tm,
                     ct.name as type_name, m.name as manufacturer_name,
                     true as inherited
              FROM system_components sc
@@ -261,8 +210,6 @@ router.get('/:id/blocks', auth, async (req, res) => {
              JOIN block_templates bt ON sctb.block_template_id = bt.id
              LEFT JOIN component_types ct ON bt.type_id = ct.id
              LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id
-             LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
-             LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
              WHERE sc.id = $1
              AND NOT EXISTS (
                SELECT 1 FROM system_block_links sbl2
@@ -318,28 +265,11 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
         let imported = 0;
         for (const row of data) {
             try {
-                const result = await pool.query(
-                    `INSERT INTO system_components (name, article, description)
-                     VALUES ($1,$2,$3) RETURNING id`,
-                    [row['название']||row['name'], row['артикул']||null, row['описание']||null]
+                await pool.query(
+                    `INSERT INTO system_components (name, article, description, ln, tm)
+                     VALUES ($1,$2,$3,$4,$5)`,
+                    [row['название']||row['name'], row['артикул']||null, row['описание']||null, row['ln']||row['LN']||null, row['tm']||row['TM']||null]
                 );
-                const compId = result.rows[0].id;
-                if (row['ln'] || row['LN']) {
-                    await pool.query(
-                        `INSERT INTO ln_values (entity_type, entity_id, value)
-                         VALUES ($1,$2,$3)
-                         ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
-                        ['system_component', compId, row['ln'] || row['LN']]
-                    );
-                }
-                if (row['tm'] || row['TM']) {
-                    await pool.query(
-                        `INSERT INTO tm_values (entity_type, entity_id, value)
-                         VALUES ($1,$2,$3)
-                         ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value`,
-                        ['system_component', compId, row['tm'] || row['TM']]
-                    );
-                }
                 imported++;
             } catch (e) { console.error(e); }
         }
@@ -353,7 +283,6 @@ router.post('/:id/duplicate', auth, isAdmin, async (req, res) => {
         await client.query('BEGIN');
         const { id } = req.params;
 
-        // Копируем компонент
         const comp = await client.query('SELECT * FROM system_components WHERE id = $1', [id]);
         if (comp.rows.length === 0) {
             await client.query('ROLLBACK');
@@ -362,43 +291,24 @@ router.post('/:id/duplicate', auth, isAdmin, async (req, res) => {
         const src = comp.rows[0];
 
         const newComp = await client.query(
-            `INSERT INTO system_components (name, type_id, module_id, manufacturer_id, article, description)
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-            [src.name + ' (копия)', src.type_id, src.module_id, src.manufacturer_id, src.article, src.description]
+            `INSERT INTO system_components (name, type_id, module_id, manufacturer_id, article, description, ln, tm)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [src.name + ' (копия)', src.type_id, src.module_id, src.manufacturer_id, src.article, src.description, src.ln, src.tm]
         );
         const newId = newComp.rows[0].id;
 
-        // Копируем параметры
         await client.query(
             `INSERT INTO system_component_params (component_id, parameter_id, value, type)
              SELECT $1, parameter_id, value, type FROM system_component_params WHERE component_id = $2`,
             [newId, id]
         );
 
-        // Копируем LN/TM
-        const ln = await client.query("SELECT value FROM ln_values WHERE entity_type = 'system_component' AND entity_id = $1", [id]);
-        if (ln.rows.length) {
-            await client.query(
-                "INSERT INTO ln_values (entity_type, entity_id, value) VALUES ('system_component', $1, $2) ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value",
-                [newId, ln.rows[0].value]
-            );
-        }
-        const tm = await client.query("SELECT value FROM tm_values WHERE entity_type = 'system_component' AND entity_id = $1", [id]);
-        if (tm.rows.length) {
-            await client.query(
-                "INSERT INTO tm_values (entity_type, entity_id, value) VALUES ('system_component', $1, $2) ON CONFLICT (entity_type, entity_id) DO UPDATE SET value = EXCLUDED.value",
-                [newId, tm.rows[0].value]
-            );
-        }
-
-        // Копируем материалы
         await client.query(
             `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
              SELECT $1, material_id, quantity FROM system_component_materials WHERE system_component_id = $2`,
             [newId, id]
         );
 
-        // Копируем блоки
         await client.query(
             `INSERT INTO system_block_links (system_component_id, block_template_id, quantity)
              SELECT $1, block_template_id, quantity FROM system_block_links WHERE system_component_id = $2`,
@@ -417,4 +327,3 @@ router.post('/:id/duplicate', auth, isAdmin, async (req, res) => {
 });
 
 module.exports = router;
-

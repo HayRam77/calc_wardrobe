@@ -407,8 +407,8 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
         MIN(bt.id) as id,
         bt.article,
         bt.name,
-        COALESCE(ln.value, '') AS ln,
-        COALESCE(tm.value, '') AS tm,
+        COALESCE(bt.ln, '') AS ln,
+        COALESCE(bt.tm, '') AS tm,
         SUM(COALESCE(pb.quantity, sbl.quantity)) as total_quantity,
         MIN(bt.price) as unit_price,
         SUM(COALESCE(pb.quantity, sbl.quantity) * COALESCE(bt.price, 0)) as total_price,
@@ -421,11 +421,9 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
       LEFT JOIN system_components_link scl ON scl.component_id = sc.id
       LEFT JOIN systems s ON scl.system_id = s.id
       LEFT JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
-      LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
-      LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
       WHERE (pb.cabinet_id = $1 OR cs.cabinet_id = $1)
         AND bt.article IS NOT NULL
-      GROUP BY bt.article, bt.name, ln.value, tm.value
+      GROUP BY bt.article, bt.name, bt.ln, bt.tm
       ORDER BY bt.name
     `, [cabinetId]);
 
@@ -436,8 +434,8 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
         MIN(m.id) as id,
         m.article,
         m.name,
-        COALESCE(ln.value, '') AS ln,
-        COALESCE(tm.value, '') AS tm,
+        COALESCE(m.ln, '') AS ln,
+        COALESCE(m.tm, '') AS tm,
         SUM(COALESCE(pm.quantity, scm.quantity)) as total_quantity,
         MIN(m.price) as unit_price,
         SUM(COALESCE(pm.quantity, scm.quantity) * COALESCE(m.price, 0)) as total_price,
@@ -450,14 +448,11 @@ router.get('/cabinet/:cabinetId/html', auth, async (req, res) => {
       LEFT JOIN system_components_link scl ON scl.component_id = sc.id
       LEFT JOIN systems s ON scl.system_id = s.id
       LEFT JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
-      LEFT JOIN ln_values ln ON ln.entity_type = 'material' AND ln.entity_id = m.id
-      LEFT JOIN tm_values tm ON tm.entity_type = 'material' AND tm.entity_id = m.id
       WHERE (pm.cabinet_id = $1 OR cs.cabinet_id = $1)
         AND m.article IS NOT NULL
-      GROUP BY m.article, m.name, ln.value, tm.value
+      GROUP BY m.article, m.name, m.ln, m.tm
       ORDER BY m.name
     `, [cabinetId]);
-
     // Итоговые переменные
     let totalLn = 0, totalTm = 0, totalPrice = 0;
     let html = '';

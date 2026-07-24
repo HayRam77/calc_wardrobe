@@ -17,13 +17,64 @@
 (function() {
  var currentUser=JSON.parse(localStorage.getItem('user') || 'null');
  var isAdmin=currentUser && currentUser.role==='admin';
+ applyPermissions();
+
  function applyPermissions(){
   var btns=['addComponentBtn','exportComponentsBtn','importComponentsBtn'];
   btns.forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display=isAdmin?'':'none'; });
   var col=document.getElementById('componentsActionsCol');
   if(col) col.style.display=isAdmin?'':'none';
  }
+
  function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+ function setupDragAndDrop(tbody) {
+   var dragInfo = null;
+   function onMouseMove(e) {
+     if (!dragInfo) return;
+     var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+     var target = null;
+     for (var i = 0; i < rows.length; i++) {
+       var rect = rows[i].getBoundingClientRect();
+       if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; }
+     }
+     if (target && target !== dragInfo.row) {
+       var ti = rows.indexOf(target), ri = rows.indexOf(dragInfo.row);
+       if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
+       else tbody.insertBefore(dragInfo.row, target);
+     }
+   }
+   function onMouseUp() {
+     if (!dragInfo) return;
+     dragInfo.row.style.opacity = '';
+     document.removeEventListener('mousemove', onMouseMove);
+     document.removeEventListener('mouseup', onMouseUp);
+
+     var ids = Array.from(tbody.querySelectorAll('tr[data-id]')).map(function(tr) {
+       return parseInt(tr.dataset.id);
+     }).filter(Boolean);
+
+     localStorage.setItem('components_order', JSON.stringify(ids));
+     rebuildFilters();
+     applyAllFilters();
+     fetch('/api/table-sort/system-components', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sort_order: ids}) }).catch(function(e){console.error(e);});
+     fetch('/api/system-components/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids }) }).catch(function(e) { console.error(e); });
+     dragInfo = null;
+   }
+
+   tbody.addEventListener('mousedown', function(e) {
+     var handle = e.target.closest('.drag-handle');
+     if (!handle) return;
+     e.preventDefault();
+     var row = handle.closest('tr');
+     if (!row) return;
+     dragInfo = {row: row, startY: e.clientY};
+     row.style.opacity = '0.5';
+     document.addEventListener('mousemove', onMouseMove);
+     document.addEventListener('mouseup', onMouseUp);
+   });
+ }
+
  function loadComponents(){
   var tbody=document.getElementById('componentsBody');
   window.loadComponents = loadComponents;
@@ -54,52 +105,9 @@
      html+='</tr>';
     });
     tbody.innerHTML=html;
-    var ids = data.map(function(x){return x.id;});
-    updateStatusLine(ids);
     rebuildFilters();
     applyAllFilters();
-    
-    var compTable = tbody.closest('table');
-    if (compTable && !compTable.dataset.dragInit) {
-      compTable.dataset.dragInit = '1';
-      var dragInfo = null;
-      tbody.addEventListener('mousedown', function(e) {
-        var handle = e.target.closest('.drag-handle');
-        if (!handle) return;
-        e.preventDefault();
-        var row = handle.closest('tr');
-        if (!row) return;
-        dragInfo = {row: row, startY: e.clientY};
-        row.style.opacity = '0.5';
-      });
-      document.addEventListener('mousemove', function(e) {
-        if (!dragInfo) return;
-        var rows = Array.from(tbody.querySelectorAll('tr'));
-        var target = null;
-        for (var i = 0; i < rows.length; i++) {
-          var rect = rows[i].getBoundingClientRect();
-          if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; }
-        }
-        if (target && target !== dragInfo.row) {
-          var ti = rows.indexOf(target), ri = rows.indexOf(dragInfo.row);
-          if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
-          else tbody.insertBefore(dragInfo.row, target);
-        }
-      });
-      document.addEventListener('mouseup', function() {
-        if (!dragInfo) return;
-        dragInfo.row.style.opacity = '';
-        var ids = [];
-        tbody.querySelectorAll('tr[data-id]').forEach(function(tr) { var id = parseInt(tr.dataset.id); if (id) ids.push(id); });
-        localStorage.setItem('components_order', JSON.stringify(ids));
-        updateStatusLine(ids);
-    rebuildFilters();
-    applyAllFilters();
-        fetch('/api/table-sort/system-components', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({sort_order: ids}) }).catch(function(e){console.error(e);});
-        fetch('/api/system-components/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids }) }).catch(function(e) { console.error(e); });
-        dragInfo = null;
-      });
-    }
+    setupDragAndDrop(tbody);
     
     document.querySelectorAll('#tab-components th[data-sort]').forEach(function(th) {
      th.onclick = function() {
@@ -129,7 +137,6 @@
    tbody.innerHTML='<tr><td colspan="9" class="error">Ошибка загрузки</td></tr>';
   });
  }
- 
 
   var selectedModules = JSON.parse(localStorage.getItem('components_module_filter') || '[]');
   var selectedNames = JSON.parse(localStorage.getItem('components_name_filter') || '[]');
@@ -207,28 +214,17 @@
   initFilter('nameDropdown', 'nameFilterIcon', 3, selectedNames, 'components_name_filter');
   initFilter('typeDropdown', 'typeFilterIcon', 4, selectedTypes, 'components_type_filter');
 
- function updateStatusLine(ids) {
-    var sl = document.getElementById('sortStatusLine');
-    if (!sl) {
-      sl = document.createElement('div'); sl.id = 'sortStatusLine';
-      sl.style.cssText = 'margin-top:8px;font-size:12px;color:#555;';
-      var btnDiv = document.querySelector('#tab-components > div:first-child');
-      if (btnDiv) btnDiv.parentNode.insertBefore(sl, btnDiv.nextSibling);
-    }
-    sl.textContent = ids.length + ': ' + ids.join(' - ');
- }
- 
  var componentTooltipCache = {};
-var componentTooltipEl = null;
-function createComponentTooltipEl() {
+ var componentTooltipEl = null;
+ function createComponentTooltipEl() {
   if (componentTooltipEl) return componentTooltipEl;
   componentTooltipEl = document.createElement('div');
   componentTooltipEl.id = 'componentTooltip';
   componentTooltipEl.style.cssText = 'display:none; position:fixed; background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:9999; max-width:500px; font-size:12px;';
   document.body.appendChild(componentTooltipEl);
   return componentTooltipEl;
-}
-function showComponentTooltip(e, compId) {
+ }
+ function showComponentTooltip(e, compId) {
   if (!compId) return;
   var el = createComponentTooltipEl();
   if (componentTooltipCache[compId]) { el.innerHTML = componentTooltipCache[compId]; el.style.display = 'block'; moveComponentTooltip(e); return; }
@@ -260,28 +256,29 @@ function showComponentTooltip(e, compId) {
     } else { html += '<p style="color:#888;">Нет материалов</p>'; }
     componentTooltipCache[compId] = html; el.innerHTML = html; moveComponentTooltip(e);
   }).catch(function(err) { el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; });
-}
-function moveComponentTooltip(e) {
+ }
+ function moveComponentTooltip(e) {
   if (!componentTooltipEl || componentTooltipEl.style.display === 'none') return;
   var x = e.clientX + 15, y = e.clientY + 15;
   if (x + componentTooltipEl.offsetWidth > window.innerWidth) x = e.clientX - componentTooltipEl.offsetWidth - 15;
   if (y + componentTooltipEl.offsetHeight > window.innerHeight) y = e.clientY - componentTooltipEl.offsetHeight - 15;
   componentTooltipEl.style.left = x + 'px'; componentTooltipEl.style.top = y + 'px';
-}
-function hideComponentTooltip() { if (componentTooltipEl) componentTooltipEl.style.display = 'none'; }
+ }
+ function hideComponentTooltip() { if (componentTooltipEl) componentTooltipEl.style.display = 'none'; }
 
-document.getElementById('addComponentBtn').addEventListener('click', function(){
+ document.getElementById('addComponentBtn').addEventListener('click', function(){
   if(typeof SystemCompModal !== 'undefined'){ SystemCompModal.open(null, function(){ loadComponents(); }); }
   else { setTimeout(function(){ document.getElementById('addComponentBtn').click(); }, 200); }
  });
-window.editSystemComponent=function(id){ if(typeof SystemCompModal !== 'undefined'){ SystemCompModal.open(id, function(){ loadComponents(); }); } };
-window.deleteSystemComponent=function(id){ if(!confirm('Удалить?')) return; fetch('/api/system-components/'+id, { method:'DELETE' }).then(loadComponents).catch(function(e){ alert(e.message); }); };
-document.getElementById('exportComponentsBtn').addEventListener('click', async function(){ var r=await fetch('/api/system-components/export'); var b=await r.blob(); var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='system_components.xlsx'; a.click(); });
-document.getElementById('importComponentsBtn').addEventListener('click', function(){ document.getElementById('importComponentsFile').click(); });
-document.getElementById('importComponentsFile').addEventListener('change', async function(){ var fd=new FormData(); fd.append('file', this.files[0]); await fetch('/api/system-components/import', { method:'POST', body:fd }); loadComponents(); this.value=''; });
-applyPermissions();
-loadComponents();
+ window.editSystemComponent=function(id){ if(typeof SystemCompModal !== 'undefined'){ SystemCompModal.open(id, function(){ loadComponents(); }); } };
+ window.deleteSystemComponent=function(id){ if(!confirm('Удалить?')) return; fetch('/api/system-components/'+id, { method:'DELETE' }).then(loadComponents).catch(function(e){ alert(e.message); }); };
+ document.getElementById('exportComponentsBtn').addEventListener('click', async function(){ var r=await fetch('/api/system-components/export'); var b=await r.blob(); var a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='system_components.xlsx'; a.click(); });
+ document.getElementById('importComponentsBtn').addEventListener('click', function(){ document.getElementById('importComponentsFile').click(); });
+ document.getElementById('importComponentsFile').addEventListener('change', async function(){ var fd=new FormData(); fd.append('file', this.files[0]); await fetch('/api/system-components/import', { method:'POST', body:fd }); loadComponents(); this.value=''; });
+ applyPermissions();
+ loadComponents();
 })();
+
 window.duplicateSystemComponent = function(id) {
   if (!confirm('Создать копию?')) return;
   fetch('/api/system-components/' + id + '/duplicate', { method: 'POST' })

@@ -17,59 +17,18 @@
  var user = JSON.parse(localStorage.getItem("user") || "null");
  var isAdmin = user && user.role === "admin";
  applyPermissions();
+
  function applyPermissions(){
   ["addModuleBtn","exportModulesBtn","importModulesBtn"].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = isAdmin ? "" : "none"; });
   var col = document.getElementById("modulesActionsCol");
   if(col) col.style.display = isAdmin ? "" : "none";
  }
+
  function esc(s){ var d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
- function updateStatusLine(ids) {
-   var sl = document.getElementById("sortStatusLine");
-   if (!sl) {
-     sl = document.createElement("div"); sl.id = "sortStatusLine";
-     sl.style.cssText = "margin-top:8px;font-size:12px;color:#555;";
-     var btnDiv = document.querySelector("#tab-modules > div:first-child");
-     if (btnDiv) btnDiv.parentNode.insertBefore(sl, btnDiv.nextSibling);
-   }
-   sl.textContent = ids.length + ": " + ids.join(" - ");
- }
- function loadModules(){
-   var tbody = document.getElementById("modulesBody");
-   if(!tbody) return;
-   fetch("/api/system-modules?_="+Date.now())
-   .then(function(r){ return r.json(); })
-   .then(function(data){
-     if(!data.length){ tbody.innerHTML = "<tr><td colspan=5>No modules</td></tr>"; return; }
-     var html = "";
-     for (var i = 0; i < data.length; i++) {
-       var item = data[i];
-       html += "<tr draggable=\"false\" data-id=\""+item.id+"\"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+esc(item.name)+"</td><td>"+esc(item.description||"")+"</td>";
-       if(isAdmin) html += "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editModule("+item.id+")\">\u270F\uFE0F</button> <button class=\"btn btn-sm btn-delete\" onclick=\"deleteModule("+item.id+")\">\uD83D\uDDD1\uFE0F</button></td>";
-       html += "</tr>";
-     }
-     tbody.innerHTML = html;
-     initDragAndSort();
-     initSortableHeaders();
-     loadSortFromDB();
-     updateStatusLine(data.map(function(x){return x.id;}));
-   }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=5>Error</td></tr>"; });
- }
- function initDragAndSort(){
-   var tbody = document.getElementById("modulesBody");
-   var table = tbody.closest("table");
-   if (!table || table.dataset.dragInit) return;
-   table.dataset.dragInit = "1";
+
+ function setupDragAndDrop(tbody) {
    var dragInfo = null;
-   tbody.addEventListener("mousedown", function(e) {
-     var handle = e.target.closest(".drag-handle");
-     if (!handle) return;
-     e.preventDefault();
-     var row = handle.closest("tr");
-     if (!row) return;
-     dragInfo = {row: row, startY: e.clientY};
-     row.style.opacity = "0.5";
-   });
-   document.addEventListener("mousemove", function(e) {
+   function onMouseMove(e) {
      if (!dragInfo) return;
      var rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
      var target = null;
@@ -82,22 +41,61 @@
        if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
        else tbody.insertBefore(dragInfo.row, target);
      }
-   });
-   document.addEventListener("mouseup", function() {
+   }
+   function onMouseUp() {
      if (!dragInfo) return;
      dragInfo.row.style.opacity = "";
-     var ids = [];
-     tbody.querySelectorAll("tr[data-id]").forEach(function(tr) { var id = parseInt(tr.dataset.id); if (id) ids.push(id); });
+     document.removeEventListener("mousemove", onMouseMove);
+     document.removeEventListener("mouseup", onMouseUp);
+
+     var ids = Array.from(tbody.querySelectorAll("tr[data-id]")).map(function(tr) {
+       return parseInt(tr.dataset.id);
+     }).filter(Boolean);
+
      localStorage.setItem("modules_order", JSON.stringify(ids));
-     updateStatusLine(ids);
      fetch("/api/table-sort/system-modules", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids}) }).catch(function(e){console.error(e);});
      fetch("/api/system-modules/reorder", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ids: ids}) }).catch(function(e){console.error(e);});
      dragInfo = null;
+   }
+
+   tbody.addEventListener("mousedown", function(e) {
+     var handle = e.target.closest(".drag-handle");
+     if (!handle) return;
+     e.preventDefault();
+     var row = handle.closest("tr");
+     if (!row) return;
+     dragInfo = {row: row, startY: e.clientY};
+     row.style.opacity = "0.5";
+     document.addEventListener("mousemove", onMouseMove);
+     document.addEventListener("mouseup", onMouseUp);
    });
  }
+
+ function loadModules(){
+   var tbody = document.getElementById("modulesBody");
+   if(!tbody) return;
+   fetch("/api/system-modules?_="+Date.now())
+   .then(function(r){ return r.json(); })
+   .then(function(data){
+     if(!data.length){ tbody.innerHTML = "<tr><td colspan=5>Нет модулей</td></tr>"; return; }
+     var html = "";
+     for (var i = 0; i < data.length; i++) {
+       var item = data[i];
+       html += "<tr draggable=\"false\" data-id=\""+item.id+"\"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+esc(item.name)+"</td><td>"+esc(item.description||"")+"</td>";
+       if(isAdmin) html += "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editModule("+item.id+")\">\u270F\uFE0F</button> <button class=\"btn btn-sm btn-delete\" onclick=\"deleteModule("+item.id+")\">\uD83D\uDDD1\uFE0F</button></td>";
+       html += "</tr>";
+     }
+     tbody.innerHTML = html;
+     setupDragAndDrop(tbody);
+     initSortableHeaders();
+     loadSortFromDB();
+   }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=5>Ошибка загрузки</td></tr>"; });
+ }
+
  function initSortableHeaders(){
    var tbody = document.getElementById("modulesBody");
    var thead = document.querySelector("#tab-modules thead tr");
+   if(!thead) return;
    thead.querySelectorAll("th[data-sort]").forEach(function(th) {
      th.style.cursor = "pointer";
      th.onclick = function() {
@@ -118,11 +116,11 @@
        });
        rows.forEach(function(row) { tbody.appendChild(row); });
        var ids = rows.map(function(r) { return parseInt(r.dataset.id); }).filter(Boolean);
-       updateStatusLine(ids);
        fetch("/api/table-sort/system-modules", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids, sort_key: k, sort_dir: s.dir}) }).catch(function(e){console.error(e);});
      };
    });
  }
+
  function loadSortFromDB(){
    var tbody = document.getElementById("modulesBody");
    fetch("/api/table-sort/system-modules").then(function(r){ return r.json(); }).then(function(saved){
@@ -131,31 +129,36 @@
          var row = tbody.querySelector("tr[data-id=\""+id+"\"]");
          if (row) tbody.appendChild(row);
        });
-       updateStatusLine(saved.sort_order);
      }
-   });
+   }).catch(function(e){ console.error(e); });
  }
+
  document.getElementById("addModuleBtn").addEventListener("click", function(){
    var name = prompt("Название:"); if (!name || !name.trim()) return;
    fetch("/api/system-modules", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name: name.trim()}) }).then(loadModules);
  });
+
  window.editModule = function(id){
    var name = prompt("Новое название:"); if (!name || !name.trim()) return;
    fetch("/api/system-modules/"+id, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name: name.trim()}) }).then(loadModules);
  };
+
  window.deleteModule = function(id){
    if(!confirm("Удалить?")) return;
    fetch("/api/system-modules/"+id, { method:"DELETE" }).then(loadModules);
  };
+
  document.getElementById("exportModulesBtn").addEventListener("click", async function(){
    var r = await fetch("/api/system-modules/export"); var b = await r.blob();
    var a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "modules.xlsx"; a.click();
  });
+
  document.getElementById("importModulesBtn").addEventListener("click", function(){ document.getElementById("importModulesFile").click(); });
  document.getElementById("importModulesFile").addEventListener("change", async function(){
    var fd = new FormData(); fd.append("file", this.files[0]);
    await fetch("/api/system-modules/import", { method:"POST", body:fd }); loadModules(); this.value="";
  });
+
  loadModules();
 })();
 </script>

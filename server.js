@@ -1,6 +1,10 @@
 // server.js
+require('dotenv').config();
+
 const express = require('express');
 const path = require('path');
+
+// Импорт роутеров
 const authRouter = require('./routes/auth');
 const projectsRouter = require('./routes/projects');
 const cabinetsRouter = require('./routes/cabinets');
@@ -13,17 +17,20 @@ const systemComponentsRouter = require('./routes/systemComponents');
 const systemComponentTypesRouter = require('./routes/systemComponentTypes');
 const systemParametersRouter = require('./routes/systemParameters');
 const systemParameterTypesRouter = require('./routes/systemParameterTypes');
+const systemModulesRouter = require('./routes/systemModules');
 const systemsRouter = require('./routes/systems');
 const materialsRouter = require('./routes/materials');
+const tableSortRouter = require('./routes/table-sort');
+
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '127.0.0.1';
 
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Middleware парсинга тела запросов с увеличенным лимитом для дампов и импорта Excel
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Статические файлы
 app.use(express.static(path.join(__dirname, 'public')));
@@ -41,18 +48,22 @@ app.use('/api/system-components', systemComponentsRouter);
 app.use('/api/system-component-types', systemComponentTypesRouter);
 app.use('/api/system-parameters', systemParametersRouter);
 app.use('/api/system-parameter-types', systemParameterTypesRouter);
-const systemModulesRouter = require("./routes/systemModules");
-app.use("/api/system-modules", systemModulesRouter);
+app.use('/api/system-modules', systemModulesRouter);
 app.use('/api/systems', systemsRouter);
 app.use('/api/materials', materialsRouter);
-app.use('/api/table-sort', require('./routes/table-sort'));
+app.use('/api/table-sort', tableSortRouter);
 
-// SPA fallback
+// Защита: ненайденные API роуты возвращают JSON 404, а не HTML страницу
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ message: 'API маршрут не найден' });
+});
+
+// SPA fallback (все остальные фронтенд-маршруты отдают index.html)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Обработчик ошибок
+// Глобальный обработчик ошибок
 app.use(errorHandler);
 
 app.listen(PORT, HOST, () => {

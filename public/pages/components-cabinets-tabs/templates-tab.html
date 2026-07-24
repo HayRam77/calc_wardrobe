@@ -17,24 +17,22 @@
  var user = JSON.parse(localStorage.getItem("user") || "null");
  var isAdmin = user && user.role === "admin";
  applyPermissions();
+
  function applyPermissions(){
   ["addTemplateBtn","exportTemplatesBtn","importTemplatesBtn"].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = isAdmin ? "" : "none"; });
   var col = document.getElementById("templatesActionsCol");
   if(col) col.style.display = isAdmin ? "" : "none";
  }
+
  function esc(s){ var d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
- function updateStatusLine(ids) {
-   var sl = document.getElementById("sortStatusLine");
-   if (!sl) { sl = document.createElement("div"); sl.id = "sortStatusLine"; sl.style.cssText = "margin-top:8px;font-size:12px;color:#555;"; var btnDiv = document.querySelector("#tab-templates > div:first-child"); if (btnDiv) btnDiv.parentNode.insertBefore(sl, btnDiv.nextSibling); }
-   sl.textContent = ids.length + ": " + ids.join(" - ");
- }
+
  function loadTemplates(){
    var tbody = document.getElementById("templatesBody");
    if(!tbody) return;
    fetch("/api/block-templates?_="+Date.now())
    .then(function(r){ return r.json(); })
    .then(function(data){
-     if(!data.length){ tbody.innerHTML = "<tr><td colspan=13>No templates</td></tr>"; return; }
+     if(!data.length){ tbody.innerHTML = "<tr><td colspan=13>Нет компонентов</td></tr>"; return; }
      var html = "";
      for (var i = 0; i < data.length; i++) {
        var item = data[i];
@@ -43,46 +41,60 @@
        html += "</tr>";
      }
      tbody.innerHTML = html;
-     updateStatusLine(data.map(function(x){return x.id;}));
-     initDrag();
+     setupDragAndDrop(tbody);
      initSort();
      initFilters();
      loadSortFromDB();
-   }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=13>Error</td></tr>"; });
+   }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=13>Ошибка загрузки</td></tr>"; });
  }
- function initDrag(){
-   var tbody = document.getElementById("templatesBody");
-   var table = tbody.closest("table");
-   if (!table || table.dataset.dragInit) return;
-   table.dataset.dragInit = "1";
+
+ function setupDragAndDrop(tbody){
    var dragInfo = null;
+   function onMouseMove(e) {
+     if (!dragInfo) return;
+     var rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
+     var target = null;
+     for (var i = 0; i < rows.length; i++) {
+       var rect = rows[i].getBoundingClientRect();
+       if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; }
+     }
+     if (target && target !== dragInfo.row) {
+       var ti = rows.indexOf(target), ri = rows.indexOf(dragInfo.row);
+       if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
+       else tbody.insertBefore(dragInfo.row, target);
+     }
+   }
+   function onMouseUp() {
+     if (!dragInfo) return;
+     dragInfo.row.style.opacity = "";
+     document.removeEventListener("mousemove", onMouseMove);
+     document.removeEventListener("mouseup", onMouseUp);
+
+     var ids = Array.from(tbody.querySelectorAll("tr[data-id]")).map(function(tr) {
+       return parseInt(tr.dataset.id);
+     }).filter(Boolean);
+
+     fetch("/api/table-sort/block-templates", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids}) }).catch(function(e){console.error(e);});
+     fetch("/api/block-templates/sort-order", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({items: ids.map(function(id,idx){return {id:id,position:idx};})}) }).catch(function(e){console.error(e);});
+     dragInfo = null;
+   }
+
    tbody.addEventListener("mousedown", function(e) {
      var handle = e.target.closest(".drag-handle"); if (!handle) return;
      e.preventDefault(); var row = handle.closest("tr"); if (!row) return;
      dragInfo = {row: row, startY: e.clientY}; row.style.opacity = "0.5";
-   });
-   document.addEventListener("mousemove", function(e) {
-     if (!dragInfo) return;
-     var rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
-     var target = null;
-     for (var i = 0; i < rows.length; i++) { var rect = rows[i].getBoundingClientRect(); if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; } }
-     if (target && target !== dragInfo.row) { var ti = rows.indexOf(target), ri = rows.indexOf(dragInfo.row); if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling); else tbody.insertBefore(dragInfo.row, target); }
-   });
-   document.addEventListener("mouseup", function() {
-     if (!dragInfo) return; dragInfo.row.style.opacity = "";
-     var ids = []; tbody.querySelectorAll("tr[data-id]").forEach(function(tr) { var id = parseInt(tr.dataset.id); if (id) ids.push(id); });
-     updateStatusLine(ids);
-     fetch("/api/table-sort/block-templates", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids}) }).catch(function(e){console.error(e);});
-     fetch("/api/block-templates/sort-order", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({items: ids.map(function(id,idx){return {id:id,position:idx};})}) }).catch(function(e){console.error(e);});
-     dragInfo = null;
+     document.addEventListener("mousemove", onMouseMove);
+     document.addEventListener("mouseup", onMouseUp);
    });
  }
+
  function initSort(){
    var tbody = document.getElementById("templatesBody");
    var thead = document.querySelector("#tab-templates thead tr");
+   if (!thead) return;
    thead.querySelectorAll("th[data-sort]").forEach(function(th) {
      th.style.cursor = "pointer";
-     th.onclick = function() {
+     th.onclick = function(event) {
        if (this.querySelector("[id*=FilterIcon]") && (event.target.closest("[id*=FilterIcon]") || event.target.closest("[id*=Dropdown]"))) return;
        var k = this.dataset.sort;
        var s = JSON.parse(localStorage.getItem("cab_templates_sort") || "{}");
@@ -99,14 +111,15 @@
        });
        rows.forEach(function(row) { tbody.appendChild(row); });
        var ids = rows.map(function(r) { return parseInt(r.dataset.id); }).filter(Boolean);
-       updateStatusLine(ids);
        fetch("/api/table-sort/block-templates", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids, sort_key: k, sort_dir: s.dir}) }).catch(function(e){console.error(e);});
      };
    });
  }
+
  var selectedTypes = JSON.parse(localStorage.getItem("cab_templates_type_filter") || "[]");
  var selectedNames = JSON.parse(localStorage.getItem("cab_templates_name_filter") || "[]");
  var selectedMans = JSON.parse(localStorage.getItem("cab_templates_man_filter") || "[]");
+
  function initFilters(){
    initFilter("typeDropdown", "typeFilterIcon", 2, selectedTypes, "cab_templates_type_filter");
    initFilter("nameDropdown", "nameFilterIcon", 3, selectedNames, "cab_templates_name_filter");
@@ -114,6 +127,7 @@
    rebuildFilters();
    applyAllFilters();
  }
+
  function initFilter(dropdownId, iconId, colIdx, selectedList, storageKey) {
    var dd = document.getElementById(dropdownId), icon = document.getElementById(iconId);
    if (!dd || !icon) return;
@@ -130,6 +144,7 @@
    });
    window._f = window._f || {}; window._f[dropdownId] = { dd: dd, icon: icon, colIdx: colIdx, selectedList: selectedList, storageKey: storageKey };
  }
+
  function rebuildFilters() {
    var tbody = document.getElementById("templatesBody");
    if (!tbody || !window._f) return;
@@ -140,6 +155,7 @@
      f.dd.querySelectorAll(".fcb-"+key).forEach(function(cb) { cb.addEventListener("change", function() { f.selectedList.length = 0; f.dd.querySelectorAll(".fcb-"+key+":checked").forEach(function(c) { f.selectedList.push(c.value); }); localStorage.setItem(f.storageKey, JSON.stringify(f.selectedList)); applyAllFilters(); f.icon.textContent = f.selectedList.length > 0 ? "\u2699\uFE0F" : "\u2699"; saveFilterToDB(); }); });
    });
  }
+
  function applyAllFilters() {
    var tb = document.getElementById("templatesBody"); if (!tb) return;
    tb.querySelectorAll("tr[data-id]").forEach(function(tr) {
@@ -150,19 +166,23 @@
      tr.style.display = "";
    });
  }
+
  function saveFilterToDB() { fetch("/api/table-sort/block-templates", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({filter_data: {types: selectedTypes, names: selectedNames, manufacturers: selectedMans}}) }).catch(function(e){console.error(e);}); }
+
  function loadSortFromDB(){
    var tbody = document.getElementById("templatesBody");
    fetch("/api/table-sort/block-templates").then(function(r){ return r.json(); }).then(function(saved){
-     if (saved && saved.sort_order && saved.sort_order.length > 0) { saved.sort_order.forEach(function(id) { var row = tbody.querySelector("tr[data-id=\""+id+"\"]"); if (row) tbody.appendChild(row); }); updateStatusLine(saved.sort_order); }
+     if (saved && saved.sort_order && saved.sort_order.length > 0) { saved.sort_order.forEach(function(id) { var row = tbody.querySelector("tr[data-id=\""+id+"\"]"); if (row) tbody.appendChild(row); }); }
    });
  }
+
  window.editTemplate = function(id){ if(typeof BlockTemplateModal !== "undefined"){ BlockTemplateModal.open(function(){ loadTemplates(); }, id); } };
- window.deleteTemplate = function(id){ if(!confirm("Delete?")) return; fetch("/api/block-templates/"+id, { method:"DELETE" }).then(loadTemplates); };
+ window.deleteTemplate = function(id){ if(!confirm("Удалить?")) return; fetch("/api/block-templates/"+id, { method:"DELETE" }).then(loadTemplates); };
  document.getElementById("addTemplateBtn").addEventListener("click", function(){ if(typeof BlockTemplateModal !== "undefined"){ BlockTemplateModal.open(function(){ loadTemplates(); }); } });
  document.getElementById("exportTemplatesBtn").addEventListener("click", async function(){ var r = await fetch("/api/block-templates/export"); var b = await r.blob(); var a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "block_templates.xlsx"; a.click(); });
  document.getElementById("importTemplatesBtn").addEventListener("click", function(){ document.getElementById("importTemplatesFile").click(); });
  document.getElementById("importTemplatesFile").addEventListener("change", async function(){ var fd = new FormData(); fd.append("file", this.files[0]); await fetch("/api/block-templates/import", { method:"POST", body:fd }); loadTemplates(); this.value=""; });
+
  loadTemplates();
 })();
 </script>

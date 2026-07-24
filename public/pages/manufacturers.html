@@ -28,7 +28,6 @@
 
 <script>
 (function() {
-    var token = localStorage.getItem('token');
     var user = JSON.parse(localStorage.getItem('user') || '{}');
     var isAdmin = user && user.role === 'admin';
     if (isAdmin) {
@@ -37,6 +36,50 @@
         document.getElementById('importBtn').style.display = '';
     }
     function escapeHtml(str) { var d=document.createElement('div');d.textContent=str||'';return d.innerHTML; }
+
+    function setupDragAndDrop(tbody) {
+        var dragInfo = null;
+        function onMouseMove(e) {
+            if (!dragInfo) return;
+            var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+            var target = null;
+            for (var i = 0; i < rows.length; i++) {
+                var rect = rows[i].getBoundingClientRect();
+                if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; }
+            }
+            if (target && target !== dragInfo.row) {
+                var ri = rows.indexOf(dragInfo.row), ti = rows.indexOf(target);
+                if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
+                else tbody.insertBefore(dragInfo.row, target);
+            }
+        }
+        function onMouseUp() {
+            if (!dragInfo) return;
+            dragInfo.row.style.opacity = '';
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            var items = [];
+            tbody.querySelectorAll('tr[data-id]').forEach(function(tr, idx) {
+                var id = parseInt(tr.dataset.id);
+                if (id) items.push({ id: id, position: idx });
+            });
+            fetch('/api/manufacturers/sort-order', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e) { console.error(e); });
+            dragInfo = null;
+        }
+
+        tbody.addEventListener('mousedown', function(e) {
+            var handle = e.target.closest('.drag-handle');
+            if (!handle) return;
+            e.preventDefault();
+            var row = handle.closest('tr');
+            if (!row) return;
+            dragInfo = { row: row, startY: e.clientY };
+            row.style.opacity = '0.5';
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    }
 
     async function loadManufacturers() {
         var container = document.getElementById('manufacturersTable');
@@ -48,91 +91,48 @@
             if (isAdmin) html += '<th>Действия</th>';
             html += '</tr></thead><tbody>';
             data.forEach(function(m) {
-                html += '<tr data-id="'+m.id+'"><td class="drag-handle" draggable="true">⠿</td><td>'+m.id+'</td><td>'+escapeHtml(m.name)+'</td><td>'+escapeHtml(m.country||'')+'</td><td>'+(m.website?'<a href="'+escapeHtml(m.website)+'" target="_blank">'+escapeHtml(m.website)+'</a>':'')+'</td>';
+                html += '<tr data-id="'+m.id+'"><td class="drag-handle" style="cursor:grab;">⠿</td><td>'+m.id+'</td><td>'+escapeHtml(m.name)+'</td><td>'+escapeHtml(m.country||'')+'</td><td>'+(m.website?'<a href="'+escapeHtml(m.website)+'" target="_blank">'+escapeHtml(m.website)+'</a>':'')+'</td>';
                 if (isAdmin) html += '<td><button class="btn btn-sm btn-edit" data-id="'+m.id+'">✏️</button> <button class="btn btn-sm btn-delete" data-id="'+m.id+'">🗑️</button></td>';
                 html += '</tr>';
             });
             html += '</tbody></table></div>';
             container.innerHTML = html;
 
-            // Клиентская сортировка + drag
             var manTable = container.querySelector('table');
             if (manTable) {
                 var manThead = manTable.querySelector('thead tr');
-                var manSortState = JSON.parse(localStorage.getItem('manufacturers_sort') || '{}');
-                var manSortKey = manSortState.key || null;
-                var manSortDir = manSortState.dir || 'asc';
                 var manTbody = manTable.querySelector('tbody');
                 
+                setupDragAndDrop(manTbody);
+
                 manThead.querySelectorAll('th').forEach(function(th, idx) {
                     if (idx === 1) th.dataset.sort = 'id';
                     else if (idx === 2) th.dataset.sort = 'name';
                     else if (idx === 3) th.dataset.sort = 'country';
                 });
-                
-                function applyManSort(key, dir) {
-                    if (!manTbody || !key) return;
-                    var rows = Array.from(manTbody.querySelectorAll('tr'));
-                    var colIdx = Array.from(manThead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === key; });
-                    if (colIdx < 0) return;
-                    rows.sort(function(a, b) {
-                        var va = (a.cells[colIdx]?.textContent || '').trim();
-                        var vb = (b.cells[colIdx]?.textContent || '').trim();
-                        var na = parseFloat(va.replace(/,/g, '.'));
-                        var nb = parseFloat(vb.replace(/,/g, '.'));
-                        if (!isNaN(na) && !isNaN(nb)) return dir === 'asc' ? na - nb : nb - na;
-                        return dir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
-                    });
-                    rows.forEach(function(row) { manTbody.appendChild(row); });
-                    manThead.querySelectorAll('th').forEach(function(th) {
-                        th.classList.remove('sorted-asc', 'sorted-desc');
-                        if (th.dataset.sort === key) th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
-                    });
-                }
-                
+
                 manThead.querySelectorAll('th[data-sort]').forEach(function(th) {
                     th.style.cursor = 'pointer';
                     th.addEventListener('click', function() {
                         var key = this.dataset.sort;
-                        if (manSortKey === key) { manSortDir = manSortDir === 'asc' ? 'desc' : 'asc'; }
-                        else { manSortKey = key; manSortDir = 'asc'; }
-                        localStorage.setItem('manufacturers_sort', JSON.stringify({key: manSortKey, dir: manSortDir}));
-                        applyManSort(manSortKey, manSortDir);
+                        var s = JSON.parse(localStorage.getItem('manufacturers_sort') || '{}');
+                        s.dir = s.key === key ? (s.dir === 'asc' ? 'desc' : 'asc') : 'asc';
+                        s.key = key;
+                        localStorage.setItem('manufacturers_sort', JSON.stringify(s));
+                        
+                        var rows = Array.from(manTbody.querySelectorAll('tr[data-id]'));
+                        var colIdx = Array.from(manThead.querySelectorAll('th')).findIndex(function(t) { return t.dataset.sort === key; });
+                        if (colIdx < 0) return;
+                        rows.sort(function(a, b) {
+                            var va = (a.cells[colIdx]?.textContent || '').trim();
+                            var vb = (b.cells[colIdx]?.textContent || '').trim();
+                            var na = parseFloat(va.replace(/,/g, '.')), nb = parseFloat(vb.replace(/,/g, '.'));
+                            if (!isNaN(na) && !isNaN(nb)) return s.dir === 'asc' ? na - nb : nb - na;
+                            return s.dir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+                        });
+                        rows.forEach(function(row) { manTbody.appendChild(row); });
                     });
                 });
-                
-                if (manSortKey) setTimeout(function() { applyManSort(manSortKey, manSortDir); }, 200);
-                
-                // Drag-and-drop
-                if (!manTable.dataset.dragInit) {
-                    manTable.dataset.dragInit = '1';
-                    var draggedRow = null;
-                    manTbody.addEventListener('dragstart', function(e) {
-                        var h2 = e.target.closest('.drag-handle');
-                        if (!h2) { e.preventDefault(); return; }
-                        draggedRow = h2.closest('tr');
-                        if (draggedRow) draggedRow.style.opacity = '0.5';
-                    });
-                    manTbody.addEventListener('dragend', function() { if (draggedRow) draggedRow.style.opacity = ''; draggedRow = null; });
-                    manTbody.addEventListener('dragover', function(e) { e.preventDefault(); });
-                    manTbody.addEventListener('drop', function(e) {
-                        e.preventDefault();
-                        var target = e.target.closest('tr');
-                        if (!target || !draggedRow || target === draggedRow) return;
-                        var rows = Array.from(manTbody.querySelectorAll('tr'));
-                        var from = rows.indexOf(draggedRow), to = rows.indexOf(target);
-                        if (from < 0 || to < 0) return;
-                        if (from < to) manTbody.insertBefore(draggedRow, target.nextSibling);
-                        else manTbody.insertBefore(draggedRow, target);
-                        var items = [];
-                        manTbody.querySelectorAll('tr').forEach(function(tr, idx) {
-                            var id = tr.dataset.id;
-                            if (id) items.push({ id: parseInt(id), position: idx });
-                        });
-                        fetch('/api/manufacturers/sort-order', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
-                        .catch(function(e) { console.error(e); });
-                    });
-                }
             }
 
             container.querySelectorAll('.btn-edit').forEach(function(b){b.addEventListener('click',function(){openManufacturerModal(this.dataset.id);});});

@@ -1,68 +1,65 @@
 <script>
 window.MaterialModal = {
     _cb: null,
-    _modal: null,
 
     open: function(callback, preselectedId) {
         this._cb = callback;
         var self = this;
         var isEdit = !!preselectedId;
 
-        if (!this._modal) {
-            var m = document.createElement('div');
-            m.className = 'modal';
-            m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:6000;';
-            m.innerHTML = '<div class="modal-content" style="max-width:95vw;max-height:90vh;overflow-y:auto;">' +
-                '<span class="modal-close">&times;</span>' +
-                '<h3 id="materialModalTitle">Добавить материал</h3>' +
-                '<form id="materialForm">' +
-                '<input type="hidden" id="materialId">' +
-                '<div class="form-group"><label>Сществующий материал</label><select id="existingMaterialSelect" style="width:100%;"><option value="">-- выберите или создайте новый --</option></select></div>' +
-                '<hr style="margin:15px 0;">' +
-                '<div class="form-group"><label>Артикул</label><input type="text" id="materialArticle"></div>' +
-                '<div class="form-group"><label>Название *</label><input type="text" id="materialName" required></div>' +
-                '<div class="form-group"><label>Производитель</label><select id="materialManufacturer"><option value="">-- без производителя --</option></select></div>' +
-                '<div class="form-group"><label>Описание</label><textarea id="materialDescription" rows="2"></textarea></div>' +
-                '<div class="form-group"><label>Ссылка на сайт производителя</label><input type="url" id="materialManufacturerUrl" placeholder="https://example.com"></div>' +
-                '<div class="form-row" style="display:flex;gap:10px;">' +
-                '<div class="form-group" style="flex:1;"><label>LN</label><input type="text" id="materialLn"></div>' +
-                '<div class="form-group" style="flex:1;"><label>TM</label><input type="text" id="materialTm"></div>' +
-                '</div>' +
-                '<div class="form-row" style="display:flex;gap:10px;">' +
-                '<div class="form-group" style="flex:1;"><label>Ед. изм.</label><input type="text" id="materialUnit" placeholder="штт, м, кг..."></div>' +
-                '<div class="form-group" style="flex:1;"><label>Цена, руб.</label><input type="number" id="materialPrice" step="0.01"></div>' +
-                '</div>' +
-                '<div id="materialError" class="error-message" style="display:none;"></div>' +
-                '<div class="form-actions">' +
-                '<button type="button" class="btn btn-secondary cancel-material-btn">Отмена</button>' +
-                '<button type="submit" class="btn btn-primary">Сохранить</button>' +
-                '</div>' +
-                '</form>' +
-                '</div>';
-            document.body.appendChild(m);
-            m.querySelector('.modal-close').addEventListener('click', function(){ m.style.display = 'none'; });
-            m.querySelector('.cancel-material-btn').addEventListener('click', function(){ m.style.display = 'none'; });
-            m.addEventListener('click', function(e){ if(e.target === m) m.style.display = 'none'; });
-            this._modal = m;
-        }
+        // Создаем модальное окно динамически
+        var m = document.createElement('div');
+        m.className = 'modal';
+        m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:6000;';
+        m.innerHTML = '<div class="modal-content" style="max-width:95vw;max-height:90vh;overflow-y:auto;width:600px;">' +
+            '<span class="modal-close">&times;</span>' +
+            '<h3 id="materialModalTitle">Добавить материал</h3>' +
+            '<form id="materialForm">' +
+            '<input type="hidden" id="materialId">' +
+            '<div class="form-group"><label for="existingMaterialSelect">Существующий материал</label><select id="existingMaterialSelect" class="form-control" style="width:100%;"><option value="">-- выберите или создайте новый --</option></select></div>' +
+            '<hr style="margin:15px 0;">' +
+            '<div class="form-group"><label for="materialArticle">Артикул</label><input type="text" id="materialArticle" class="form-control"></div>' +
+            '<div class="form-group"><label for="materialName">Название *</label><input type="text" id="materialName" class="form-control" required></div>' +
+            '<div class="form-group"><label for="materialManufacturer">Производитель</label><select id="materialManufacturer" class="form-control"><option value="">-- без производителя --</option></select></div>' +
+            '<div class="form-group"><label for="materialDescription">Описание</label><textarea id="materialDescription" class="form-control" rows="2"></textarea></div>' +
+            '<div class="form-group"><label for="materialManufacturerUrl">Ссылка на сайт производителя</label><input type="url" id="materialManufacturerUrl" class="form-control" placeholder="https://example.com"></div>' +
+            '<div class="form-row" style="display:flex;gap:10px;">' +
+            '<div class="form-group" style="flex:1;"><label for="materialLn">LN</label><input type="text" id="materialLn" class="form-control"></div>' +
+            '<div class="form-group" style="flex:1;"><label for="materialTm">TM</label><input type="text" id="materialTm" class="form-control"></div>' +
+            '</div>' +
+            '<div class="form-row" style="display:flex;gap:10px;">' +
+            '<div class="form-group" style="flex:1;"><label for="materialUnit">Ед. изм.</label><input type="text" id="materialUnit" class="form-control" placeholder="шт, м, кг..."></div>' +
+            '<div class="form-group" style="flex:1;"><label for="materialPrice">Цена, руб.</label><input type="number" id="materialPrice" class="form-control" step="0.01"></div>' +
+            '</div>' +
+            '<div id="materialError" class="error-message" style="display:none;color:red;margin-top:10px;"></div>' +
+            '<div class="form-actions" style="margin-top:15px;display:flex;gap:10px;justify-content:flex-end;">' +
+            '<button type="button" class="btn btn-secondary cancel-material-btn">Отмена</button>' +
+            '<button type="submit" class="btn btn-primary">Сохранить</button>' +
+            '</div>' +
+            '</form>' +
+            '</div>';
+        document.body.appendChild(m);
 
-        this._modal.style.display = 'block';
-        var form = document.getElementById('materialForm');
-        var title = document.getElementById('materialModalTitle');
-        var errorDiv = document.getElementById('materialError');
-        var existingSelect = document.getElementById('existingMaterialSelect');
+        var closeModal = function() { m.remove(); };
+        m.querySelector('.modal-close').addEventListener('click', closeModal);
+        m.querySelector('.cancel-material-btn').addEventListener('click', closeModal);
+        m.addEventListener('click', function(e){ if(e.target === m) closeModal(); });
+
+        var form = m.querySelector('#materialForm');
+        var title = m.querySelector('#materialModalTitle');
+        var errorDiv = m.querySelector('#materialError');
+        var existingSelect = m.querySelector('#existingMaterialSelect');
 
         function loadManufacturers(selectedId) {
             return fetch('/api/manufacturers')
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    var sel = document.getElementById('materialManufacturer');
+                    var sel = m.querySelector('#materialManufacturer');
                     sel.innerHTML = '<option value="">-- без производителя --</option>';
-                    data.forEach(function(m) {
-                        sel.innerHTML += '<option value="' + m.id + '">' + (m.name || '') + '</option>';
+                    data.forEach(function(man) {
+                        sel.innerHTML += '<option value="' + man.id + '">' + (man.name || '') + '</option>';
                     });
                     if (selectedId) sel.value = selectedId;
-                    return data;
                 });
         }
 
@@ -70,50 +67,47 @@ window.MaterialModal = {
             return fetch('/api/materials')
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    var sel = document.getElementById('existingMaterialSelect');
-                    sel.innerHTML = '<option value="">-- выберите или создайте новый --</option>';
-                    data.forEach(function(m) {
-                        var text = m.article ? m.article + ' - ' : '';
-                        text += m.name;
-                        if (m.manufacturer_name) text += ' (' + m.manufacturer_name + ')';
-                        sel.innerHTML += '<option value="' + m.id + '">' + text + '</option>';
+                    existingSelect.innerHTML = '<option value="">-- выберите или создайте новый --</option>';
+                    data.forEach(function(mat) {
+                        var text = mat.article ? mat.article + ' - ' : '';
+                        text += mat.name;
+                        if (mat.manufacturer_name) text += ' (' + mat.manufacturer_name + ')';
+                        existingSelect.innerHTML += '<option value="' + mat.id + '">' + text + '</option>';
                     });
                     if (selectedId) {
-                        sel.value = selectedId;
-                        sel.dispatchEvent(new Event('change'));
+                        existingSelect.value = selectedId;
                     }
-                    return data;
                 });
         }
 
         function fillMaterialData(material) {
             if (!material) return;
-            document.getElementById('materialId').value = material.id || '';
-            document.getElementById('materialArticle').value = material.article || '';
-            document.getElementById('materialName').value = material.name || '';
-            document.getElementById('materialDescription').value = material.description || '';
-            document.getElementById('materialUnit').value = material.unit || '';
-            document.getElementById('materialPrice').value = material.price || '';
-            document.getElementById('materialManufacturerUrl').value = material.manufacturer_url || '';
-            document.getElementById('materialLn').value = material.ln || '';
-            document.getElementById('materialTm').value = material.tm || '';
+            m.querySelector('#materialId').value = material.id || '';
+            m.querySelector('#materialArticle').value = material.article || '';
+            m.querySelector('#materialName').value = material.name || '';
+            m.querySelector('#materialDescription').value = material.description || '';
+            m.querySelector('#materialUnit').value = material.unit || '';
+            m.querySelector('#materialPrice').value = material.price || '';
+            m.querySelector('#materialManufacturerUrl').value = material.manufacturer_url || '';
+            m.querySelector('#materialLn').value = material.ln || '';
+            m.querySelector('#materialTm').value = material.tm || '';
             if (material.manufacturer_id) {
-                document.getElementById('materialManufacturer').value = material.manufacturer_id;
+                m.querySelector('#materialManufacturer').value = material.manufacturer_id;
             }
         }
 
         function clearForm() {
-            document.getElementById('materialId').value = '';
-            document.getElementById('materialArticle').value = '';
-            document.getElementById('materialName').value = '';
-            document.getElementById('materialDescription').value = '';
-            document.getElementById('materialUnit').value = '';
-            document.getElementById('materialPrice').value = '';
-            document.getElementById('materialManufacturerUrl').value = '';
-            document.getElementById('materialLn').value = '';
-            document.getElementById('materialTm').value = '';
-            document.getElementById('materialManufacturer').value = '';
-            document.getElementById('existingMaterialSelect').value = '';
+            m.querySelector('#materialId').value = '';
+            m.querySelector('#materialArticle').value = '';
+            m.querySelector('#materialName').value = '';
+            m.querySelector('#materialDescription').value = '';
+            m.querySelector('#materialUnit').value = '';
+            m.querySelector('#materialPrice').value = '';
+            m.querySelector('#materialManufacturerUrl').value = '';
+            m.querySelector('#materialLn').value = '';
+            m.querySelector('#materialTm').value = '';
+            m.querySelector('#materialManufacturer').value = '';
+            existingSelect.value = '';
             errorDiv.style.display = 'none';
         }
 
@@ -134,7 +128,7 @@ window.MaterialModal = {
                         errorDiv.style.display = 'block';
                     });
             } else {
-                title.textContent = 'Добавить материала';
+                title.textContent = 'Добавить материал';
                 clearForm();
             }
         });
@@ -145,8 +139,8 @@ window.MaterialModal = {
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         fillMaterialData(data);
-                        title.textContent = 'Редактировать материала';
-                        document.getElementById('materialName').focus();
+                        title.textContent = 'Редактировать материал';
+                        m.querySelector('#materialName').focus();
                     })
                     .catch(function(err) {
                         console.error(err);
@@ -155,38 +149,38 @@ window.MaterialModal = {
                     });
             } else {
                 clearForm();
-                title.textContent = 'Добавить материала';
-                document.getElementById('materialName').focus();
+                title.textContent = 'Добавить материал';
+                m.querySelector('#materialName').focus();
             }
         });
 
         form.onsubmit = function(e) {
             e.preventDefault();
-            var name = document.getElementById('materialName').value.trim();
+            var name = m.querySelector('#materialName').value.trim();
             if (!name) {
                 errorDiv.textContent = 'Введите название';
                 errorDiv.style.display = 'block';
                 return;
             }
 
-            var materialId = document.getElementById('materialId').value;
-            var existingId = document.getElementById('existingMaterialSelect').value;
+            var materialId = m.querySelector('#materialId').value;
+            var existingId = existingSelect.value;
             if (!materialId && existingId) {
-                self._modal.style.display = 'none';
+                closeModal();
                 if (self._cb) self._cb(parseInt(existingId));
                 return;
             }
 
             var body = {
-                article: document.getElementById('materialArticle').value.trim() || null,
+                article: m.querySelector('#materialArticle').value.trim() || null,
                 name: name,
-                manufacturer_id: document.getElementById('materialManufacturer').value || null,
-                description: document.getElementById('materialDescription').value.trim() || null,
-                unit: document.getElementById('materialUnit').value.trim() || null,
-                price: parseFloat(document.getElementById('materialPrice').value) || null,
-                manufacturer_url: document.getElementById('materialManufacturerUrl').value.trim() || null,
-                ln: document.getElementById('materialLn').value.trim() || null,
-                tm: document.getElementById('materialTm').value.trim() || null
+                manufacturer_id: m.querySelector('#materialManufacturer').value || null,
+                description: m.querySelector('#materialDescription').value.trim() || null,
+                unit: m.querySelector('#materialUnit').value.trim() || null,
+                price: parseFloat(m.querySelector('#materialPrice').value) || null,
+                manufacturer_url: m.querySelector('#materialManufacturerUrl').value.trim() || null,
+                ln: m.querySelector('#materialLn').value.trim() || null,
+                tm: m.querySelector('#materialTm').value.trim() || null
             };
 
             var url = materialId ? '/api/materials/' + materialId : '/api/materials';
@@ -194,7 +188,7 @@ window.MaterialModal = {
 
             fetch(url, {
                 method: method,
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             })
             .then(function(r){
@@ -202,9 +196,8 @@ window.MaterialModal = {
                 return r.json();
             })
             .then(function(data){
-                self._modal.style.display = 'none';
+                closeModal();
                 if (self._cb) self._cb(data.id);
-                loadExistingMaterials(data.id);
             })
             .catch(function(err){
                 errorDiv.textContent = err.message;

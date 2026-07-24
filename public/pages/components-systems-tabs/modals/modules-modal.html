@@ -1,5 +1,14 @@
 <form id="moduleForm">
-  <div class="form-group"><label>Название: <span style="color:red;">*</span></label><input type="text" id="moduleName" required></div>
-  <div class="form-group"><label>Описание:</label><textarea id="moduleDescription" rows="3"></textarea></div>
-  <div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal').style.display='none'">Отмена</button></div>
+  <div class="form-group">
+    <label for="moduleName">Название <span style="color:red;">*</span></label>
+    <input type="text" id="moduleName" class="form-control" required>
+  </div>
+  <div class="form-group">
+    <label for="moduleDescription">Описание</label>
+    <textarea id="moduleDescription" class="form-control" rows="3"></textarea>
+  </div>
+  <div class="form-actions" style="margin-top:15px;display:flex;gap:10px;justify-content:flex-end;">
+    <button type="button" class="btn btn-secondary" onclick="document.getElementById('modal').style.display='none'">Отмена</button>
+    <button type="submit" class="btn btn-primary">Сохранить</button>
+  </div>
 </form>

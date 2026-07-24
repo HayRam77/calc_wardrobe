@@ -7,22 +7,48 @@ const XLSX = require('xlsx');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Получение списка всех систем с агрегацией компонентов за 1 SQL-запрос
 router.get('/', auth, async (req, res) => {
   try {
-    const systems = await pool.query(`SELECT s.*, STRING_AGG(DISTINCT c.name, ', ') as cabinet_names, STRING_AGG(DISTINCT c.id::text, ',') as cabinet_ids FROM systems s LEFT JOIN cabinet_systems cs ON cs.system_id = s.id LEFT JOIN cabinets c ON cs.cabinet_id = c.id GROUP BY s.id ORDER BY COALESCE(s.position, 9999), s.name`);
-    const result = [];
-    for (const sys of systems.rows) {
-      const comps = await pool.query(`
-        SELECT scl.*, sc.name, sc.article, sc.ln, sc.tm, sct.name as type_name
-        FROM system_components_link scl
-        JOIN system_components sc ON scl.component_id = sc.id
-        LEFT JOIN system_component_types sct ON sc.type_id = sct.id
-        WHERE scl.system_id = $1 ORDER BY scl.position, sc.name
-      `, [sys.id]);
-      result.push({ ...sys, components: comps.rows });
-    }
-    res.json(result);
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+    const query = `
+      SELECT 
+        s.*, 
+        STRING_AGG(DISTINCT c.name, ', ') as cabinet_names, 
+        STRING_AGG(DISTINCT c.id::text, ',') as cabinet_ids,
+        COALESCE(
+          (
+            SELECT json_agg(
+              json_build_object(
+                'id', sc.id,
+                'link_id', scl.id,
+                'name', sc.name,
+                'article', sc.article,
+                'ln', COALESCE(ln.value, ''),
+                'tm', COALESCE(tm.value, ''),
+                'type_name', sct.name,
+                'position', scl.position
+              ) ORDER BY scl.position, sc.name
+            )
+            FROM system_components_link scl
+            JOIN system_components sc ON scl.component_id = sc.id
+            LEFT JOIN system_component_types sct ON sc.type_id = sct.id
+            LEFT JOIN ln_values ln ON ln.entity_type = 'system_component' AND ln.entity_id = sc.id
+            LEFT JOIN tm_values tm ON tm.entity_type = 'system_component' AND tm.entity_id = sc.id
+            WHERE scl.system_id = s.id
+          ), '[]'::json
+        ) as components
+      FROM systems s 
+      LEFT JOIN cabinet_systems cs ON cs.system_id = s.id 
+      LEFT JOIN cabinets c ON cs.cabinet_id = c.id 
+      GROUP BY s.id 
+      ORDER BY COALESCE(s.position, 9999), s.name
+    `;
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (err) { 
+    console.error('Ошибка получения систем:', err); 
+    res.status(500).json({ message: 'Ошибка получения систем' }); 
+  }
 });
 
 router.get('/export', auth, async (req, res) => {
@@ -57,17 +83,21 @@ router.put('/sort-order', auth, isAdmin, async (req, res) => {
     res.json({ message: 'ok' });
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
+
 router.get('/:id', auth, async (req, res) => {
   try {
     const sys = await pool.query('SELECT * FROM systems WHERE id = $1', [req.params.id]);
     if (sys.rows.length === 0) return res.status(404).json({ message: 'Не найдена' });
     const comps = await pool.query(`
-      SELECT scl.id as link_id, scl.*, sc.id, sc.name, sc.article, sc.type_id, sc.module_id, sc.ln, sc.tm,
+      SELECT scl.id as link_id, scl.*, sc.id, sc.name, sc.article, sc.type_id, sc.module_id, 
+             COALESCE(ln.value, '') AS ln, COALESCE(tm.value, '') AS tm,
              sct.name as type_name, sm.name as module_name
       FROM system_components_link scl
       JOIN system_components sc ON scl.component_id = sc.id
       LEFT JOIN system_component_types sct ON sc.type_id = sct.id
       LEFT JOIN system_modules sm ON sc.module_id = sm.id
+      LEFT JOIN ln_values ln ON ln.entity_type = 'system_component' AND ln.entity_id = sc.id
+      LEFT JOIN tm_values tm ON tm.entity_type = 'system_component' AND tm.entity_id = sc.id
       WHERE scl.system_id = $1 ORDER BY scl.position
     `, [req.params.id]);
     res.json({ ...sys.rows[0], components: comps.rows });
@@ -115,14 +145,7 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
     }
     await client.query('COMMIT');
     const sys = await pool.query('SELECT * FROM systems WHERE id=$1', [req.params.id]);
-    const comps = await pool.query(`
-      SELECT scl.*, sc.name, sc.article, sc.ln, sc.tm, sct.name as type_name
-      FROM system_components_link scl
-      JOIN system_components sc ON scl.component_id = sc.id
-      LEFT JOIN system_component_types sct ON sc.type_id = sct.id
-      WHERE scl.system_id = $1 ORDER BY scl.position
-    `, [req.params.id]);
-    res.json({ ...sys.rows[0], components: comps.rows });
+    res.json(sys.rows[0]);
   } catch (err) { await client.query('ROLLBACK'); console.error(err); res.status(500).json({ message: 'Ошибка' }); }
   finally { client.release(); }
 });
@@ -158,58 +181,40 @@ router.delete('/link/:id', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-
-// Копирование состава системы в другую (привязка компонентов без дублирования)
+// Копирование состава системы в другую
 router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const sourceId = req.params.sourceId;
     const targetId = req.params.targetId;
-    const cabinetId = req.body.cabinetId; // опционально
+    const cabinetId = req.body.cabinetId;
 
-    // Проверка существования систем
     const sourceSys = await client.query('SELECT id FROM systems WHERE id = $1', [sourceId]);
     const targetSys = await client.query('SELECT id FROM systems WHERE id = $1', [targetId]);
-    if (sourceSys.rows.length === 0) {
-      return res.status(404).json({ message: 'Исходная система не найдена' });
-    }
-    if (targetSys.rows.length === 0) {
-      return res.status(404).json({ message: 'Целевая система не найдена' });
+    if (sourceSys.rows.length === 0 || targetSys.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Система не найдена' });
     }
 
-    // Удаляем все существующие компоненты в целевой системе
-    await client.query(
-      'DELETE FROM system_components_link WHERE system_id = $1',
-      [targetId]
-    );
+    await client.query('DELETE FROM system_components_link WHERE system_id = $1', [targetId]);
 
-    // Копируем связи компонентов из исходной системы
     const result = await client.query(
       `INSERT INTO system_components_link (system_id, component_id, quantity, position)
        SELECT $2, component_id, quantity, position
-       FROM system_components_link
-       WHERE system_id = $1`,
+       FROM system_components_link WHERE system_id = $1`,
       [sourceId, targetId]
     );
 
-    // Если передан cabinetId, привязываем целевую систему к шкафу (если ещё нет)
     if (cabinetId) {
-      const existing = await client.query(
-        'SELECT id FROM cabinet_systems WHERE cabinet_id = $1 AND system_id = $2',
+      await client.query(
+        'INSERT INTO cabinet_systems (cabinet_id, system_id) VALUES ($1, $2) ON CONFLICT (cabinet_id, system_id) DO NOTHING',
         [cabinetId, targetId]
       );
-      if (existing.rows.length === 0) {
-        // Добавляем целевую систему в шкаф
-        await client.query(
-          'INSERT INTO cabinet_systems (cabinet_id, system_id) VALUES ($1, $2) ON CONFLICT (cabinet_id, system_id) DO NOTHING',
-          [cabinetId, targetId]
-        );
-      }
     }
 
     await client.query('COMMIT');
-    res.json({ message: 'Состав системы скопирован (добавлено/обновлено связей: ' + result.rowCount + ')' });
+    res.json({ message: 'Состав системы скопирован (добавлено связей: ' + result.rowCount + ')' });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
@@ -219,7 +224,7 @@ router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
   }
 });
 
-// ========== ОЧИСТКА ВСЕХ КОМПОНЕНТОВ СИСТЕМЫ ==========
+// Очистка всех компонентов системы
 router.delete('/:id/components', auth, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -230,9 +235,6 @@ router.delete('/:id/components', auth, isAdmin, async (req, res) => {
     res.status(500).json({ message: 'Ошибка очистки системы' });
   }
 });
-
-undefined
-
 
 // Добавить компонент в систему
 router.post('/:id/components', auth, isAdmin, async (req, res) => {
@@ -247,14 +249,11 @@ router.post('/:id/components', auth, isAdmin, async (req, res) => {
             [req.params.id, component_id, quantity || 1]
         );
         const status = result.rows[0].created_at === result.rows[0].updated_at ? 201 : 200;
-    res.status(status).json(result.rows[0]);
+        res.status(status).json(result.rows[0]);
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: 'Ошибка добавления компонента в систему' });
     }
 });
-
-module.exports = router;
-
 
 module.exports = router;

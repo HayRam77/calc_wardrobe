@@ -1,4 +1,3 @@
-
 <style>
 .sorted-asc::after { content: ' ▲'; font-size: 10px; }
 .sorted-desc::after { content: ' ▼'; font-size: 10px; }
@@ -41,6 +40,50 @@ th[data-sort]:hover { background-color: #e0e0e0; }
         return num.toFixed(2);
     }
 
+    function setupDragAndDrop(tbody) {
+        var dragInfo = null;
+        function onMouseMove(e) {
+            if (!dragInfo) return;
+            var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+            var target = null;
+            for (var i = 0; i < rows.length; i++) {
+                var rect = rows[i].getBoundingClientRect();
+                if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; }
+            }
+            if (target && target !== dragInfo.row) {
+                var ri = rows.indexOf(dragInfo.row), ti = rows.indexOf(target);
+                if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
+                else tbody.insertBefore(dragInfo.row, target);
+            }
+        }
+        function onMouseUp() {
+            if (!dragInfo) return;
+            dragInfo.row.style.opacity = '';
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            var items = [];
+            tbody.querySelectorAll('tr[data-id]').forEach(function(tr, idx) {
+                var id = parseInt(tr.dataset.id);
+                if (id) items.push({ id: id, position: idx });
+            });
+            fetch('/api/materials/sort-order', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e) { console.error(e); });
+            dragInfo = null;
+        }
+
+        tbody.addEventListener('mousedown', function(e) {
+            var handle = e.target.closest('.drag-handle');
+            if (!handle) return;
+            e.preventDefault();
+            var row = handle.closest('tr');
+            if (!row) return;
+            dragInfo = { row: row, startY: e.clientY };
+            row.style.opacity = '0.5';
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    }
+
     function loadManufacturers() {
         return fetch('/api/manufacturers')
             .then(function(r) { return r.json(); })
@@ -52,16 +95,6 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                 console.error('Ошибка загрузки производителей:', e);
                 return [];
             });
-    }
-
-    function buildManufacturerSelect(selectedId) {
-        var html = '<select id="materialManufacturer" class="form-control">';
-        html += '<option value="">-- бзе производителя --</option>';
-        allManufacturers.forEach(function(m) {
-            html += '<option value="' + m.id + '"' + (selectedId == m.id ? ' selected' : '') + '>' + esc(m.name) + '</option>';
-        });
-        html += '</select>';
-        return html;
     }
 
     function getManufacturerName(id) {
@@ -83,7 +116,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                 return;
             }
             var html = '<div class="table-container"><table class="data-table"><thead><tr>' +
-                '<th data-sort="id">ID</th><th data-sort="article">Артикул</th><th data-sort="name">Название</th><th data-sort="manufacturer">Производитель</th>' +
+                '<th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="article">Артикул</th><th data-sort="name">Название</th><th data-sort="manufacturer">Производитель</th>' +
                 '<th data-sort="description">Описание</th><th>Ссылка</th><th data-sort="ln">LN</th><th data-sort="tm">TM</th><th data-sort="unit">Ед. изм.</th><th data-sort="price">Цена, руб.</th>';
             if (isAdmin) html += '<th>Действия</th>';
             html += '</tr></thead><tbody>';
@@ -95,7 +128,8 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                 if (item.manufacturer_url) {
                     linkHtml = '<a href="' + esc(item.manufacturer_url) + '" target="_blank">🔧</a>';
                 }
-                html += '<tr>' +
+                html += '<tr data-id="' + item.id + '">' +
+                    '<td class="drag-handle" style="cursor:grab;">⠿</td>' +
                     '<td>' + item.id + '</td>' +
                     '<td>' + esc(item.article || '') + '</td>' +
                     '<td>' + esc(item.name) + '</td>' +
@@ -109,7 +143,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                 if (isAdmin) {
                     html += '<td>' +
                         '<button class="btn btn-sm btn-edit" data-id="' + item.id + '">✏️</button> ' +
-                        '<button class="btn btn-sm btn-delete" data-id="' + item.id + '">🗅️</button>' +
+                        '<button class="btn btn-sm btn-delete" data-id="' + item.id + '">🗑️</button>' +
                         '</td>';
                 }
                 html += '</tr>';
@@ -118,20 +152,21 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             html += '</tbody></table></div>';
             container.innerHTML = html;
 
-            // === СОРТИРОВКА С СОХРАНЕНИЕМ ===
             var table = container.querySelector('table');
             if (table) {
                 var tbody = table.querySelector('tbody');
+                setupDragAndDrop(tbody);
+
                 var headers = table.querySelectorAll('thead th[data-sort]');
                 var sortState = JSON.parse(localStorage.getItem('consumables_sort') || '{}');
                 var sortKey = sortState.key || null;
                 var sortDir = sortState.dir || 'asc';
 
                 function applySort(key, dir) {
-                    var rows = Array.from(tbody.querySelectorAll('tr'));
+                    var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
                     rows.sort(function(a, b) {
-                        var idA = parseInt(a.cells[0].textContent);
-                        var idB = parseInt(b.cells[0].textContent);
+                        var idA = parseInt(a.dataset.id);
+                        var idB = parseInt(b.dataset.id);
                         var itemA = data.find(function(x) { return x.id == idA; });
                         var itemB = data.find(function(x) { return x.id == idB; });
                         if (!itemA || !itemB) return 0;
@@ -178,8 +213,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                             if (id) loadMaterials();
                         }, this.dataset.id);
                     } else {
-                        console.error('MaterialModal не загружен');
-                        alert('Модальное окно не загружено. Обновите страницу. ');
+                        alert('Модальное окно не загружено. Обновите страницу.');
                     }
                 });
             });
@@ -206,8 +240,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                 if (id) loadMaterials();
             }, null, allManufacturers);
         } else {
-            alert('Модальное окно не загружено. Подждите...');
-            console.error('MaterialModal не загружен');
+            alert('Модальное окно не загружено. Подождите...');
         }
     });
 

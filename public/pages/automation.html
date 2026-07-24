@@ -32,11 +32,59 @@
     }
     function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
     var modal = document.getElementById('modal'), modalTitle = document.getElementById('modalTitle'), modalForm = document.getElementById('modalForm');
-    document.querySelector('.close-modal').addEventListener('click', function() { modal.style.display = 'none'; });
-    window.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
+    modal.querySelector('.close-modal').addEventListener('click', function() { modal.style.display = 'none'; });
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
+
     var sysSortState = JSON.parse(localStorage.getItem('systems_sort') || '{}');
     var sysSortKey = sysSortState.key || null, sysSortDir = sysSortState.dir || 'asc';
     var selectedCabinets = JSON.parse(localStorage.getItem('systems_filter')||'[]');
+
+    function setupDragAndDrop(tbody) {
+        var dragInfo = null;
+        function onMouseMove(e) {
+            if (!dragInfo) return;
+            var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+            var target = null;
+            for (var i = 0; i < rows.length; i++) {
+                var rect = rows[i].getBoundingClientRect();
+                if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; }
+            }
+            if (target && target !== dragInfo.row) {
+                var ti = rows.indexOf(target), ri = rows.indexOf(dragInfo.row);
+                if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
+                else tbody.insertBefore(dragInfo.row, target);
+            }
+        }
+        function onMouseUp() {
+            if (!dragInfo) return;
+            dragInfo.row.style.opacity = '';
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            var items = [], ids = [];
+            tbody.querySelectorAll('tr[data-id]').forEach(function(tr, idx) {
+                var id = parseInt(tr.dataset.id);
+                if (id) { items.push({ id: id, position: idx }); ids.push(id); }
+            });
+            localStorage.setItem('systems_order', JSON.stringify(ids));
+            fetch('/api/table-sort/systems', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sort_order: ids }) }).catch(function(e){ console.error(e); });
+            fetch('/api/systems/sort-order', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e){ console.error(e); });
+            dragInfo = null;
+        }
+
+        tbody.addEventListener('mousedown', function(e) {
+            var handle = e.target.closest('.drag-handle');
+            if (!handle) return;
+            e.preventDefault();
+            var row = handle.closest('tr');
+            if (!row) return;
+            dragInfo = { row: row, startY: e.clientY };
+            row.style.opacity = '0.5';
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    }
+
     function renderSystems(data) {
         var tbody = document.getElementById('systemsBody');
         var filtered = data;
@@ -49,10 +97,13 @@
         if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="6">Нет систем</td></tr>'; return; }
         tbody.innerHTML = filtered.map(function(s) {
             var cabHtml = (s.cabinet_names||'').split(', ').filter(Boolean).map(function(n,i){var ids=(s.cabinet_ids||'').split(',');return '<a href="/cabinet/'+(ids[i]||'')+'" target="_blank" style="color:#1a5f7a;">'+esc(n)+'</a>';}).join(', ')||'-';
-            return '<tr data-id="'+s.id+'"><td class="drag-handle" draggable="true">⠿</td><td>'+s.id+'</td><td>'+cabHtml+'</td><td><a href="#" style="color:#1a5f7a;text-decoration:underline;cursor:pointer;" onclick="openSystemModal('+s.id+')">'+esc(s.name)+'</a></td><td>'+esc(s.description||'')+'</td>' +
+            return '<tr data-id="'+s.id+'"><td class="drag-handle" style="cursor:grab;">⠿</td><td>'+s.id+'</td><td>'+cabHtml+'</td><td><a href="#" style="color:#1a5f7a;text-decoration:underline;cursor:pointer;" onclick="openSystemModal('+s.id+')">'+esc(s.name)+'</a></td><td>'+esc(s.description||'')+'</td>' +
                 (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')">🗑️</button></td>' : '') + '</tr>';
         }).join('');
+
+        setupDragAndDrop(tbody);
     }
+
     function loadSystems() {
         Promise.all([
             fetch('/api/systems').then(function(r) { return r.json(); }),
@@ -62,13 +113,10 @@
             var saved = results[1] || {};
             if (!data.length) { document.getElementById('systemsBody').innerHTML = '<tr><td colspan="6">Нет систем</td></tr>'; return; }
             window._systemsData = data;
-            setTimeout(function(){ initSystemsDrag(); }, 200);
             
-            // Восстановление фильтра
             if (saved.filter_data && saved.filter_data.cabinets) {
                 selectedCabinets = saved.filter_data.cabinets;
             }
-            // Восстановление сортировки
             if (saved.sort_key) {
                 sysSortKey = saved.sort_key;
                 sysSortDir = saved.sort_dir || 'asc';
@@ -76,7 +124,6 @@
             
             buildCabinetDropdown(data);
             
-            // Восстановление порядка
             var savedOrder = saved.sort_order || [];
             if (savedOrder.length > 0) {
                 var dataMap = {};
@@ -87,12 +134,9 @@
                 data = ordered;
             }
             renderSystems(data);
-            var ids = data.map(function(x){return x.id;});
-            var sl = document.getElementById("sortStatusLine");
-            if(!sl){sl=document.createElement("div");sl.id="sortStatusLine";sl.style.cssText="margin-top:8px;font-size:12px;color:#555;";var btnDiv=document.querySelector(".page-content > div:first-child");if(btnDiv)btnDiv.parentNode.insertBefore(sl,btnDiv.nextSibling);}
-            sl.textContent=ids.length+": "+ids.join(" - ");
         });
     }
+
     function buildCabinetDropdown(data) {
         var allCabinets = [];
         data.forEach(function(s) {
@@ -116,16 +160,19 @@
             cb.addEventListener('click', function(e) { e.stopPropagation(); });
         });
     }
+
     function updateFilterBadge() {
         var badge = document.getElementById('filterBadge');
         var icon = document.getElementById('cabinetFilterIcon');
         if (selectedCabinets.length > 0) { badge.style.display = ''; badge.textContent = 'Выбрано: ' + selectedCabinets.length; icon.textContent = '⚙️'; }
         else { badge.style.display = 'none'; icon.textContent = '⚙'; }
     }
+
     var filterIcon = document.getElementById('cabinetFilterIcon');
     var dropdown = document.getElementById('cabinetDropdown');
     filterIcon.addEventListener('click', function(e) { e.stopPropagation(); dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none'; });
     document.addEventListener('click', function() { dropdown.style.display = 'none'; });
+
     var table = document.getElementById('systemsTable');
     table.querySelectorAll('th[data-sort]').forEach(function(th) {
         th.style.cursor = 'pointer';
@@ -147,25 +194,26 @@
             renderSystems(data);
             var sortedIds = data.map(function(item){return item.id;});
             localStorage.setItem('systems_order', JSON.stringify(sortedIds));
-            var sl = document.getElementById('sortStatusLine');
-            if(sl) sl.textContent = sortedIds.length + ': ' + sortedIds.join(' - ');
             fetch('/api/table-sort/systems',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sort_order:sortedIds, sort_key:sysSortKey, sort_dir:sysSortDir})}).catch(function(e){console.error(e);});
 
             table.querySelectorAll('th').forEach(function(h) { h.classList.remove('sorted-asc', 'sorted-desc'); });
             th.classList.add(sysSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
         });
     });
+
     document.getElementById('addSystemBtn').addEventListener('click', function() { openSystemForm(); });
+
     function openSystemForm(sys) {
         var isEdit = !!sys;
         var h = '<input type="hidden" id="sysId" value="' + (sys ? sys.id : '') + '">';
         h += '<div class="form-group"><label>Название *</label><input type="text" id="sysName" value="' + esc(sys ? sys.name : '') + '" required></div>';
         h += '<div class="form-group"><label>Описание</label><textarea id="sysDesc" rows="2">' + esc(sys ? sys.description || '' : '') + '</textarea></div>';
-            h += '<div class="form-group"><label>Шкафы</label><div style="display:flex;gap:5px;margin-bottom:5px;"><input type="text" id="newCabinetName" placeholder="Новый шкаф" style="flex:1;"><select id="newCabinetProject" style="width:130px;"><option value="">Проект</option></select><button type="button" id="addCabinetBtn" class="btn btn-sm btn-primary">+ Создать</button></div><select id="cabinetSelect" multiple style="width:100%;height:100px;"><option value="">Загрузка...</option></select></div>';
+        h += '<div class="form-group"><label>Шкафы</label><div style="display:flex;gap:5px;margin-bottom:5px;"><input type="text" id="newCabinetName" placeholder="Новый шкаф" style="flex:1;"><select id="newCabinetProject" style="width:130px;"><option value="">Проект</option></select><button type="button" id="addCabinetBtn" class="btn btn-sm btn-primary">+ Создать</button></div><select id="cabinetSelect" multiple style="width:100%;height:100px;"><option value="">Загрузка...</option></select></div>';
         modalTitle.textContent = isEdit ? 'Редактировать систему' : 'Добавить систему';
         modalForm.innerHTML = h + '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>';
         modal.style.display = 'flex';
-            setTimeout(function(){
+        
+        setTimeout(function(){
             fetch('/api/projects').then(function(r){return r.json()}).then(function(projects){
                 var ps=document.getElementById('newCabinetProject');
                 if(ps){ps.innerHTML='<option value="">Проект</option>';projects.forEach(function(p){ps.innerHTML+='<option value="'+p.id+'">'+esc(p.name)+'</option>';});}
@@ -189,7 +237,8 @@
                     document.getElementById('newCabinetName').value='';
                 }).catch(function(e){alert(e.message)});
             };
-            }, 100);
+        }, 100);
+
         modalForm.onsubmit = function(e) {
             e.preventDefault();
             var name = document.getElementById('sysName').value.trim();
@@ -203,6 +252,7 @@
                 .catch(function(e) { alert(e.message); });
         };
     }
+
     window.editSystem = function(id) { fetch('/api/systems/' + id).then(function(r) { return r.json(); }).then(function(s) { openSystemForm(s); }); };
 
     window.openSystemModal = function(sysId) {
@@ -283,60 +333,13 @@
             }, false, null);
         }
     }
+
     window.deleteSystem = function(id) { if (!confirm('Удалить?')) return; fetch('/api/systems/' + id, { method: 'DELETE' }).then(loadSystems); };
     document.getElementById('exportBtn').addEventListener('click', async function() { var r = await fetch('/api/systems/export'); var b = await r.blob(); var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'systems.xlsx'; a.click(); });
     document.getElementById('importBtn').addEventListener('click', function() { document.getElementById('importFile').click(); });
     document.getElementById('importFile').addEventListener('change', async function() { var fd = new FormData(); fd.append('file', this.files[0]); await fetch('/api/systems/import', { method: 'POST', body: fd }); loadSystems(); this.value = ''; });
-    function initSystemsDrag(){
-        var table=document.getElementById('systemsTable');
-        if(!table) return;
-        var tbody=table.querySelector('tbody');
-        if(!tbody) return;
-        
-        var dragInfo=null;
-        
-        tbody.addEventListener('mousedown',function(e){
-            var handle=e.target.closest('.drag-handle');
-            if(!handle) return;
-            e.preventDefault();
-            var row=handle.closest('tr');
-            if(!row) return;
-            dragInfo={row:row, startY:e.clientY};
-            row.style.opacity='0.5';
-        });
-        
-        document.addEventListener('mousemove',function(e){
-            if(!dragInfo) return;
-            var rows=Array.from(tbody.querySelectorAll('tr'));
-            var target=null;
-            for(var i=0;i<rows.length;i++){
-                var rect=rows[i].getBoundingClientRect();
-                if(e.clientY>rect.top && e.clientY<rect.bottom){target=rows[i];break;}
-            }
-            if(target && target!==dragInfo.row){
-                var ti=rows.indexOf(target), ri=rows.indexOf(dragInfo.row);
-                if(ri<ti) tbody.insertBefore(dragInfo.row,target.nextSibling);
-                else tbody.insertBefore(dragInfo.row,target);
-            }
-        });
-        
-        document.addEventListener('mouseup',function(){
-            if(!dragInfo) return;
-            dragInfo.row.style.opacity='';
-            var items=[], ids=[];
-            tbody.querySelectorAll('tr[data-id]').forEach(function(tr,idx){
-                var id=parseInt(tr.dataset.id);
-                if(id){items.push({id:id,position:idx});ids.push(id);}
-            });
-            localStorage.setItem('systems_order', JSON.stringify(ids));
-            var sl = document.getElementById('sortStatusLine');
-            if(sl) sl.textContent = ids.length + ': ' + ids.join(' - ');
-            fetch('/api/table-sort/systems',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sort_order:ids})}).catch(function(e){console.error(e);});
-            fetch('/api/systems/sort-order',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:items})}).catch(function(e){console.error(e);});
-            dragInfo=null;
-        });
-    }
 
+    loadSystems();
     window.pageInit = function() { loadSystems(); };
 })();
 </script>

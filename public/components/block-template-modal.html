@@ -1,60 +1,63 @@
 <script>
 window.BlockTemplateModal = {
-    _modal: null, _cb: null, _preselectedId: null,
-    open: function(callback, preselectedId) {
-        this._cb = callback; this._preselectedId = preselectedId || null; var self = this;
-        if (!this._modal) {
-            var m = document.createElement('div'); m.className = 'modal';
-            m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3000;';
-            m.innerHTML = '<div class="modal-content" style="max-width:95vw;max-height:90vh;overflow-y:auto;"><span class="modal-close">&times;</span><h3 id="blockModalTitle">Добавить компонент шкафа</h3><form id="blockTemplateForm"><input type="hidden" id="blockTemplateId"></form></div>';
-            document.body.appendChild(m);
-            m.querySelector('.modal-close').addEventListener('click', function(){ m.style.display = 'none'; });
-            m.addEventListener('click', function(e){ if(e.target === m) m.style.display = 'none'; });
+    _cb: null, 
+    _preselectedId: null,
 
-            this._modal = m;
-        }
-        this._modal.style.display = 'flex'; this._modal.style.zIndex = '6000';
-        var f = document.getElementById('blockTemplateForm'); f.innerHTML = '';
+    open: function(callback, preselectedId) {
+        this._cb = callback; 
+        this._preselectedId = preselectedId || null; 
         var self = this;
-        setTimeout(function() {
-            var cancelBtn = self._modal.querySelector('.cancel-block-btn');
-            if (cancelBtn) cancelBtn.onclick = function(){ self._modal.style.display = 'none'; };
-        }, 100);
+
+        // Создаем окно динамически для предотвращения дублирования событий
+        var m = document.createElement('div'); 
+        m.className = 'modal';
+        m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:6000;';
+        m.innerHTML = '<div class="modal-content" style="max-width:95vw;max-height:90vh;overflow-y:auto;"><span class="modal-close">&times;</span><h3 id="blockModalTitle">Добавить компонент шкафа</h3><form id="blockTemplateForm"><input type="hidden" id="blockTemplateId"></form></div>';
+        document.body.appendChild(m);
+
+        var closeModal = function() { m.remove(); };
+        m.querySelector('.modal-close').addEventListener('click', closeModal);
+        m.addEventListener('click', function(e){ if(e.target === m) closeModal(); });
+
+        var f = m.querySelector('#blockTemplateForm');
+
         fetch('/api/manufacturers').then(function(r){ return r.json(); }).then(function(manufacturers){
-            var h = '<div class="form-group"><label>Существующий компонент</label><select id="existingBlockSelect" style="width:100%;"><option value="">-- выберите или создайте новый --</option></select></div>';
-            h += '<div class="form-row"><div class="form-group"><label>Тип</label><div id="blockTypeContainer"></div></div>';
-            h += '<div class="form-group"><label>Производитель</label><select id="blockManufacturer"><option value="">-- Производитель --</option>';
-            manufacturers.forEach(function(m){ h += '<option value="'+m.id+'">'+m.name+'</option>'; });
+            var h = '<div class="form-group"><label for="existingBlockSelect">Существующий компонент</label><select id="existingBlockSelect" class="form-control" style="width:100%;"><option value="">-- выберите или создайте новый --</option></select></div>';
+            h += '<div class="form-row" style="display:flex;gap:10px;"><div class="form-group" style="flex:1;"><label for="blockType">Тип</label><div id="blockTypeContainer"></div></div>';
+            h += '<div class="form-group" style="flex:1;"><label for="blockManufacturer">Производитель</label><select id="blockManufacturer" class="form-control"><option value="">-- Производитель --</option>';
+            manufacturers.forEach(function(man){ h += '<option value="'+man.id+'">'+man.name+'</option>'; });
             h += '</select></div></div>';
-            h += '<div class="form-row"><div class="form-group"><label>Название *</label><input type="text" id="blockName" required></div><div class="form-group"><label>Артикул</label><input type="text" id="blockArticle"></div></div>';
-            h += '<div class="form-row"><div class="form-group"><label>Цена, руб.</label><input type="number" id="blockPrice" step="0.01"></div><div class="form-group"><label>Вес, гр.</label><input type="number" id="blockWeight" step="0.01"></div></div>';
-            h += '<div class="form-row"><div class="form-group"><label>Мощность, Вт</label><input type="number" id="blockPower" step="0.01"></div><div class="form-group"><label>LN</label><input type="text" id="blockLn"></div></div>';
-            h += '<div class="form-row"><div class="form-group"><label>TM</label><input type="text" id="blockTm"></div></div>';
-            h += '<div class="form-group"><label>Ссылка</label><input type="url" id="blockUrl"></div>';
-            h += '<div class="form-group"><label>Описание</label><textarea id="blockDescription" rows="2"></textarea></div>';
-            h += '<h4>Параметры</h4><div id="blockParamsContainer"></div><button type="button" id="addBlockParamBtn" class="btn btn-sm btn-secondary">+ Добавить параметр</button>';
+            h += '<div class="form-row" style="display:flex;gap:10px;"><div class="form-group" style="flex:1;"><label for="blockName">Название *</label><input type="text" id="blockName" class="form-control" required></div><div class="form-group" style="flex:1;"><label for="blockArticle">Артикул</label><input type="text" id="blockArticle" class="form-control"></div></div>';
+            h += '<div class="form-row" style="display:flex;gap:10px;"><div class="form-group" style="flex:1;"><label for="blockPrice">Цена, руб.</label><input type="number" id="blockPrice" class="form-control" step="0.01"></div><div class="form-group" style="flex:1;"><label for="blockWeight">Вес, гр.</label><input type="number" id="blockWeight" class="form-control" step="0.01"></div></div>';
+            h += '<div class="form-row" style="display:flex;gap:10px;"><div class="form-group" style="flex:1;"><label for="blockPower">Мощность, Вт</label><input type="number" id="blockPower" class="form-control" step="0.01"></div><div class="form-group" style="flex:1;"><label for="blockLn">LN</label><input type="text" id="blockLn" class="form-control"></div></div>';
+            h += '<div class="form-row" style="display:flex;gap:10px;"><div class="form-group" style="flex:1;"><label for="blockTm">TM</label><input type="text" id="blockTm" class="form-control"></div></div>';
+            h += '<div class="form-group"><label for="blockUrl">Ссылка</label><input type="url" id="blockUrl" class="form-control"></div>';
+            h += '<div class="form-group"><label for="blockDescription">Описание</label><textarea id="blockDescription" class="form-control" rows="2"></textarea></div>';
+            h += '<h4>Параметры</h4><div id="blockParamsContainer"></div><button type="button" id="addBlockParamBtn" class="btn btn-sm btn-secondary" style="margin-bottom:15px;">+ Добавить параметр</button>';
             h += '<div class="form-group"><label>Материалы компонента шкафа</label><div id="blockMaterialsList" style="margin-bottom:5px;"></div><button type="button" class="btn btn-sm btn-primary" id="addBlockMaterialBtn">+ Добавить материал</button></div>';
-            h += '<div style="margin-top:15px;"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary cancel-block-btn">Отмена</button></div>';
+            h += '<div style="margin-top:15px;display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary cancel-block-btn">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';
             f.innerHTML = h;
 
+            f.querySelector('.cancel-block-btn').onclick = closeModal;
+
             fetch('/api/component-types').then(function(r){ return r.json(); }).then(function(types){
-                var container = document.getElementById('blockTypeContainer');
+                var container = m.querySelector('#blockTypeContainer');
                 if (container) {
-                    var sel = document.createElement('select'); sel.id = 'blockType'; sel.style.width = '100%';
+                    var sel = document.createElement('select'); sel.id = 'blockType'; sel.className = 'form-control'; sel.style.width = '100%';
                     sel.innerHTML = '<option value="">-- Тип --</option>';
                     types.forEach(function(t){ sel.innerHTML += '<option value="'+t.id+'">'+t.name+'</option>'; });
                     container.appendChild(sel);
                 }
-                if (self._preselectedId) setTimeout(function(){ self._loadData(self._preselectedId); }, 50);
-                // Инициализируем обработчики материалов
-                self._initMaterialHandlers(self._preselectedId || 0);
-            self._addParamRow(null, null);
-            var addParamBtn = document.getElementById('addBlockParamBtn');
-            if (addParamBtn) addParamBtn.addEventListener('click', function(){ self._addParamRow(null, null); });
+                if (self._preselectedId) self._loadData(m, self._preselectedId);
+                self._initMaterialHandlers(m, self._preselectedId || 0);
+                self._addParamRow(m, null, null);
+
+                var addParamBtn = m.querySelector('#addBlockParamBtn');
+                if (addParamBtn) addParamBtn.addEventListener('click', function(){ self._addParamRow(m, null, null); });
             });
 
             fetch('/api/block-templates').then(function(r){ return r.json(); }).then(function(blocks){
-                var sel = document.getElementById('existingBlockSelect');
+                var sel = m.querySelector('#existingBlockSelect');
                 if (sel) {
                     blocks.forEach(function(b){
                         var opt = document.createElement('option'); opt.value = b.id;
@@ -63,29 +66,29 @@ window.BlockTemplateModal = {
                     });
                     sel.addEventListener('change', function(){
                         var val = this.value;
-                        if (val) self._loadData(val); else self._clearForm();
+                        if (val) self._loadData(m, val); else self._clearForm(m);
                     });
                 }
             });
 
             f.addEventListener('submit', function(e){
                 e.preventDefault();
-                var id = document.getElementById('blockTemplateId')?.value;
-                var name = document.getElementById('blockName')?.value?.trim();
-                var article = document.getElementById('blockArticle')?.value?.trim();
-                var manufacturer_id_str = document.getElementById('blockManufacturer')?.value || '';
-                var type_id_str = document.getElementById('blockType')?.value || '';
+                var id = m.querySelector('#blockTemplateId')?.value;
+                var name = m.querySelector('#blockName')?.value?.trim();
+                var article = m.querySelector('#blockArticle')?.value?.trim();
+                var manufacturer_id_str = m.querySelector('#blockManufacturer')?.value || '';
+                var type_id_str = m.querySelector('#blockType')?.value || '';
                 var manufacturer_id = manufacturer_id_str ? parseInt(manufacturer_id_str) : null;
                 var type_id = type_id_str ? parseInt(type_id_str) : null;
-                var price = parseFloat(document.getElementById('blockPrice')?.value) || 0;
-                var weight = parseFloat(document.getElementById('blockWeight')?.value) || 0;
-                var power = parseFloat(document.getElementById('blockPower')?.value) || 0;
-                var ln = document.getElementById('blockLn')?.value?.trim();
-                var tm = document.getElementById('blockTm')?.value?.trim();
-                var url = document.getElementById('blockUrl')?.value?.trim();
-                var description = document.getElementById('blockDescription')?.value?.trim();
+                var price = parseFloat(m.querySelector('#blockPrice')?.value) || 0;
+                var weight = parseFloat(m.querySelector('#blockWeight')?.value) || 0;
+                var power = parseFloat(m.querySelector('#blockPower')?.value) || 0;
+                var ln = m.querySelector('#blockLn')?.value?.trim();
+                var tm = m.querySelector('#blockTm')?.value?.trim();
+                var url = m.querySelector('#blockUrl')?.value?.trim();
+                var description = m.querySelector('#blockDescription')?.value?.trim();
 
-                var pc = document.getElementById('blockParamsContainer');
+                var pc = m.querySelector('#blockParamsContainer');
                 var params = [];
                 if (pc) {
                     pc.querySelectorAll('.block-param-row').forEach(function(r){
@@ -93,6 +96,7 @@ window.BlockTemplateModal = {
                         if (s4 && s4.value && s4.value !== '__new__') params.push({parameter_id: parseInt(s4.value), param_value: v ? v.value : ''});
                     });
                 }
+
                 var apiUrl = id ? '/api/block-templates/'+id : '/api/block-templates';
                 var method = id ? 'PUT' : 'POST';
                 fetch(apiUrl, {
@@ -105,54 +109,57 @@ window.BlockTemplateModal = {
                     })
                 }).then(function(r){ return r.json(); }).then(function(result){
                     if (result.error) { alert('Ошибка: '+result.error); }
-                    else { self._modal.style.display = 'none'; if (self._cb) self._cb(result.id || result); }
+                    else { closeModal(); if (self._cb) self._cb(result.id || result); }
                 }).catch(function(err){ alert('Ошибка запроса: '+err.message); });
             });
         });
     },
-    _safeSetValue: function(id, value) {
-        var el = document.getElementById(id);
+
+    _safeSetValue: function(modalEl, id, value) {
+        var el = modalEl.querySelector('#' + id);
         if (el) el.value = value !== null && value !== undefined ? value : '';
-        else setTimeout(function(){ var el2 = document.getElementById(id); if (el2) el2.value = value; }, 100);
     },
-    _loadData: function(id) {
+
+    _loadData: function(modalEl, id) {
         var self = this;
         fetch('/api/block-templates/'+id)
             .then(function(r){ if(!r.ok) throw new Error('Not found'); return r.json(); })
             .then(function(data){
                 if (!data || !data.id) { alert('Компонент не найден'); return; }
-                self._safeSetValue('blockTemplateId', data.id); self._safeSetValue('blockName', data.name);
-                self._safeSetValue('blockArticle', data.article); self._safeSetValue('blockPrice', data.price);
-                self._safeSetValue('blockWeight', data.weight_grams); self._safeSetValue('blockPower', data.power_watts);
-                self._safeSetValue('blockLn', data.ln); self._safeSetValue('blockTm', data.tm);
-                self._safeSetValue('blockUrl', data.url); self._safeSetValue('blockDescription', data.description);
-                if (data.manufacturer_id) self._safeSetValue('blockManufacturer', data.manufacturer_id);
-                if (data.type_id) self._safeSetValue('blockType', data.type_id);
-                document.getElementById('blockModalTitle').textContent = 'Редактировать компонент шкафа';
-                var sel = document.getElementById('existingBlockSelect'); if (sel) sel.value = data.id;
-                // Загружаем материалы блока
-                self._loadMaterials(data.id);
-                self._initMaterialHandlers(data.id);
-                self._renderParams(data.parameters);
+                self._safeSetValue(modalEl, 'blockTemplateId', data.id); self._safeSetValue(modalEl, 'blockName', data.name);
+                self._safeSetValue(modalEl, 'blockArticle', data.article); self._safeSetValue(modalEl, 'blockPrice', data.price);
+                self._safeSetValue(modalEl, 'blockWeight', data.weight_grams); self._safeSetValue(modalEl, 'blockPower', data.power_watts);
+                self._safeSetValue(modalEl, 'blockLn', data.ln); self._safeSetValue(modalEl, 'blockTm', data.tm);
+                self._safeSetValue(modalEl, 'blockUrl', data.url); self._safeSetValue(modalEl, 'blockDescription', data.description);
+                if (data.manufacturer_id) self._safeSetValue(modalEl, 'blockManufacturer', data.manufacturer_id);
+                if (data.type_id) self._safeSetValue(modalEl, 'blockType', data.type_id);
+                
+                var title = modalEl.querySelector('#blockModalTitle');
+                if (title) title.textContent = 'Редактировать компонент шкафа';
+                var sel = modalEl.querySelector('#existingBlockSelect'); if (sel) sel.value = data.id;
+                
+                self._loadMaterials(modalEl, data.id);
+                self._initMaterialHandlers(modalEl, data.id);
+                self._renderParams(modalEl, data.parameters);
             })
             .catch(function(err){ console.error(err); alert('Не удалось загрузить данные.'); });
     },
-    _clearForm: function() {
-        this._safeSetValue('blockTemplateId', ''); this._safeSetValue('blockName', ''); this._safeSetValue('blockArticle', '');
-        this._safeSetValue('blockPrice', ''); this._safeSetValue('blockWeight', ''); this._safeSetValue('blockPower', '');
-        this._safeSetValue('blockLn', ''); this._safeSetValue('blockTm', '');
-        this._safeSetValue('blockUrl', ''); this._safeSetValue('blockDescription', '');
-        this._safeSetValue('blockManufacturer', ''); this._safeSetValue('blockType', '');
-        var title = document.getElementById('blockModalTitle'); if (title) title.textContent = 'Добавить компонент шкафа';
-        var sel = document.getElementById('existingBlockSelect'); if (sel) sel.value = '';
-        // Очищаем список материалов
-        var ml = document.getElementById('blockMaterialsList'); if (ml) ml.innerHTML = '';
-        var pc = document.getElementById('blockParamsContainer'); if (pc) pc.innerHTML = '';
+
+    _clearForm: function(modalEl) {
+        this._safeSetValue(modalEl, 'blockTemplateId', ''); this._safeSetValue(modalEl, 'blockName', ''); this._safeSetValue(modalEl, 'blockArticle', '');
+        this._safeSetValue(modalEl, 'blockPrice', ''); this._safeSetValue(modalEl, 'blockWeight', ''); this._safeSetValue(modalEl, 'blockPower', '');
+        this._safeSetValue(modalEl, 'blockLn', ''); this._safeSetValue(modalEl, 'blockTm', '');
+        this._safeSetValue(modalEl, 'blockUrl', ''); this._safeSetValue(modalEl, 'blockDescription', '');
+        this._safeSetValue(modalEl, 'blockManufacturer', ''); this._safeSetValue(modalEl, 'blockType', '');
+        var title = modalEl.querySelector('#blockModalTitle'); if (title) title.textContent = 'Добавить компонент шкафа';
+        var sel = modalEl.querySelector('#existingBlockSelect'); if (sel) sel.value = '';
+        var ml = modalEl.querySelector('#blockMaterialsList'); if (ml) ml.innerHTML = '';
+        var pc = modalEl.querySelector('#blockParamsContainer'); if (pc) pc.innerHTML = '';
     },
 
-    _loadMaterials: function(blockId) {
+    _loadMaterials: function(modalEl, blockId) {
         var self = this;
-        var ml = document.getElementById('blockMaterialsList');
+        var ml = modalEl.querySelector('#blockMaterialsList');
         if (!ml) return;
         ml.innerHTML = 'Загрузка...';
         fetch('/api/block-templates/' + blockId + '/materials')
@@ -164,10 +171,21 @@ window.BlockTemplateModal = {
                 }
                 var html = '<table class="data-table"><tr><th>Название</th><th>Кол-во</th><th></th></tr>';
                 materials.forEach(function(mat) {
-                    html += '<tr><td>' + (mat.name || '') + '</td><td><input type="number" value="' + mat.quantity + '" style="width:60px;" onchange="window.BlockTemplateModal._updateMaterialQty(' + blockId + ',' + mat.material_id + ', this.value)"></td><td><button class="btn btn-sm btn-delete" type="button" onclick="window.BlockTemplateModal._deleteMaterial(' + blockId + ',' + mat.material_id + ')">🗑️</button></td></tr>';
+                    html += '<tr><td>' + (mat.name || '') + '</td><td><input type="number" value="' + mat.quantity + '" class="mat-qty-input" data-mat-id="' + mat.material_id + '" style="width:60px;"></td><td><button class="btn btn-sm btn-delete del-mat-btn" type="button" data-mat-id="' + mat.material_id + '">🗑️</button></td></tr>';
                 });
                 html += '</table>';
                 ml.innerHTML = html;
+
+                ml.querySelectorAll('.mat-qty-input').forEach(function(inp) {
+                    inp.addEventListener('change', function() {
+                        self._updateMaterialQty(blockId, inp.dataset.matId, inp.value);
+                    });
+                });
+                ml.querySelectorAll('.del-mat-btn').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        self._deleteMaterial(modalEl, blockId, btn.dataset.matId);
+                    });
+                });
             });
     },
 
@@ -180,15 +198,16 @@ window.BlockTemplateModal = {
         }).catch(function(e) { alert('Ошибка: ' + e.message); });
     },
 
-    _deleteMaterial: function(blockId, materialId) {
+    _deleteMaterial: function(modalEl, blockId, materialId) {
         if (!confirm('Удалить материал из блока?')) return;
+        var self = this;
         fetch('/api/block-templates/' + blockId + '/materials/' + materialId, { method: 'DELETE' })
-            .then(function() { window.BlockTemplateModal._loadMaterials(blockId); });
+            .then(function() { self._loadMaterials(modalEl, blockId); });
     },
 
-    _initMaterialHandlers: function(blockId) {
+    _initMaterialHandlers: function(modalEl, blockId) {
         var self = this;
-        var btn = document.getElementById('addBlockMaterialBtn');
+        var btn = modalEl.querySelector('#addBlockMaterialBtn');
         if (btn) {
             btn.onclick = function() {
                 if (typeof MaterialModal !== 'undefined') {
@@ -200,7 +219,7 @@ window.BlockTemplateModal = {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ material_id: materialId, quantity: parseInt(qty) })
-                                }).then(function() { self._loadMaterials(blockId); });
+                                }).then(function() { self._loadMaterials(modalEl, blockId); });
                             }
                         }
                     });
@@ -211,32 +230,31 @@ window.BlockTemplateModal = {
         }
     },
 
-    _renderParams: function(params) {
+    _renderParams: function(modalEl, params) {
         var self = this;
-        var pc = document.getElementById('blockParamsContainer');
+        var pc = modalEl.querySelector('#blockParamsContainer');
         if (!pc) return;
         pc.innerHTML = '';
         if (!params || !params.length) {
-            self._addParamRow(null, null);
+            self._addParamRow(modalEl, null, null);
         } else {
             params.forEach(function(p) {
-                self._addParamRow(p.parameter_id, p.param_value);
+                self._addParamRow(modalEl, p.parameter_id, p.param_value);
             });
         }
     },
 
-    _addParamRow: function(paramId, value) {
-        var pc = document.getElementById('blockParamsContainer');
+    _addParamRow: function(modalEl, paramId, value) {
+        var pc = modalEl.querySelector('#blockParamsContainer');
         if (!pc) return;
-        var self = this;
         var r = document.createElement('div'); r.className = 'block-param-row'; r.style.cssText = 'display:flex;gap:8px;margin-bottom:5px;';
         fetch('/api/parameters').then(function(rr){return rr.json();}).then(function(params){
-            var s2 = '<select class="cabinet-param-select" style="flex:1;"><option value="">-- параметр --</option>';
+            var s2 = '<select class="cabinet-param-select form-control" style="flex:1;"><option value="">-- параметр --</option>';
             if (params.length) {
                 params.forEach(function(x){ s2 += '<option value="'+x.id+'"'+(paramId==x.id?' selected':'')+'>'+x.name+'</option>'; });
             }
             s2 += '<option value="__new__">+ новый параметр</option></select>';
-            r.innerHTML = s2 + '<input type="text" class="cabinet-param-value" placeholder="Значение" style="flex:1;" value="'+(value||'')+'"><input type="text" class="cabinet-param-new-name" placeholder="Название" style="flex:2;display:none;"><button type="button" class="btn btn-sm btn-primary cabinet-param-save-btn" style="display:none;">✓</button>';
+            r.innerHTML = s2 + '<input type="text" class="cabinet-param-value form-control" placeholder="Значение" style="flex:1;" value="'+(value||'')+'"><input type="text" class="cabinet-param-new-name form-control" placeholder="Название" style="flex:2;display:none;"><button type="button" class="btn btn-sm btn-primary cabinet-param-save-btn" style="display:none;">✓</button>';
             var dl = document.createElement('button'); dl.type = 'button'; dl.textContent = '✕'; dl.className = 'btn btn-sm btn-delete';
             dl.addEventListener('click', function(){ r.remove(); }); r.appendChild(dl); pc.appendChild(r);
             var s3 = r.querySelector('.cabinet-param-select'), ni = r.querySelector('.cabinet-param-new-name'), sv = r.querySelector('.cabinet-param-save-btn');

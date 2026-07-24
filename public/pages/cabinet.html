@@ -12,7 +12,7 @@
             <div class="form-group">
                 <label for="systemSelect">Система *</label>
                 <select id="systemSelect" required><option value="">-- выберите --</option></select>
-                <div class="new-system-row" style="display:none;margin-top:5px;display:flex;gap:5px;">
+                <div class="new-system-row" style="display:none;margin-top:5px;gap:5px;">
                     <input type="text" class="new-system-name" placeholder="Название новой системы" style="flex:1;">
                     <button type="button" class="btn btn-sm btn-primary save-new-system-btn">✓</button>
                 </div>
@@ -99,6 +99,62 @@
         return d.innerHTML;
     }
 
+    // ===== УНИВЕРСАЛЬНЫЙ БЕЗОПАСНЫЙ DRAG-AND-DROP (БЕЗ УТЕЧЕК) =====
+    function setupDragAndDrop(tbody, tableName, onComplete) {
+        var dragInfo = null;
+
+        function onMouseMove(e) {
+            if (!dragInfo) return;
+            var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+            var target = null;
+            for (var i = 0; i < rows.length; i++) {
+                var rect = rows[i].getBoundingClientRect();
+                if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; }
+            }
+            if (target && target !== dragInfo.row) {
+                var ri = rows.indexOf(dragInfo.row);
+                var ti = rows.indexOf(target);
+                if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
+                else tbody.insertBefore(dragInfo.row, target);
+            }
+        }
+
+        function onMouseUp() {
+            if (!dragInfo) return;
+            dragInfo.row.style.opacity = '';
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            var ids = Array.from(tbody.querySelectorAll('tr[data-id]')).map(function(tr) {
+                return parseInt(tr.dataset.id);
+            }).filter(function(v) { return !isNaN(v); });
+
+            if (tableName) {
+                fetch('/api/table-sort/' + tableName, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sort_order: ids })
+                }).catch(function(e) { console.error('Ошибка сохранения порядка:', e); });
+            }
+
+            if (onComplete) onComplete(ids);
+            dragInfo = null;
+        }
+
+        tbody.addEventListener('mousedown', function(e) {
+            var handle = e.target.closest('.drag-handle');
+            if (!handle) return;
+            e.preventDefault();
+            var row = handle.closest('tr');
+            if (!row) return;
+            dragInfo = { row: row, startY: e.clientY };
+            row.style.opacity = '0.5';
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    }
+
+    // ===== ЗАГРУЗКА ИНИЦИАЛИЗАЦИИ ШКАФА =====
     fetch('/api/cabinets/' + cabinetId)
         .then(function(res) { return res.json(); })
         .then(function(cabinet) {
@@ -142,33 +198,136 @@
                 });
             });
 
-            loadSystems();
-            loadSystemComponents(); window.loadCabinetMaterials();
-            loadCabinetCalculation(); window.loadBlocks();
-            setTimeout(function(){ window.loadBlocks(); }, 100);
-            loadCabinetMaterials();
+            // Последовательная загрузка всех модулей
+            refreshAllData();
+
             document.getElementById('addSystemBtn').addEventListener('click', function(){ openSystemModal(); });
             document.getElementById('addBlockBtn').addEventListener('click', window.openBlockModal);
             document.getElementById('addMaterialToCabinetBtn').addEventListener('click', openAddMaterialToCabinet);
         });
 
+    function refreshAllData() {
+        loadSystems();
+        loadSystemComponents();
+        window.loadBlocks();
+        window.loadCabinetMaterials();
+        loadCabinetCalculation();
+    }
+
+    // ===== 1. СИСТЕМЫ ШКАФА =====
     function loadSystems() {
-        fetch('/api/cabinets/' + cabinetId + '/systems')
-            .then(function(r){ return r.json(); })
-            .then(function(data){
-                var c = document.getElementById('cabinetSystems');
-                if (!data.length) {
-                    c.innerHTML = '<p>Нет систем</p>';
-                    return;
-                }
-                var h = '<div class="table-container"><table class="data-table"><tr><th style="width:1%"></th><th>Система</th><th>Описание</th><th>Действия</th></tr>';
-                data.forEach(function(s){
-                    h += '<tr data-id="' + s.id + '"><td class="drag-handle" draggable="true">⠿</td><td>' + esc(s.system_name || '') + '</td><td>' + esc(s.description || '') + '</td><td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-copy" onclick="copySystemTo(' + s.system_id + ')">📋</button> <button class="btn btn-sm btn-delete" onclick="delSystem(' + s.id + ')">🗑️</button></td></tr>';
+        var container = document.getElementById('cabinetSystems');
+        container.innerHTML = '';
+
+        var table = document.createElement('table');
+        table.className = 'data-table';
+        var thead = document.createElement('thead');
+        thead.innerHTML = '<tr><th style="width:1%"></th><th data-sort="id" style="width:50px;text-align:center;">ID</th><th data-sort="system_name">Система</th><th data-sort="description">Описание</th><th>Действия</th></tr>';
+        table.appendChild(thead);
+        var tbody = document.createElement('tbody');
+        table.appendChild(tbody);
+
+        container.appendChild(table);
+
+        Promise.all([
+            fetch('/api/cabinets/' + cabinetId + '/systems').then(function(r){ return r.json(); }),
+            fetch('/api/table-sort/cabinet_systems').then(function(r){ return r.json(); }).catch(function(){ return {}; })
+        ]).then(function(results) {
+            var data = results[0];
+            var saved = results[1];
+
+            if (!data.length) {
+                container.innerHTML = '<p>Нет систем</p>';
+                return;
+            }
+
+            var sortKey = saved.sort_key || null;
+            var sortDir = saved.sort_dir || 'asc';
+
+            if (saved.sort_order && saved.sort_order.length) {
+                var orderMap = {};
+                saved.sort_order.forEach(function(id, idx) { orderMap[id] = idx; });
+                data.sort(function(a, b) {
+                    var ia = orderMap.hasOwnProperty(a.id) ? orderMap[a.id] : 999999;
+                    var ib = orderMap.hasOwnProperty(b.id) ? orderMap[b.id] : 999999;
+                    return ia - ib;
                 });
-                h += '</table></div>';
-                c.innerHTML = h;
-                setTimeout(function(){ makeDraggable(c.querySelector('table'), 'cabinet_systems'); }, 0);
+            }
+
+            if (sortKey) {
+                data.sort(function(a, b) {
+                    var va = (a[sortKey] || '').toString().trim();
+                    var vb = (b[sortKey] || '').toString().trim();
+                    var na = parseFloat(va.replace(',', '.'));
+                    var nb = parseFloat(vb.replace(',', '.'));
+                    if (!isNaN(na) && !isNaN(nb) && va == na.toString() && vb == nb.toString()) {
+                        return sortDir === 'asc' ? na - nb : nb - na;
+                    }
+                    return sortDir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+                });
+            }
+
+            data.forEach(function(s) {
+                var tr = document.createElement('tr');
+                tr.setAttribute('data-id', s.id);
+                tr.setAttribute('data-system-id', s.system_id);
+                tr.innerHTML = '<td class="drag-handle" style="cursor:grab;">\u282F</td>' +
+                    '<td style="text-align:center;">' + s.id + '</td>' +
+                    '<td>' + esc(s.system_name || '') + '</td>' +
+                    '<td>' + esc(s.description || '') + '</td>' +
+                    '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">\u270F\uFE0F</button> ' +
+                    '<button class="btn btn-sm btn-copy" onclick="copySystemTo(' + s.system_id + ')">\uD83D\uDCCB</button> ' +
+                    '<button class="btn btn-sm btn-delete" onclick="delSystem(' + s.id + ')">\uD83D\uDDD1\uFE0F</button></td>';
+                tbody.appendChild(tr);
             });
+
+            // Безбезопасный Drag-and-drop
+            setupDragAndDrop(tbody, 'cabinet_systems', function() {
+                loadSystemComponents();
+            });
+
+            // Сортировка по клику
+            thead.addEventListener('click', function(e) {
+                var th = e.target.closest('th[data-sort]');
+                if (!th) return;
+                e.stopPropagation();
+
+                var key = th.dataset.sort;
+                var currentDir = th.dataset.sortDir || 'asc';
+                var newDir = (currentDir === 'asc') ? 'desc' : 'asc';
+
+                thead.querySelectorAll('th[data-sort]').forEach(function(t) { t.dataset.sortDir = ''; });
+                th.dataset.sortDir = newDir;
+
+                var allTh = Array.from(thead.querySelectorAll('th'));
+                var colIdx = allTh.indexOf(th);
+
+                var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+                rows.sort(function(a, b) {
+                    var va = (a.cells[colIdx]?.textContent || '').trim();
+                    var vb = (b.cells[colIdx]?.textContent || '').trim();
+                    var na = parseFloat(va);
+                    var nb = parseFloat(vb);
+                    if (!isNaN(na) && !isNaN(nb) && va == na.toString() && vb == nb.toString()) {
+                        return newDir === 'asc' ? na - nb : nb - na;
+                    }
+                    return newDir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+                });
+                rows.forEach(function(row) { tbody.appendChild(row); });
+
+                var ids = rows.map(function(r) { return parseInt(r.dataset.id); });
+
+                fetch('/api/table-sort/cabinet_systems', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sort_order: ids, sort_key: key, sort_dir: newDir })
+                }).then(function() { loadSystemComponents(); }).catch(function(e) { console.error(e); });
+            });
+
+        }).catch(function(err) {
+            console.error(err);
+            container.innerHTML = '<p>Ошибка загрузки систем</p>';
+        });
     }
 
     function openSystemModal(sysId) {
@@ -197,6 +356,7 @@
                 sel.innerHTML += '<optgroup label="Добавить"><option value="__new__">+ новая система</option></optgroup>';
                 document.getElementById('systemForm').dataset.editId = '';
                 document.querySelector('.new-system-row').style.display = 'none';
+
                 if (sysId) {
                     fetch('/api/cabinets/' + cabinetId + '/systems')
                         .then(function(r){ return r.json(); })
@@ -214,14 +374,18 @@
                 sel.onchange = function() {
                     document.querySelector('.new-system-row').style.display = sel.value === '__new__' ? 'flex' : 'none';
                 };
-                document.querySelector('.save-new-system-btn').onclick = function() {
-                    var name = document.querySelector('.new-system-name').value.trim();
+                
+                var saveBtn = document.querySelector('.save-new-system-btn');
+                saveBtn.onclick = function() {
+                    var nameInput = document.querySelector('.new-system-name');
+                    var name = nameInput.value.trim();
                     if (!name) { alert('Введите название'); return; }
                     fetch('/api/systems', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) })
                     .then(function(r){ return r.json(); })
                     .then(function(ns){
                         sel.innerHTML += '<option value="' + ns.id + '" selected>' + esc(ns.name) + '</option>';
                         sel.value = ns.id;
+                        nameInput.value = '';
                         document.querySelector('.new-system-row').style.display = 'none';
                     });
                 };
@@ -248,9 +412,7 @@
         .then(function(r){
             if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
             document.getElementById('systemModal').style.display = 'none';
-            loadSystems();
-            loadSystemComponents(); window.loadCabinetMaterials();
-            loadCabinetCalculation(); window.loadBlocks();
+            refreshAllData();
         })
         .catch(function(e){ alert(e.message); });
     });
@@ -259,61 +421,169 @@
     window.delSystem = function(id) {
         if (!confirm('Удалить систему из шкафа?')) return;
         fetch('/api/cabinets/' + cabinetId + '/systems/' + id, { method: 'DELETE' })
-            .then(function(){ loadSystems(); loadSystemComponents(); window.loadCabinetMaterials();
-            loadCabinetCalculation(); window.loadBlocks(); });
+            .then(function(){ refreshAllData(); });
     };
 
+    // ===== 2. КОМПОНЕНТЫ СИСТЕМ =====
     window.loadSystemComponents = loadSystemComponents;
     function loadSystemComponents() {
         var container = document.getElementById('cabinetSystemComponents');
-        fetch('/api/cabinets/' + cabinetId + '/systems')
-            .then(function(r){ return r.json(); })
-            .then(function(systems){
-                if (!systems.length) {
-                    container.innerHTML = '<p>Нет систем. Добавьте систему в шкаф.</p>';
-                    return;
-                }
-                container.innerHTML = 'Загрузка...';
-                var promises = systems.map(function(sys) {
-                    return fetch('/api/systems/' + sys.system_id)
-                        .then(function(r){ return r.json(); })
-                        .then(function(sysData){ return { sys: sys, sysData: sysData }; });
+        Promise.all([
+            fetch('/api/cabinets/' + cabinetId + '/systems').then(function(r){ return r.json(); }),
+            fetch('/api/table-sort/cabinet_systems').then(function(r){ return r.json(); }).catch(function(){ return {}; })
+        ]).then(function(results) {
+            var systems = results[0];
+            var saved = results[1];
+
+            if (!systems.length) {
+                container.innerHTML = '<p>Нет систем. Добавьте систему в шкаф.</p>';
+                return;
+            }
+
+            if (saved.sort_order && saved.sort_order.length) {
+                var orderMap = {};
+                saved.sort_order.forEach(function(id, idx) { orderMap[id] = idx; });
+                systems.sort(function(a, b) {
+                    var ia = orderMap.hasOwnProperty(a.id) ? orderMap[a.id] : 999999;
+                    var ib = orderMap.hasOwnProperty(b.id) ? orderMap[b.id] : 999999;
+                    return ia - ib;
                 });
-                Promise.all(promises).then(function(results) {
-                    var html = '';
-                    results.forEach(function(item) {
-                        var sys = item.sys, sysData = item.sysData;
-                        html += '<div class="system-block" style="margin-bottom:20px;border:1px solid #e0e0e0;border-radius:8px;padding:15px;background:#f9fafb;">';
-                        html += '<h4 style="margin-top:0;display:flex;justify-content:space-between;align-items:center;"><span>' + esc(sys.system_name || 'Система') + '</span><button class="btn btn-sm btn-delete" onclick="clearSystemComponents(' + sys.system_id + ')" title="Очистить все компоненты системы" style="font-size:12px;">🗑️ Очистить</button></h4>';
-                        if (sysData.components && sysData.components.length) {
-                            html += '<div class="table-container"><table class="data-table"><thead><tr><th style="width:1%"></th><th>Компонент</th><th>Тип</th><th>Модуль</th><th>Действия</th></tr></thead><tbody>';
-                            sysData.components.forEach(function(c){
-                                var moduleName = c.module_name || '-';
-                                html += '<tr data-id="' + c.link_id + '"><td class="drag-handle" draggable="true">⠿</td><td>' + esc(c.name) + '</td><td>' + esc(c.type_name || '') + '</td><td>' + esc(moduleName) + '</td><td><button class="btn btn-sm btn-edit" onclick="editSysComp(' + c.id + ')">✏️</button> <button class="btn btn-sm btn-copy" onclick="copyComponentToSystem(' + c.id + ')">📋</button> <button class="btn btn-sm btn-delete" onclick="unlinkSysComp(' + c.link_id + ')">🗑️</button></td></tr>';
-                            });
-                            html += '</tbody></table></div>';
-                        } else {
-                            html += '<p>Нет компонентов</p>';
-                        }
-                        html += '<div style="margin-top:10px;display:flex;gap:10px;">';
-                        html += '<button class="btn btn-primary btn-sm" onclick="attachExistingComponent(' + sys.system_id + ')">+ Привязать компонент</button>';
-                        html += '<button class="btn btn-secondary btn-sm" onclick="addNewComponentToSystem(' + sys.system_id + ')">+ Добавить компонент</button>';
-                        html += '</div></div>';
-                    });
-                    container.innerHTML = html;
-                    setTimeout(function() {
-                        container.querySelectorAll('table.data-table').forEach(function(t) {
-                            delete t.dataset.dragInitialized;
-                            makeDraggable(t, 'system_components_link');
-                        });
-                    }, 100);
-                });
-            })
-            .catch(function(err){
-                console.error('Ошибка загрузки систем:', err);
-                container.innerHTML = '<p style="color:red;">Ошибка загрузки систем</p>';
+            }
+
+            container.innerHTML = 'Загрузка...';
+            var promises = systems.map(function(sys) {
+                return fetch('/api/systems/' + sys.system_id)
+                    .then(function(r){ return r.json(); })
+                    .then(function(sysData){ return { sys: sys, sysData: sysData }; });
             });
+            Promise.all(promises).then(function(results) {
+                var html = '';
+                results.forEach(function(item) {
+                    var sys = item.sys, sysData = item.sysData;
+                    html += '<div class="system-block" style="margin-bottom:20px;border:1px solid #e0e0e0;border-radius:8px;padding:15px;background:#f9fafb;">';
+                    html += '<h4 style="margin-top:0;display:flex;justify-content:space-between;align-items:center;"><span>' + esc(sys.system_name || 'Система') + '</span><button class="btn btn-sm btn-delete" onclick="clearSystemComponents(' + sys.system_id + ')" title="Очистить все компоненты системы" style="font-size:12px;">\uD83D\uDDD1\uFE0F Очистить</button></h4>';
+                    if (sysData.components && sysData.components.length) {
+                        html += '<div class="table-container"><table class="data-table system-comp-table"><thead><tr><th style="width:1%"></th><th data-sort="id" style="width:50px;text-align:center;">ID</th><th data-sort="name">Компонент<span class="filter-icon" data-col="name" style="cursor:pointer;font-size:14px;margin-left:4px;">\u2699</span><div class="filter-dropdown" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:1000;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="type_name" style="position:relative;">Тип<span class="filter-icon" data-col="type_name" style="cursor:pointer;font-size:14px;margin-left:4px;">\u2699</span><div class="filter-dropdown" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:1000;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="module_name" style="position:relative;">Модуль<span class="filter-icon" data-col="module_name" style="cursor:pointer;font-size:14px;margin-left:4px;">\u2699</span><div class="filter-dropdown" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:1000;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th>Действия</th></tr></thead><tbody>';
+                        sysData.components.forEach(function(c){
+                            var moduleName = c.module_name || '-';
+                            html += '<tr data-id="' + c.link_id + '"><td class="drag-handle" style="cursor:grab;">\u282F</td><td style="text-align:center;">' + c.id + '</td><td>' + esc(c.name) + '</td><td>' + esc(c.type_name || '') + '</td><td>' + esc(moduleName) + '</td><td><button class="btn btn-sm btn-edit" onclick="editSysComp(' + c.id + ')">\u270F\uFE0F</button> <button class="btn btn-sm btn-copy" onclick="copyComponentToSystem(' + c.id + ')">\uD83D\uDCCB</button> <button class="btn btn-sm btn-delete" onclick="unlinkSysComp(' + c.link_id + ')">\uD83D\uDDD1\uFE0F</button></td></tr>';
+                        });
+                        html += '</tbody></table></div>';
+                    } else {
+                        html += '<p>Нет компонентов</p>';
+                    }
+                    html += '<div style="margin-top:10px;display:flex;gap:10px;">';
+                    html += '<button class="btn btn-primary btn-sm" onclick="attachExistingComponent(' + sys.system_id + ')">+ Привязать компонент</button>';
+                    html += '<button class="btn btn-secondary btn-sm" onclick="addNewComponentToSystem(' + sys.system_id + ')">+ Добавить компонент</button>';
+                    html += '</div></div>';
+                });
+                container.innerHTML = html;
+                container.querySelectorAll('table.system-comp-table').forEach(function(table) {
+                    initSystemCompTable(table);
+                });
+            });
+        }).catch(function(err){
+            console.error('Ошибка загрузки систем:', err);
+            container.innerHTML = '<p style="color:red;">Ошибка загрузки систем</p>';
+        });
     }
+
+    window.initSystemCompTable = function(table) {
+        var thead = table.querySelector('thead');
+        var tbody = table.querySelector('tbody');
+        if (!thead || !tbody) return;
+
+        var systemBlock = table.closest('.system-block');
+        var clearBtn = systemBlock ? systemBlock.querySelector('button[onclick*="clearSystemComponents"]') : null;
+        var systemId = null;
+        if (clearBtn) {
+            var match = clearBtn.getAttribute('onclick').match(/clearSystemComponents\((\d+)\)/);
+            if (match) systemId = match[1];
+        }
+        if (!systemId) return;
+
+        var tableName = 'system_components_' + systemId;
+
+        // Удаляем информационную строку, если она есть
+        var existingStatusLine = systemBlock.querySelector('.comp-status-line');
+        if (existingStatusLine) existingStatusLine.remove();
+
+        // Безбезопасный Drag-and-drop компонентов
+        setupDragAndDrop(tbody, tableName);
+
+        function getRowId(tr) {
+            return tr.dataset.id || tr.getAttribute('data-id');
+        }
+
+        fetch('/api/table-sort/' + tableName).then(function(r){ return r.json(); }).catch(function(){ return {}; }).then(function(saved) {
+            var filterData = saved.filter_data || {};
+
+            if (saved.sort_order && saved.sort_order.length) {
+                var orderMap = {};
+                saved.sort_order.forEach(function(id, idx) { orderMap[id] = idx; });
+                var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+                rows.sort(function(a, b) {
+                    var ia = orderMap.hasOwnProperty(getRowId(a)) ? orderMap[getRowId(a)] : 999999;
+                    var ib = orderMap.hasOwnProperty(getRowId(b)) ? orderMap[getRowId(b)] : 999999;
+                    return ia - ib;
+                });
+                rows.forEach(function(row) { tbody.appendChild(row); });
+            }
+
+            Object.keys(filterData).forEach(function(col) {
+                var selectedValues = filterData[col] || [];
+                if (selectedValues.length > 0) {
+                    tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
+                        var colIdx = Array.from(thead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === col; });
+                        var cellValue = (tr.cells[colIdx]?.textContent || '').trim() || '-';
+                        if (selectedValues.indexOf(cellValue) < 0) {
+                            tr.style.display = 'none';
+                        }
+                    });
+                    var icon = thead.querySelector('.filter-icon[data-col="' + col + '"]');
+                    if (icon) icon.textContent = '\u2699\uFE0F';
+                }
+            });
+
+            table._filterData = filterData;
+            table._tableName = tableName;
+        });
+
+        thead.addEventListener('click', function(e) {
+            var th = e.target.closest('th[data-sort]');
+            if (!th || e.target.closest('.filter-icon') || e.target.closest('.filter-dropdown')) return;
+            e.stopPropagation();
+
+            var key = th.dataset.sort;
+            var currentDir = th.dataset.sortDir || 'asc';
+            var newDir = (currentDir === 'asc') ? 'desc' : 'asc';
+
+            thead.querySelectorAll('th[data-sort]').forEach(function(t) { t.dataset.sortDir = ''; });
+            th.dataset.sortDir = newDir;
+
+            var colIdx = Array.from(thead.querySelectorAll('th')).indexOf(th);
+            var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+            rows.sort(function(a, b) {
+                var va = (a.cells[colIdx]?.textContent || '').trim();
+                var vb = (b.cells[colIdx]?.textContent || '').trim();
+                var na = parseFloat(va);
+                var nb = parseFloat(vb);
+                if (!isNaN(na) && !isNaN(nb) && va == na.toString() && vb == nb.toString()) {
+                    return newDir === 'asc' ? na - nb : nb - na;
+                }
+                return newDir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+            });
+            rows.forEach(function(row) { tbody.appendChild(row); });
+
+            var ids = rows.map(function(r) { return getRowId(r); });
+
+            fetch('/api/table-sort/' + tableName, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sort_order: ids, sort_key: key, sort_dir: newDir })
+            }).catch(function(e) { console.error(e); });
+        });
+    };
 
     window.clearSystemComponents = function(systemId) {
         if (!confirm('Удалить ВСЕ компоненты из этой системы? Это действие нельзя отменить.')) return;
@@ -321,16 +591,12 @@
             .then(function(r){ return r.json(); })
             .then(function(d){
                 alert('✅ ' + (d.message || 'Готово'));
-                loadSystemComponents();
-                loadCabinetCalculation();
-                window.loadCabinetMaterials();
-                window.loadBlocks();
+                refreshAllData();
             })
             .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
     window.attachExistingComponent = function(systemId) {
-        console.log('🔍 Привязка существующего компонента к системе:', systemId);
         var modal = document.getElementById('attachComponentModal');
         var select = document.getElementById('attachComponentSelect');
         var form = document.getElementById('attachComponentForm');
@@ -358,10 +624,10 @@
                 modal.style.display = 'flex';
             })
             .catch(function(err){
-                console.error('Ошибка загрузки компонентов:', err);
                 errorDiv.textContent = 'Ошибка загрузки компонентов';
                 errorDiv.style.display = 'flex';
             });
+
         form.onsubmit = function(e) {
             e.preventDefault();
             var componentId = select.value;
@@ -376,8 +642,7 @@
             .then(function(r){
                 if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
                 modal.style.display = 'none';
-                loadSystemComponents(); window.loadCabinetMaterials();
-                loadCabinetCalculation(); window.loadBlocks();
+                refreshAllData();
                 alert('✅ Компонент успешно привязан к системе!');
             })
             .catch(function(e){ errorDiv.textContent = 'Ошибка привязки: ' + e.message; errorDiv.style.display = 'flex'; });
@@ -385,7 +650,6 @@
     };
 
     window.addNewComponentToSystem = function(systemId) {
-        console.log('🔍 Добавление нового компонента в систему:', systemId);
         if (typeof SystemCompModal !== 'undefined') {
             SystemCompModal.open(null, function(compId) {
                 if (compId) {
@@ -397,8 +661,7 @@
                         })
                         .then(function(r){
                             if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-                            loadSystemComponents(); window.loadCabinetMaterials();
-                            loadCabinetCalculation(); window.loadBlocks();
+                            refreshAllData();
                             alert('✅ Компонент успешно добавлен в систему!');
                         })
                         .catch(function(e){ alert('Ошибка: ' + e.message); });
@@ -409,45 +672,73 @@
     };
 
     window.editSysComp = function(compId) {
-        console.log('✏️ editSysComp: compId =', compId);
         if (typeof SystemCompModal !== 'undefined') {
             SystemCompModal.open(compId, function() {
-                console.log('✅ Компонент обновлён, обновляем список');
-                loadSystemComponents(); window.loadCabinetMaterials();
-                loadCabinetCalculation(); window.loadBlocks();
+                refreshAllData();
             });
         } else { alert('Модальное окно компонентов систем не загружено'); }
     };
 
     window.unlinkSysComp = function(linkId) {
-        if (!linkId) { alert('Ошибка: идентификатор связи не найден'); console.error('linkId is undefined'); return; }
+        if (!linkId) { alert('Ошибка: идентификатор связи не найден'); return; }
         if (!confirm('Отвязать компонент от системы?\nКомпонент останется в справочнике.')) return;
-        console.log('🔗 Отвязываем компонент linkId:', linkId);
         fetch('/api/systems/link/' + linkId, { method: 'DELETE' })
             .then(function(r){
                 if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-                loadSystemComponents(); window.loadCabinetMaterials();
-                loadCabinetCalculation(); window.loadBlocks();
+                refreshAllData();
                 alert('✅ Компонент отвязан от системы');
             })
             .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
-    window.updateBlockQtyInCabinet = function(blockId, qty) {
-    if (!qty || isNaN(qty) || parseInt(qty) < 0) { alert('Количество должно быть положительным числом или 0'); return; }
-    var cabinetId = window.cabinetId;
-    if (!cabinetId) { alert('Ошибка: ID шкафа не найден'); return; }
-    fetch('/api/cabinets/' + cabinetId + '/blocks/' + blockId, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity: parseInt(qty) })
-    }).then(function(r) {
-        if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); });
-        window.loadCabinetCalculation();
-    }).catch(function(e) { alert('Ошибка: ' + e.message); });
-};
+    // ===== 3. КОМПОНЕНТЫ ШКАФА =====
+    window.loadBlocks = function() {
+        var container = document.getElementById('cabinetBlocks');
+        if (!container) return;
+        fetch('/api/cabinets/' + window.cabinetId + '/blocks/html')
+            .then(function(r){ return r.text(); })
+            .then(function(html){
+                container.innerHTML = html;
+                var table = container.querySelector('table');
+                if (table) {
+                    var theadTr = table.querySelector('thead tr');
+                    if (theadTr && !theadTr.querySelector('.drag-handle')) {
+                        var th = document.createElement('th');
+                        th.style.width = '1%';
+                        theadTr.insertBefore(th, theadTr.firstChild);
+                    }
+                    var tbody = table.querySelector('tbody');
+                    if (tbody) {
+                        tbody.querySelectorAll('tr').forEach(function(tr, idx) {
+                            if (!tr.querySelector('.drag-handle')) {
+                                var td = document.createElement('td');
+                                td.className = 'drag-handle';
+                                td.style.cursor = 'grab';
+                                td.textContent = '⠿';
+                                tr.insertBefore(td, tr.firstChild);
+                            }
+                            if (!tr.dataset.id) tr.dataset.id = (idx + 1);
+                        });
+                        setupDragAndDrop(tbody, 'cabinet_blocks');
+                    }
+                }
+            })
+            .catch(function(e){ console.error('Ошибка загрузки блоков:', e); });
+    };
 
-window.openBlockModal = function() {
+    window.updateBlockQtyInCabinet = function(blockId, qty) {
+        if (!qty || isNaN(qty) || parseInt(qty) < 0) { alert('Количество должно быть положительным числом или 0'); return; }
+        fetch('/api/cabinets/' + cabinetId + '/blocks/' + blockId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantity: parseInt(qty) })
+        }).then(function(r) {
+            if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); });
+            loadCabinetCalculation();
+        }).catch(function(e) { alert('Ошибка: ' + e.message); });
+    };
+
+    window.openBlockModal = function() {
         if (typeof BlockTemplateModal !== 'undefined') {
             BlockTemplateModal.open(function(blockId){
                 if (blockId) {
@@ -457,115 +748,21 @@ window.openBlockModal = function() {
                     })
                     .then(function(r){
                         if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-                        console.log('Добавлено, обновляем...');
-                        setTimeout(function(){ window.loadBlocks(); }, 500);
-                        window.loadCabinetMaterials();
-                        loadCabinetCalculation();
+                        refreshAllData();
                     })
                     .catch(function(e){ alert(e.message); });
                 }
             });
-        } else { setTimeout(function(){ openBlockModal(); }, 200); }
+        } else { setTimeout(function(){ window.openBlockModal(); }, 200); }
     };
 
     window.delBlock = function(id) {
-        fetch('/api/cabinets/' + cabinetId + '/blocks/' + id, { method: 'DELETE' }).then(window.loadBlocks);
+        if (!confirm('Удалить компонент из шкафа?')) return;
+        fetch('/api/cabinets/' + cabinetId + '/blocks/' + id, { method: 'DELETE' })
+            .then(function() { refreshAllData(); });
     };
 
-    window.loadBlocks = function() {
-        var container = document.getElementById('cabinetBlocks');
-        if (!container) return;
-        fetch('/api/cabinets/' + window.cabinetId + '/blocks/html')
-            .then(function(r){ return r.text(); })
-            .then(function(html){ container.innerHTML = html;
-                // Добавляем drag-handle и data-id в строки таблицы компонентов шкафа
-                var table = container.querySelector('table');
-                if (table) {
-                    var thead = table.querySelector('thead tr');
-                    if (thead && !thead.querySelector('.drag-handle')) {
-                        var th = document.createElement('th'); th.style.width = '1%'; thead.insertBefore(th, thead.firstChild);
-                    }
-                    var tbody = table.querySelector('tbody');
-                    if (tbody) {
-                        tbody.querySelectorAll('tr').forEach(function(tr, idx) {
-                            if (!tr.querySelector('.drag-handle')) {
-                                var td = document.createElement('td'); td.className = 'drag-handle'; td.draggable = true; td.textContent = '⠿';
-                                tr.insertBefore(td, tr.firstChild);
-                            }
-                            if (!tr.dataset.id) tr.dataset.id = 'block_' + idx;
-                        });
-                    }
-                }
-                // === СОРТИРОВКА КОМПОНЕНТОВ ШКАФА ===
-                var blockTable = container.querySelector('table');
-                if (blockTable) {
-                    var blockThead = blockTable.querySelector('thead tr');
-                    if (blockThead) {
-                        blockThead.querySelectorAll('th').forEach(function(th, idx) {
-                            if (!th.dataset.sort && idx > 0) {
-                                var sortKey = '';
-                                if (idx === 1) sortKey = 'system';
-                                else if (idx === 2) sortKey = 'component';
-                                else if (idx === 3) sortKey = 'type';
-                                else if (idx === 4) sortKey = 'name';
-                                else if (idx === 5) sortKey = 'ln';
-                                else if (idx === 6) sortKey = 'tm';
-                                else if (idx === 7) sortKey = 'quantity';
-                                if (sortKey) th.dataset.sort = sortKey;
-                            }
-                        });
-                    }
-                    var blockSortState = JSON.parse(localStorage.getItem('cabinet_blocks_sort') || '{}');
-                    var blockSortKey = blockSortState.key || null;
-                    var blockSortDir = blockSortState.dir || 'asc';
-                    var blockTbody = blockTable.querySelector('tbody');
-                    
-                    function applyBlockSort(key, dir) {
-                        if (!blockTbody || !key) return;
-                        var rows = Array.from(blockTbody.querySelectorAll('tr'));
-                        var colIdx = Array.from(blockThead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === key; });
-                        if (colIdx < 0) return;
-                        rows.sort(function(a, b) {
-                            var valA = (a.cells[colIdx]?.textContent || '').trim();
-                            var valB = (b.cells[colIdx]?.textContent || '').trim();
-                            var numA = parseFloat(valA.replace(/,/g, '.'));
-                            var numB = parseFloat(valB.replace(/,/g, '.'));
-                            if (!isNaN(numA) && !isNaN(numB)) {
-                                return dir === 'asc' ? numA - numB : numB - numA;
-                            }
-                            return dir === 'asc' ? valA.localeCompare(valB, 'ru') : valB.localeCompare(valA, 'ru');
-                        });
-                        rows.forEach(function(row) { blockTbody.appendChild(row); });
-                        blockThead.querySelectorAll('th').forEach(function(th) {
-                            th.classList.remove('sorted-asc', 'sorted-desc');
-                            if (th.dataset.sort === key) {
-                                th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
-                            }
-                        });
-                    }
-                    
-                    blockThead.querySelectorAll('th[data-sort]').forEach(function(th) {
-                        th.addEventListener('click', function() {
-                            var key = this.dataset.sort;
-                            if (blockSortKey === key) {
-                                blockSortDir = blockSortDir === 'asc' ? 'desc' : 'asc';
-                            } else {
-                                blockSortKey = key;
-                                blockSortDir = 'asc';
-                            }
-                            localStorage.setItem('cabinet_blocks_sort', JSON.stringify({key: blockSortKey, dir: blockSortDir}));
-                            applyBlockSort(blockSortKey, blockSortDir);
-                        });
-                    });
-                    
-                    if (blockSortKey) {
-                        setTimeout(function() { applyBlockSort(blockSortKey, blockSortDir); }, 100);
-                    }
-                }
-                setTimeout(function(){ makeDraggable(container.querySelector('table'), 'system_block_links'); }, 0); setTimeout(function(){ attachBlockChainTooltips(); }, 150); })
-            .catch(function(e){ console.error(e); });
-    };
-
+    // ===== 4. МАТЕРИАЛЫ ШКАФА =====
     window.loadCabinetMaterials = function() {
         var container = document.getElementById('cabinetMaterials');
         if (!container) return;
@@ -575,94 +772,29 @@ window.openBlockModal = function() {
                 if (!items.length) { container.innerHTML = '<p>Нет материалов</p>'; return; }
                 var html = '<div class="table-container"><table class="data-table"><thead><tr><th style="width:1%"></th><th>Система</th><th>Компонент системы</th><th>Название</th><th>Ед.</th><th>Цена</th><th>Кол-во</th><th>LN</th><th>TM</th><th>Действия</th></tr></thead><tbody>';
                 items.forEach(function(item){
-                    html += '<tr data-id="' + (item.link_id || item.id) + '"><td class="drag-handle" draggable="true">⠿</td>' +
-                        '<td>' + (item.system_name || '-') + '</td>' +
-                        '<td>' + (item.component_name || '-') + '</td>' +
-                        '<td class="material-name-cell" data-material-id="' + item.material_id + '" data-chain-block="' + (item.chain_block_template || '-') + '" data-chain-comp="' + (item.chain_system_component || '-') + '" data-chain-type="' + (item.chain_type || '') + '" style="cursor:pointer;">' + (item.name || '') + '</td>' +
-                        '<td>' + (item.unit || '') + '</td>' +
+                    var linkId = item.link_id || item.id;
+                    html += '<tr data-id="' + linkId + '"><td class="drag-handle" style="cursor:grab;">⠿</td>' +
+                        '<td>' + esc(item.system_name || '-') + '</td>' +
+                        '<td>' + esc(item.component_name || '-') + '</td>' +
+                        '<td class="material-name-cell" data-material-id="' + item.material_id + '" data-chain-block="' + esc(item.chain_block_template || '-') + '" data-chain-comp="' + esc(item.chain_system_component || '-') + '" data-chain-type="' + esc(item.chain_type || '') + '" style="cursor:pointer;">' + esc(item.name || '') + '</td>' +
+                        '<td>' + esc(item.unit || '') + '</td>' +
                         '<td>' + (item.price !== null ? parseFloat(item.price).toFixed(2) : '') + '</td>' +
-                        '<td>' + (item.is_component_material ? item.quantity : '<input type="number" value="' + item.quantity + '" style="width:60px;" onchange="updateMaterialQtyInCabinet(' + item.link_id + ', this.value)">') + '</td>' +
-                        '<td>' + (item.ln || '') + '</td>' +
-                        '<td>' + (item.tm || '') + '</td>' +
+                        '<td>' + (item.is_component_material ? item.quantity : '<input type="number" value="' + item.quantity + '" style="width:60px;" onchange="updateMaterialQtyInCabinet(' + linkId + ', this.value)">') + '</td>' +
+                        '<td>' + esc(item.ln || '') + '</td>' +
+                        '<td>' + esc(item.tm || '') + '</td>' +
                         '<td>' +
                             (item.is_component_material ?
                                 '<span style="font-size:10px;color:#888;">системный</span>' :
-                                '<button class="btn btn-sm btn-edit" onclick="editCabinetMaterialLink(' + item.link_id + ', ' + item.material_id + ')">✏️</button> ' +
-                                '<button class="btn btn-sm btn-delete" onclick="delCabinetMaterialLink(' + item.link_id + ')">🗑️</button>') +
+                                '<button class="btn btn-sm btn-edit" onclick="editCabinetMaterialLink(' + linkId + ', ' + item.material_id + ')">✏️</button> ' +
+                                '<button class="btn btn-sm btn-delete" onclick="delCabinetMaterialLink(' + linkId + ')">🗑️</button>') +
                         '</td>' +
                     '</tr>';
                 });
                 html += '</tbody></table></div>';
                 container.innerHTML = html;
-                setTimeout(function(){ attachChainTooltips(); }, 100);
-                // === СОРТИРОВКА МАТЕРИАЛОВ ШКАФА ===
-                var matTable = container.querySelector('table');
-                if (matTable) {
-                    var matThead = matTable.querySelector('thead tr');
-                    if (matThead) {
-                        matThead.querySelectorAll('th').forEach(function(th, idx) {
-                            if (!th.dataset.sort && idx > 0) {
-                                var sortKey = '';
-                                if (idx === 1) sortKey = 'system_name';
-                                else if (idx === 2) sortKey = 'component_name';
-                                else if (idx === 3) sortKey = 'name';
-                                else if (idx === 4) sortKey = 'unit';
-                                else if (idx === 5) sortKey = 'price';
-                                else if (idx === 6) sortKey = 'quantity';
-                                else if (idx === 7) sortKey = 'ln';
-                                else if (idx === 8) sortKey = 'tm';
-                                if (sortKey) th.dataset.sort = sortKey;
-                            }
-                        });
-                    }
-                    var matSortState = JSON.parse(localStorage.getItem('cabinet_materials_sort') || '{}');
-                    var matSortKey = matSortState.key || null;
-                    var matSortDir = matSortState.dir || 'asc';
-                    var matTbody = matTable.querySelector('tbody');
-                    
-                    function applyMatSort(key, dir) {
-                        if (!matTbody || !key) return;
-                        var rows = Array.from(matTbody.querySelectorAll('tr'));
-                        var colIdx = Array.from(matThead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === key; });
-                        if (colIdx < 0) return;
-                        rows.sort(function(a, b) {
-                            var valA = (a.cells[colIdx]?.textContent || '').trim();
-                            var valB = (b.cells[colIdx]?.textContent || '').trim();
-                            var numA = parseFloat(valA.replace(/,/g, '.'));
-                            var numB = parseFloat(valB.replace(/,/g, '.'));
-                            if (!isNaN(numA) && !isNaN(numB)) {
-                                return dir === 'asc' ? numA - numB : numB - numA;
-                            }
-                            return dir === 'asc' ? valA.localeCompare(valB, 'ru') : valB.localeCompare(valA, 'ru');
-                        });
-                        rows.forEach(function(row) { matTbody.appendChild(row); });
-                        matThead.querySelectorAll('th').forEach(function(th) {
-                            th.classList.remove('sorted-asc', 'sorted-desc');
-                            if (th.dataset.sort === key) {
-                                th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
-                            }
-                        });
-                    }
-                    
-                    matThead.querySelectorAll('th[data-sort]').forEach(function(th) {
-                        th.addEventListener('click', function() {
-                            var key = this.dataset.sort;
-                            if (matSortKey === key) {
-                                matSortDir = matSortDir === 'asc' ? 'desc' : 'asc';
-                            } else {
-                                matSortKey = key;
-                                matSortDir = 'asc';
-                            }
-                            localStorage.setItem('cabinet_materials_sort', JSON.stringify({key: matSortKey, dir: matSortDir}));
-                            applyMatSort(matSortKey, matSortDir);
-                        });
-                    });
-                    
-                    if (matSortKey) {
-                        setTimeout(function() { applyMatSort(matSortKey, matSortDir); }, 100);
-                    }
-                }
-                setTimeout(function(){ makeDraggable(container.querySelector('table'), 'system_component_materials'); }, 0);
+
+                var tbody = container.querySelector('tbody');
+                if (tbody) setupDragAndDrop(tbody, 'cabinet_materials');
             })
             .catch(function(e){ console.error(e); container.innerHTML = '<p style="color:red;">Ошибка загрузки материалов</p>'; });
     };
@@ -679,8 +811,7 @@ window.openBlockModal = function() {
                         })
                         .then(function(r){
                             if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-                            window.loadCabinetMaterials();
-                            loadCabinetCalculation();
+                            refreshAllData();
                             alert('✅ Материал добавлен в шкаф!');
                         })
                         .catch(function(e){ alert('Ошибка: ' + e.message); });
@@ -691,56 +822,45 @@ window.openBlockModal = function() {
     };
 
     window.updateMaterialQtyInCabinet = function(linkId, qty) {
-    if (!qty || isNaN(qty) || parseInt(qty) < 0) { alert('Количество должно быть положительным числом или 0'); return; }
-    var cabinetId = window.cabinetId;
-    if (!cabinetId) { alert('Ошибка: ID шкафа не найден'); return; }
-    fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity: parseInt(qty) })
-    }).then(function(r) {
-        if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); });
-        window.loadCabinetCalculation();
-    }).catch(function(e) { alert('Ошибка: ' + e.message); });
-};
-
-window.editMaterialQuantity = function(linkId) {
-        var newQty = prompt('Новое количество:');
-        if (!newQty || isNaN(newQty) || parseInt(newQty) < 1) return;
+        if (!qty || isNaN(qty) || parseInt(qty) < 0) { alert('Количество должно быть положительным числом или 0'); return; }
         fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, {
-            method: 'PUT', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ quantity: parseInt(newQty) })
-        })
-        .then(function(r){
-            if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-            window.loadCabinetMaterials();
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantity: parseInt(qty) })
+        }).then(function(r) {
+            if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); });
             loadCabinetCalculation();
-            console.log('✅ Количество обновлено, таблица обновлена');
-        })
-        .catch(function(e){ alert('Ошибка: ' + e.message); });
-    };
-
-    window.delMaterial = function(linkId) {
-        if (!confirm('Удалить материал из шкафа?')) return;
-        if (linkId < 0) { fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' }).then(function(){ window.loadCabinetMaterials(); loadCabinetCalculation(); }).catch(function(e){ alert('Ошибка: ' + e.message); }); return; }
-        fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' })
-            .then(function(){ window.loadCabinetMaterials(); loadCabinetCalculation(); console.log('✅ Материал удалён, таблица обновлена'); })
-            .catch(function(e){ alert('Ошибка: ' + e.message); });
-    };
-
-    window.editCabinetMaterialLink = function(linkId, materialId) {
-        if (typeof MaterialModal !== 'undefined') {
-            MaterialModal.open(function() { window.loadCabinetMaterials(); loadCabinetCalculation(); }, materialId);
-        } else { alert('Модальное окно материалов не загружено'); }
+        }).catch(function(e) { alert('Ошибка: ' + e.message); });
     };
 
     window.delCabinetMaterialLink = function(linkId) {
         if (!confirm('Удалить материал из шкафа?')) return;
         fetch('/api/materials/cabinet/' + cabinetId + '/' + linkId, { method: 'DELETE' })
-            .then(function(){ window.loadCabinetMaterials(); loadCabinetCalculation(); })
+            .then(function(){ refreshAllData(); })
             .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
+    window.editCabinetMaterialLink = function(linkId, materialId) {
+        if (typeof MaterialModal !== 'undefined') {
+            MaterialModal.open(function() { refreshAllData(); }, materialId);
+        } else { alert('Модальное окно материалов не загружено'); }
+    };
+
+    // ===== 5. КАЛЬКУЛЯЦИЯ ШКАФА =====
+    window.loadCabinetCalculation = function() {
+        var container = document.getElementById('cabinetCalculation');
+        if (!container) return;
+        container.innerHTML = 'Загрузка...';
+        fetch('/api/materials/cabinet/' + cabinetId + '/html')
+            .then(function(r) { return r.text(); })
+            .then(function(html) { container.innerHTML = html; })
+            .catch(function(e) {
+                container.innerHTML = '<p style="color:red;">Ошибка загрузки калькуляции</p>';
+                console.error(e);
+            });
+    };
+
+    // ===== 6. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ КОПИРОВАНИЯ И ЭКСПОРТА =====
     window.copyComponentToSystem = function(componentId) {
       fetch('/api/systems')
         .then(function(r){ return r.json(); })
@@ -763,14 +883,7 @@ window.editMaterialQuantity = function(linkId) {
               .then(function(data){
                 alert('✅ ' + data.message);
                 document.getElementById('copySystemModal').style.display = 'none';
-                loadSystemComponents();
-                if (typeof window.loadBlocks === 'function') { window.loadBlocks(); }
-                if (typeof window.loadCabinetMaterials === 'function') { window.loadCabinetMaterials(); }
-                loadCabinetCalculation();
-                setTimeout(function() {
-                    if (typeof window.loadCabinetMaterials === 'function') window.loadCabinetMaterials();
-                    loadCabinetCalculation();
-                }, 500);
+                refreshAllData();
               })
               .catch(function(e){ alert('Ошибка: ' + e.message); });
           };
@@ -799,14 +912,7 @@ window.editMaterialQuantity = function(linkId) {
               .then(function(data){
                 alert('✅ ' + data.message);
                 document.getElementById('copySystemModal').style.display = 'none';
-                loadSystems(); loadSystemComponents();
-                if (typeof window.loadBlocks === 'function') { window.loadBlocks(); }
-                if (typeof window.loadCabinetMaterials === 'function') { window.loadCabinetMaterials(); }
-                loadCabinetCalculation();
-                setTimeout(function() {
-                    if (typeof window.loadCabinetMaterials === 'function') window.loadCabinetMaterials();
-                    loadCabinetCalculation();
-                }, 500);
+                refreshAllData();
               })
               .catch(function(e){ alert('Ошибка: ' + e.message); });
           };
@@ -824,93 +930,83 @@ window.editMaterialQuantity = function(linkId) {
       html2pdf().set({ margin: 10, filename: 'calculation.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }).from(element).save();
     };
 
+    window.openBlockModalWithId = function(blockId, templateId) {
+        if (typeof BlockTemplateModal !== "undefined") {
+            BlockTemplateModal.open(function() {
+                refreshAllData();
+            }, parseInt(templateId));
+        } else {
+            alert("Ошибка: модальное окно компонентов не загружено");
+        }
+    };
+
     window.pageInit = function() {};
 
 })();
 
-window.openBlockModalWithId = function(blockId, templateId) {
-    if (typeof BlockTemplateModal !== "undefined") {
-        BlockTemplateModal.open(function(updatedId) {
-            if (typeof window.loadBlocks === "function") window.loadBlocks();
-            if (typeof window.loadCabinetMaterials === "function") window.loadCabinetMaterials();
-            loadCabinetCalculation();
-        }, parseInt(templateId));
-    } else {
-        console.error("BlockTemplateModal не загружен");
-        alert("Ошибка: модальное окно не загружено");
+// ===== 7. ЕДИНЫЙ ГЛОБАЛЬНЫЙ ДЕЛЕГИРОВАННЫЙ TOOLTIP ДЛЯ СВЯЗЕЙ =====
+(function setupGlobalTooltips() {
+    var chainTooltipStyles = document.createElement("style");
+    chainTooltipStyles.textContent = ".material-chain-tooltip{position:fixed;z-index:99999;background:#1e293b;color:#f1f5f9;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;box-shadow:0 4px 16px rgba(0,0,0,0.5);pointer-events:none;opacity:0;transition:opacity 0.15s;max-width:420px;}.material-chain-tooltip.visible{opacity:1;}.chain-header{font-weight:600;margin-bottom:6px;color:#fbbf24;}.chain-line{color:#e2e8f0;}.chain-arrow{color:#94a3b8;margin:0 4px;}";
+    document.head.appendChild(chainTooltipStyles);
+
+    var chainTooltip = document.createElement('div');
+    chainTooltip.className = 'material-chain-tooltip';
+    document.body.appendChild(chainTooltip);
+
+    function esc(str) {
+        var d = document.createElement('div');
+        d.textContent = str || '';
+        return d.innerHTML;
     }
-};
-window.loadCabinetCalculation = function() {    var container = document.getElementById('cabinetCalculation');    container.innerHTML = 'Загрузка...';    fetch('/api/materials/cabinet/' + cabinetId + '/html')        .then(function(r) { return r.text(); })        .then(function(html) {            container.innerHTML = html;
-                setTimeout(function(){ makeDraggable(container.querySelector('table'), 'system_component_materials'); }, 0);        })        .catch(function(e) {            container.innerHTML = '<p style="color:red;">Ошибка загрузки калькуляции</p>';            console.error(e);        });};
 
-// ===== TOOLTIP ЦЕПОЧКИ МАТЕРИАЛА =====
-var chainTooltipStyles = document.createElement("style");
-chainTooltipStyles.textContent = ".material-chain-tooltip{position:fixed;z-index:99999;background:#1e293b;color:#f1f5f9;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;box-shadow:0 4px 16px rgba(0,0,0,0.5);pointer-events:none;opacity:0;transition:opacity 0.15s;max-width:420px;}.material-chain-tooltip.visible{opacity:1;}.chain-header{font-weight:600;margin-bottom:6px;color:#fbbf24;}.chain-line{color:#e2e8f0;}.chain-arrow{color:#94a3b8;margin:0 4px;}";
-document.head.appendChild(chainTooltipStyles);
-var chainTooltip = document.createElement('div');
-chainTooltip.className = 'material-chain-tooltip';
-document.body.appendChild(chainTooltip);
+    document.body.addEventListener('mouseover', function(e) {
+        var matCell = e.target.closest('.material-name-cell');
+        var compCell = e.target.closest('.component-name-cell');
 
-function showChainTooltip(td) {
-  var block = td.dataset.chainBlock || '-';
-  var comp = td.dataset.chainComp || '-';
-  var type = td.dataset.chainType || '';
-  if (block === '-' && comp === '-') return;
-  
-  var matName = td.textContent.trim();
-  var html = '<div class="chain-header">🔗 Связи материала «' + matName + '»:</div>';
-  html += '<div class="chain-line">' + matName;
-  if (block !== '-') html += ' <span class="chain-arrow">→</span> ' + block;
-  if (comp !== '-') html += ' <span class="chain-arrow">→</span> ' + comp;
-  if (type) html += ' (' + type + ')';
-  html += '</div>';
-  
-  chainTooltip.innerHTML = html;
-  chainTooltip.classList.add('visible');
-}
+        if (matCell) {
+            var block = matCell.dataset.chainBlock || '-';
+            var comp = matCell.dataset.chainComp || '-';
+            var type = matCell.dataset.chainType || '';
+            if (block === '-' && comp === '-') return;
 
-function attachChainTooltips() {
-  document.querySelectorAll('.material-name-cell').forEach(function(td) {
-    td.addEventListener('mouseenter', function(e) {
-      showChainTooltip(td);
-      chainTooltip.style.left = (e.clientX + 12) + 'px';
-      chainTooltip.style.top = (e.clientY + 12) + 'px';
-    });
-    td.addEventListener('mousemove', function(e) {
-      chainTooltip.style.left = (e.clientX + 12) + 'px';
-      chainTooltip.style.top = (e.clientY + 12) + 'px';
-    });
-    td.addEventListener('mouseleave', function() {
-      chainTooltip.classList.remove('visible');
-    });
-  });
-}
+            var matName = matCell.textContent.trim();
+            var html = '<div class="chain-header">🔗 Связи материала «' + esc(matName) + '»:</div>';
+            html += '<div class="chain-line">' + esc(matName);
+            if (block !== '-') html += ' <span class="chain-arrow">→</span> ' + esc(block);
+            if (comp !== '-') html += ' <span class="chain-arrow">→</span> ' + esc(comp);
+            if (type) html += ' (' + esc(type) + ')';
+            html += '</div>';
 
+            chainTooltip.innerHTML = html;
+            chainTooltip.classList.add('visible');
+        } else if (compCell) {
+            var comp = compCell.dataset.chainComp || '';
+            var type = compCell.dataset.chainType || '';
+            if (!comp && !type) return;
 
-function attachBlockChainTooltips() {
-  document.querySelectorAll('#cabinetBlocks .component-name-cell').forEach(function(td) {
-    var comp = td.dataset.chainComp || '';
-    var type = td.dataset.chainType || '';
-    if (!comp && !type) return;
-    td.addEventListener('mouseenter', function(e) {
-      var blockName = td.closest('tr').querySelector('td:nth-child(4)')?.textContent?.trim() || '';
-      var html = '<div class="chain-header">🔗 Связи компонента «' + blockName + '»:</div>';
-      html += '<div class="chain-line">' + blockName;
-      if (comp) html += ' <span class="chain-arrow">→</span> ' + comp;
-      if (type) html += ' (' + type + ')';
-      html += '</div>';
-      chainTooltip.innerHTML = html;
-      chainTooltip.classList.add('visible');
-      chainTooltip.style.left = (e.clientX + 12) + 'px';
-      chainTooltip.style.top = (e.clientY + 12) + 'px';
+            var blockName = compCell.closest('tr')?.querySelector('td:nth-child(4)')?.textContent?.trim() || '';
+            var html = '<div class="chain-header">🔗 Связи компонента «' + esc(blockName) + '»:</div>';
+            html += '<div class="chain-line">' + esc(blockName);
+            if (comp) html += ' <span class="chain-arrow">→</span> ' + esc(comp);
+            if (type) html += ' (' + esc(type) + ')';
+            html += '</div>';
+
+            chainTooltip.innerHTML = html;
+            chainTooltip.classList.add('visible');
+        }
     });
-    td.addEventListener('mousemove', function(e) {
-      chainTooltip.style.left = (e.clientX + 12) + 'px';
-      chainTooltip.style.top = (e.clientY + 12) + 'px';
+
+    document.body.addEventListener('mousemove', function(e) {
+        if (chainTooltip.classList.contains('visible')) {
+            chainTooltip.style.left = (e.clientX + 12) + 'px';
+            chainTooltip.style.top = (e.clientY + 12) + 'px';
+        }
     });
-    td.addEventListener('mouseleave', function() {
-      chainTooltip.classList.remove('visible');
+
+    document.body.addEventListener('mouseout', function(e) {
+        if (e.target.closest('.material-name-cell, .component-name-cell')) {
+            chainTooltip.classList.remove('visible');
+        }
     });
-  });
-}
-</script>
+})();

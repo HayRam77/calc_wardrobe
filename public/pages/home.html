@@ -16,14 +16,14 @@
             <input type="hidden" id="projectId">
             <div class="form-group">
                 <label for="projectName">Название *</label>
-                <input type="text" id="projectName" required maxlength="255">
+                <input type="text" id="projectName" class="form-control" required maxlength="255">
             </div>
             <div class="form-group">
                 <label for="projectDescription">Описание</label>
-                <textarea id="projectDescription" maxlength="1000" rows="3"></textarea>
+                <textarea id="projectDescription" class="form-control" maxlength="1000" rows="3"></textarea>
             </div>
             <div id="projectError" class="error-message" style="display:none;"></div>
-            <div class="form-actions" style="margin-top:15px;">
+            <div class="form-actions" style="margin-top:15px;display:flex;gap:10px;justify-content:flex-end;">
                 <button type="button" id="projectCancelBtn" class="btn btn-secondary">Отмена</button>
                 <button type="submit" class="btn btn-primary" id="home_btn_btn">Сохранить</button>
             </div>
@@ -46,6 +46,50 @@
 
     function escapeHtml(text) { return String(text).replace(/[&<>"]/g, function(m) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]; }); }
 
+    function setupDragAndDrop(tbody) {
+        var dragInfo = null;
+        function onMouseMove(e) {
+            if (!dragInfo) return;
+            var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+            var target = null;
+            for (var i = 0; i < rows.length; i++) {
+                var rect = rows[i].getBoundingClientRect();
+                if (e.clientY > rect.top && e.clientY < rect.bottom) { target = rows[i]; break; }
+            }
+            if (target && target !== dragInfo.row) {
+                var ri = rows.indexOf(dragInfo.row), ti = rows.indexOf(target);
+                if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
+                else tbody.insertBefore(dragInfo.row, target);
+            }
+        }
+        function onMouseUp() {
+            if (!dragInfo) return;
+            dragInfo.row.style.opacity = '';
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            var items = [];
+            tbody.querySelectorAll('tr[data-id]').forEach(function(tr, idx) {
+                var id = parseInt(tr.dataset.id);
+                if (id) items.push({ id: id, position: idx });
+            });
+            fetch('/api/projects/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e) { console.error(e); });
+            dragInfo = null;
+        }
+
+        tbody.addEventListener('mousedown', function(e) {
+            var handle = e.target.closest('.drag-handle');
+            if (!handle) return;
+            e.preventDefault();
+            var row = handle.closest('tr');
+            if (!row) return;
+            dragInfo = { row: row, startY: e.clientY };
+            row.style.opacity = '0.5';
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    }
+
     async function loadProjects() {
         var container = document.getElementById('projectsTable');
         try {
@@ -56,62 +100,51 @@
             if (isAdmin) html += '<th>Действия</th>';
             html += '</tr></thead><tbody>';
             data.forEach(function(p) {
-                html += '<tr data-id="' + p.id + '"><td class="drag-handle" draggable="true">⠿</td><td>' + p.id + '</td><td><a href="/project/' + p.id + '" onclick="navigateTo(\'/project/' + p.id + '\');return false;">' + escapeHtml(p.name) + '</a></td><td>' + escapeHtml(p.description || '') + '</td><td>' + escapeHtml(p.owner_name || p.user_id) + '</td>';
+                html += '<tr data-id="' + p.id + '"><td class="drag-handle" style="cursor:grab;">⠿</td><td>' + p.id + '</td><td><a href="/project/' + p.id + '" onclick="navigateTo(\'/project/' + p.id + '\');return false;">' + escapeHtml(p.name) + '</a></td><td>' + escapeHtml(p.description || '') + '</td><td>' + escapeHtml(p.owner_name || p.user_id) + '</td>';
                 if (isAdmin) html += '<td><button class="btn btn-sm btn-edit" onclick="editProject(' + p.id + ')" id="home_edit_btn">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteProject(' + p.id + ')" id="home_del_btn">🗑️</button></td>';
                 html += '</tr>';
             });
             html += '</tbody></table></div>';
             container.innerHTML = html;
 
-  var t = container.querySelector('table');
-  if (t) {
-    var thd = t.querySelector('thead tr');
-    var st = JSON.parse(localStorage.getItem('projects_sort') || '{}');
-    var sk = st.key || null, sd = st.dir || 'asc';
-    var tb = t.querySelector('tbody');
-    function srt(k, d) {
-      if (!tb || !k) return;
-      var rs = Array.from(tb.querySelectorAll('tr'));
-      var ci = Array.from(thd.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === k; });
-      if (ci < 0) return;
-      rs.sort(function(a, b) {
-        var va = (a.cells[ci]?.textContent || '').trim();
-        var vb = (b.cells[ci]?.textContent || '').trim();
-        var na = parseFloat(va.replace(/,/g, '.')), nb = parseFloat(vb.replace(/,/g, '.'));
-        if (!isNaN(na) && !isNaN(nb)) return d === 'asc' ? na - nb : nb - na;
-        return d === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
-      });
-      rs.forEach(function(r) { tb.appendChild(r); });
-      thd.querySelectorAll('th').forEach(function(th) { th.classList.remove('sorted-asc', 'sorted-desc'); if (th.dataset.sort === k) th.classList.add(d === 'asc' ? 'sorted-asc' : 'sorted-desc'); });
-    }
-    thd.querySelectorAll('th[data-sort]').forEach(function(th) {
-      th.addEventListener('click', function() {
-        var k = this.dataset.sort;
-        if (sk === k) { sd = sd === 'asc' ? 'desc' : 'asc'; } else { sk = k; sd = 'asc'; }
-        localStorage.setItem('projects_sort', JSON.stringify({key: sk, dir: sd}));
-        srt(sk, sd);
-      });
-    });
-    if (sk) setTimeout(function() { srt(sk, sd); }, 200);
-    if (!t.dataset.dragInit) {
-      t.dataset.dragInit = '1'; var dr = null;
-      tb.addEventListener('dragstart', function(e) { var h2 = e.target.closest('.drag-handle'); if (!h2) { e.preventDefault(); return; } dr = h2.closest('tr'); if (dr) dr.style.opacity = '0.5'; });
-      tb.addEventListener('dragend', function() { if (dr) dr.style.opacity = ''; dr = null; });
-      tb.addEventListener('dragover', function(e) { e.preventDefault(); });
-      tb.addEventListener('drop', function(e) {
-        e.preventDefault(); var tg = e.target.closest('tr');
-        if (!tg || !dr || tg === dr) return;
-        var rs = Array.from(tb.querySelectorAll('tr'));
-        var from = rs.indexOf(dr), to = rs.indexOf(tg);
-        if (from < 0 || to < 0) return;
-        if (from < to) tb.insertBefore(dr, tg.nextSibling); else tb.insertBefore(dr, tg);
-        var items = []; tb.querySelectorAll('tr').forEach(function(tr, idx) { var id = tr.dataset.id; if (id) items.push({ id: parseInt(id), position: idx }); });
-        fetch('/api/projects/reorder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e) { console.error(e); });
-      });
-    }
-  }
+            var t = container.querySelector('table');
+            if (t) {
+                var thd = t.querySelector('thead tr');
+                var st = JSON.parse(localStorage.getItem('projects_sort') || '{}');
+                var sk = st.key || null, sd = st.dir || 'asc';
+                var tb = t.querySelector('tbody');
 
-        } catch(e) { container.innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; }
+                setupDragAndDrop(tb);
+
+                function srt(k, d) {
+                  if (!tb || !k) return;
+                  var rs = Array.from(tb.querySelectorAll('tr[data-id]'));
+                  var ci = Array.from(thd.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === k; });
+                  if (ci < 0) return;
+                  rs.sort(function(a, b) {
+                    var va = (a.cells[ci]?.textContent || '').trim();
+                    var vb = (b.cells[ci]?.textContent || '').trim();
+                    var na = parseFloat(va.replace(/,/g, '.')), nb = parseFloat(vb.replace(/,/g, '.'));
+                    if (!isNaN(na) && !isNaN(nb)) return d === 'asc' ? na - nb : nb - na;
+                    return d === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+                  });
+                  rs.forEach(function(r) { tb.appendChild(r); });
+                  thd.querySelectorAll('th').forEach(function(th) { th.classList.remove('sorted-asc', 'sorted-desc'); if (th.dataset.sort === k) th.classList.add(d === 'asc' ? 'sorted-asc' : 'sorted-desc'); });
+                }
+
+                thd.querySelectorAll('th[data-sort]').forEach(function(th) {
+                  th.style.cursor = 'pointer';
+                  th.addEventListener('click', function() {
+                    var k = this.dataset.sort;
+                    if (sk === k) { sd = sd === 'asc' ? 'desc' : 'asc'; } else { sk = k; sd = 'asc'; }
+                    localStorage.setItem('projects_sort', JSON.stringify({key: sk, dir: sd}));
+                    srt(sk, sd);
+                  });
+                });
+                if (sk) setTimeout(function() { srt(sk, sd); }, 200);
+            }
+
+        } catch(e) { container.innerHTML = '<p style="color:red;">Ошибка загрузки проектов</p>'; }
     }
 
     var modal = document.getElementById('projectModal');

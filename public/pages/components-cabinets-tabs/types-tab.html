@@ -1,14 +1,14 @@
-<div id="tab-cab-types" class="tab-content">
+<div id="tab-types" class="tab-content">
   <div style="margin-bottom:10px;">
-    <button id="addCabTypeBtn" class="btn btn-primary" style="display:none;">Добавить тип</button>
-    <button id="exportCabTypesBtn" class="btn btn-secondary" style="display:none;">Экспорт</button>
-    <input type="file" id="importCabTypesFile" style="display:none" accept=".xlsx,.xls">
-    <button id="importCabTypesBtn" class="btn btn-secondary" style="display:none;">Импорт</button>
+    <button id="addTypeBtn" class="btn btn-primary" style="display:none;">Добавить тип</button>
+    <button id="exportTypesBtn" class="btn btn-secondary" style="display:none;">Экспорт</button>
+    <input type="file" id="importTypesFile" style="display:none" accept=".xlsx,.xls">
+    <button id="importTypesBtn" class="btn btn-secondary" style="display:none;">Импорт</button>
   </div>
   <div class="table-container">
     <table class="data-table">
-      <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th id="cabTypesActionsCol" style="display:none;">Действия</th></tr></thead>
-      <tbody id="cabTypesBody"><tr><td colspan="5" class="loading">Загрузка...</td></tr></tbody>
+      <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th id="typesActionsCol" style="display:none;">Действия</th></tr></thead>
+      <tbody id="typesBody"><tr><td colspan="5" class="loading">Загрузка...</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -17,59 +17,18 @@
  var user = JSON.parse(localStorage.getItem("user") || "null");
  var isAdmin = user && user.role === "admin";
  applyPermissions();
+
  function applyPermissions(){
-  ["addCabTypeBtn","exportCabTypesBtn","importCabTypesBtn"].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = isAdmin ? "" : "none"; });
-  var col = document.getElementById("cabTypesActionsCol");
+  ["addTypeBtn","exportTypesBtn","importTypesBtn"].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = isAdmin ? "" : "none"; });
+  var col = document.getElementById("typesActionsCol");
   if(col) col.style.display = isAdmin ? "" : "none";
  }
+
  function esc(s){ var d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
- function updateStatusLine(ids) {
-   var sl = document.getElementById("sortStatusLine");
-   if (!sl) {
-     sl = document.createElement("div"); sl.id = "sortStatusLine";
-     sl.style.cssText = "margin-top:8px;font-size:12px;color:#555;";
-     var btnDiv = document.querySelector("#tab-cab-types > div:first-child");
-     if (btnDiv) btnDiv.parentNode.insertBefore(sl, btnDiv.nextSibling);
-   }
-   sl.textContent = ids.length + ": " + ids.join(" - ");
- }
- function loadCabTypes(){
-   var tbody = document.getElementById("cabTypesBody");
-   if(!tbody) return;
-   fetch("/api/component-types?_="+Date.now())
-   .then(function(r){ return r.json(); })
-   .then(function(data){
-     if(!data.length){ tbody.innerHTML = "<tr><td colspan=5>No types</td></tr>"; return; }
-     var html = "";
-     for (var i = 0; i < data.length; i++) {
-       var item = data[i];
-       html += "<tr draggable=\"false\" data-id=\""+item.id+"\"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+esc(item.name)+"</td><td>"+esc(item.description||"")+"</td>";
-       if(isAdmin) html += "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editCabType("+item.id+")\">\u270F\uFE0F</button> <button class=\"btn btn-sm btn-delete\" onclick=\"deleteCabType("+item.id+")\">\uD83D\uDDD1\uFE0F</button></td>";
-       html += "</tr>";
-     }
-     tbody.innerHTML = html;
-     initDragAndSort();
-     initSortableHeaders();
-     loadSortFromDB();
-     updateStatusLine(data.map(function(x){return x.id;}));
-   }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=5>Error</td></tr>"; });
- }
- function initDragAndSort(){
-   var tbody = document.getElementById("cabTypesBody");
-   var table = tbody.closest("table");
-   if (!table || table.dataset.dragInit) return;
-   table.dataset.dragInit = "1";
+
+ function setupDragAndDrop(tbody) {
    var dragInfo = null;
-   tbody.addEventListener("mousedown", function(e) {
-     var handle = e.target.closest(".drag-handle");
-     if (!handle) return;
-     e.preventDefault();
-     var row = handle.closest("tr");
-     if (!row) return;
-     dragInfo = {row: row, startY: e.clientY};
-     row.style.opacity = "0.5";
-   });
-   document.addEventListener("mousemove", function(e) {
+   function onMouseMove(e) {
      if (!dragInfo) return;
      var rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
      var target = null;
@@ -82,30 +41,69 @@
        if (ri < ti) tbody.insertBefore(dragInfo.row, target.nextSibling);
        else tbody.insertBefore(dragInfo.row, target);
      }
-   });
-   document.addEventListener("mouseup", function() {
+   }
+   function onMouseUp() {
      if (!dragInfo) return;
      dragInfo.row.style.opacity = "";
-     var ids = [];
-     tbody.querySelectorAll("tr[data-id]").forEach(function(tr) { var id = parseInt(tr.dataset.id); if (id) ids.push(id); });
-     localStorage.setItem("cab_types_order", JSON.stringify(ids));
-     updateStatusLine(ids);
-     fetch("/api/table-sort/component-types", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids}) }).catch(function(e){console.error(e);});
-     fetch("/api/component-types/reorder", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ids: ids}) }).catch(function(e){console.error(e);});
+     document.removeEventListener("mousemove", onMouseMove);
+     document.removeEventListener("mouseup", onMouseUp);
+
+     var ids = Array.from(tbody.querySelectorAll("tr[data-id]")).map(function(tr) {
+       return parseInt(tr.dataset.id);
+     }).filter(Boolean);
+
+     localStorage.setItem("types_order", JSON.stringify(ids));
+     fetch("/api/table-sort/system-component-types", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids}) }).catch(function(e){console.error(e);});
+     fetch("/api/system-component-types/reorder", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ids: ids}) }).catch(function(e){console.error(e);});
      dragInfo = null;
+   }
+
+   tbody.addEventListener("mousedown", function(e) {
+     var handle = e.target.closest(".drag-handle");
+     if (!handle) return;
+     e.preventDefault();
+     var row = handle.closest("tr");
+     if (!row) return;
+     dragInfo = {row: row, startY: e.clientY};
+     row.style.opacity = "0.5";
+     document.addEventListener("mousemove", onMouseMove);
+     document.addEventListener("mouseup", onMouseUp);
    });
  }
+
+ function loadTypes(){
+   var tbody = document.getElementById("typesBody");
+   if(!tbody) return;
+   fetch("/api/system-component-types?_="+Date.now())
+   .then(function(r){ return r.json(); })
+   .then(function(data){
+     if(!data.length){ tbody.innerHTML = "<tr><td colspan=5>Нет типов</td></tr>"; return; }
+     var html = "";
+     for (var i = 0; i < data.length; i++) {
+       var item = data[i];
+       html += "<tr draggable=\"false\" data-id=\""+item.id+"\"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+esc(item.name)+"</td><td>"+esc(item.description||"")+"</td>";
+       if(isAdmin) html += "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editType("+item.id+")\">\u270F\uFE0F</button> <button class=\"btn btn-sm btn-delete\" onclick=\"deleteType("+item.id+")\">\uD83D\uDDD1\uFE0F</button></td>";
+       html += "</tr>";
+     }
+     tbody.innerHTML = html;
+     setupDragAndDrop(tbody);
+     initSortableHeaders();
+     loadSortFromDB();
+   }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=5>Ошибка загрузки</td></tr>"; });
+ }
+
  function initSortableHeaders(){
-   var tbody = document.getElementById("cabTypesBody");
-   var thead = document.querySelector("#tab-cab-types thead tr");
+   var tbody = document.getElementById("typesBody");
+   var thead = document.querySelector("#tab-types thead tr");
+   if (!thead) return;
    thead.querySelectorAll("th[data-sort]").forEach(function(th) {
      th.style.cursor = "pointer";
      th.onclick = function() {
        var k = this.dataset.sort;
-       var s = JSON.parse(localStorage.getItem("cab_types_sort") || "{}");
+       var s = JSON.parse(localStorage.getItem("types_sort") || "{}");
        s.dir = s.key === k ? (s.dir === "asc" ? "desc" : "asc") : "asc";
        s.key = k;
-       localStorage.setItem("cab_types_sort", JSON.stringify(s));
+       localStorage.setItem("types_sort", JSON.stringify(s));
        var rows = Array.from(tbody.querySelectorAll("tr[data-id]"));
        var colIdx = Array.from(thead.querySelectorAll("th")).findIndex(function(th) { return th.dataset.sort === k; });
        if (colIdx < 0) return;
@@ -118,44 +116,49 @@
        });
        rows.forEach(function(row) { tbody.appendChild(row); });
        var ids = rows.map(function(r) { return parseInt(r.dataset.id); }).filter(Boolean);
-       updateStatusLine(ids);
-       fetch("/api/table-sort/component-types", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids, sort_key: k, sort_dir: s.dir}) }).catch(function(e){console.error(e);});
+       fetch("/api/table-sort/system-component-types", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids, sort_key: k, sort_dir: s.dir}) }).catch(function(e){console.error(e);});
      };
    });
  }
+
  function loadSortFromDB(){
-   var tbody = document.getElementById("cabTypesBody");
-   fetch("/api/table-sort/component-types").then(function(r){ return r.json(); }).then(function(saved){
+   var tbody = document.getElementById("typesBody");
+   fetch("/api/table-sort/system-component-types").then(function(r){ return r.json(); }).then(function(saved){
      if (saved && saved.sort_order && saved.sort_order.length > 0) {
        saved.sort_order.forEach(function(id) {
          var row = tbody.querySelector("tr[data-id=\""+id+"\"]");
          if (row) tbody.appendChild(row);
        });
-       updateStatusLine(saved.sort_order);
      }
-   });
+   }).catch(function(e){ console.error(e); });
  }
- document.getElementById("addCabTypeBtn").addEventListener("click", function(){
-   var name = prompt("Name:"); if (!name || !name.trim()) return;
-   fetch("/api/component-types", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name: name.trim()}) }).then(loadCabTypes);
+
+ document.getElementById("addTypeBtn").addEventListener("click", function(){
+   var name = prompt("Название:"); if (!name || !name.trim()) return;
+   fetch("/api/system-component-types", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name: name.trim()}) }).then(loadTypes);
  });
- window.editCabType = function(id){
-   var name = prompt("New name:"); if (!name || !name.trim()) return;
-   fetch("/api/component-types/"+id, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name: name.trim()}) }).then(loadCabTypes);
+
+ window.editType = function(id){
+   var name = prompt("Новое название:"); if (!name || !name.trim()) return;
+   fetch("/api/system-component-types/"+id, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name: name.trim()}) }).then(loadTypes);
  };
- window.deleteCabType = function(id){
-   if(!confirm("Delete?")) return;
-   fetch("/api/component-types/"+id, { method:"DELETE" }).then(loadCabTypes);
+
+ window.deleteType = function(id){
+   if(!confirm("Удалить?")) return;
+   fetch("/api/system-component-types/"+id, { method:"DELETE" }).then(loadTypes);
  };
- document.getElementById("exportCabTypesBtn").addEventListener("click", async function(){
-   var r = await fetch("/api/component-types/export"); var b = await r.blob();
+
+ document.getElementById("exportTypesBtn").addEventListener("click", async function(){
+   var r = await fetch("/api/system-component-types/export"); var b = await r.blob();
    var a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "types.xlsx"; a.click();
  });
- document.getElementById("importCabTypesBtn").addEventListener("click", function(){ document.getElementById("importCabTypesFile").click(); });
- document.getElementById("importCabTypesFile").addEventListener("change", async function(){
+
+ document.getElementById("importTypesBtn").addEventListener("click", function(){ document.getElementById("importTypesFile").click(); });
+ document.getElementById("importTypesFile").addEventListener("change", async function(){
    var fd = new FormData(); fd.append("file", this.files[0]);
-   await fetch("/api/component-types/import", { method:"POST", body:fd }); loadCabTypes(); this.value="";
+   await fetch("/api/system-component-types/import", { method:"POST", body:fd }); loadTypes(); this.value="";
  });
- loadCabTypes();
+
+ loadTypes();
 })();
 </script>

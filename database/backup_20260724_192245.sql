@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict xXeGosxKKnVnQfA4Xc7PRm3qR5eRFpA3LSmJFbYipsaORZq3YA6bDd1F3KiFDCa
+\restrict e7KtXmox32yykyBDqtYp34LHIlEpnIGpMfBqVhBSwlQqQQ9kIdxz4qpBCDFgSoW
 
 -- Dumped from database version 17.9 (Debian 17.9-0+deb13u1)
 -- Dumped by pg_dump version 17.9 (Debian 17.9-0+deb13u1)
@@ -111,7 +111,8 @@ CREATE TABLE public.block_templates (
     url character varying(500),
     description text,
     ln character varying(100),
-    tm character varying(100)
+    tm character varying(100),
+    "position" integer DEFAULT 0
 );
 
 
@@ -303,7 +304,8 @@ CREATE TABLE public.component_types (
     name character varying(255) NOT NULL,
     category character varying(100),
     description text,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    "position" integer DEFAULT 0
 );
 
 
@@ -527,7 +529,7 @@ ALTER SEQUENCE public.consumables_id_seq OWNED BY public.consumables.id;
 
 CREATE TABLE public.ln_values (
     id integer NOT NULL,
-    value character varying(100) NOT NULL,
+    value character varying(100),
     entity_type character varying(50) NOT NULL,
     entity_id integer NOT NULL,
     created_at timestamp with time zone DEFAULT now()
@@ -567,7 +569,8 @@ CREATE TABLE public.manufacturers (
     name character varying(255) NOT NULL,
     country character varying(100),
     website character varying(255),
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    "position" integer DEFAULT 0
 );
 
 
@@ -612,7 +615,8 @@ CREATE TABLE public.materials (
     manufacturer_id integer,
     manufacturer_url character varying(500),
     ln character varying(100),
-    tm character varying(100)
+    tm character varying(100),
+    "position" integer DEFAULT 0
 );
 
 
@@ -650,7 +654,8 @@ CREATE TABLE public.parameters (
     unit character varying(50),
     type character varying(50),
     description text,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    "position" integer DEFAULT 0
 );
 
 
@@ -841,7 +846,8 @@ CREATE TABLE public.projects (
     description text,
     user_id integer,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    "position" integer DEFAULT 0
 );
 
 
@@ -1064,7 +1070,8 @@ CREATE TABLE public.system_component_types (
     name character varying(255) NOT NULL,
     description text,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    "position" integer DEFAULT 0
 );
 
 
@@ -1108,7 +1115,8 @@ CREATE TABLE public.system_components (
     url character varying(500),
     module_id integer,
     ln character varying(100),
-    tm character varying(100)
+    tm character varying(100),
+    "position" integer DEFAULT 0
 );
 
 
@@ -1182,7 +1190,8 @@ CREATE TABLE public.system_modules (
     name character varying(255) NOT NULL,
     description text,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    "position" integer DEFAULT 0
 );
 
 
@@ -1219,7 +1228,8 @@ CREATE TABLE public.system_parameter_types (
     name character varying(255) NOT NULL,
     value text,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    "position" integer
 );
 
 
@@ -1260,7 +1270,8 @@ CREATE TABLE public.system_parameters (
     updated_at timestamp with time zone DEFAULT now(),
     type character varying(50),
     ln numeric,
-    tm numeric
+    tm numeric,
+    "position" integer DEFAULT 0
 );
 
 
@@ -1296,7 +1307,8 @@ CREATE TABLE public.systems (
     id integer NOT NULL,
     name character varying(255) NOT NULL,
     description text,
-    created_at timestamp without time zone DEFAULT now()
+    created_at timestamp without time zone DEFAULT now(),
+    "position" integer DEFAULT 0
 );
 
 
@@ -1330,7 +1342,7 @@ ALTER SEQUENCE public.systems_id_seq OWNED BY public.systems.id;
 
 CREATE TABLE public.tm_values (
     id integer NOT NULL,
-    value character varying(100) NOT NULL,
+    value character varying(100),
     entity_type character varying(50) NOT NULL,
     entity_id integer NOT NULL,
     created_at timestamp with time zone DEFAULT now()
@@ -1395,6 +1407,46 @@ ALTER SEQUENCE public.user_sessions_id_seq OWNER TO hrroot;
 --
 
 ALTER SEQUENCE public.user_sessions_id_seq OWNED BY public.user_sessions.id;
+
+
+--
+-- Name: user_table_sort; Type: TABLE; Schema: public; Owner: hrroot
+--
+
+CREATE TABLE public.user_table_sort (
+    id integer NOT NULL,
+    user_id integer,
+    table_name character varying(100) NOT NULL,
+    sort_order jsonb DEFAULT '[]'::jsonb,
+    sort_key character varying(50),
+    sort_dir character varying(10) DEFAULT 'asc'::character varying,
+    filter_data jsonb DEFAULT '{}'::jsonb,
+    updated_at timestamp without time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.user_table_sort OWNER TO hrroot;
+
+--
+-- Name: user_table_sort_id_seq; Type: SEQUENCE; Schema: public; Owner: hrroot
+--
+
+CREATE SEQUENCE public.user_table_sort_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.user_table_sort_id_seq OWNER TO hrroot;
+
+--
+-- Name: user_table_sort_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: hrroot
+--
+
+ALTER SEQUENCE public.user_table_sort_id_seq OWNED BY public.user_table_sort.id;
 
 
 --
@@ -1683,6 +1735,13 @@ ALTER TABLE ONLY public.user_sessions ALTER COLUMN id SET DEFAULT nextval('publi
 
 
 --
+-- Name: user_table_sort id; Type: DEFAULT; Schema: public; Owner: hrroot
+--
+
+ALTER TABLE ONLY public.user_table_sort ALTER COLUMN id SET DEFAULT nextval('public.user_table_sort_id_seq'::regclass);
+
+
+--
 -- Name: users id; Type: DEFAULT; Schema: public; Owner: hrroot
 --
 
@@ -1702,17 +1761,16 @@ COPY public.block_template_materials (id, block_template_id, material_id, quanti
 -- Data for Name: block_templates; Type: TABLE DATA; Schema: public; Owner: hrroot
 --
 
-COPY public.block_templates (id, name, created_at, updated_at, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, url, description, ln, tm) FROM stdin;
-49	Автоматический выключатель 10A 400В	2026-07-08 22:07:09.94405	2026-07-08 22:07:09.94405	32	1	S9F21310	4240.00	\N	\N	\N	https://api.systeme.ru/catalog/view/S9F21310	Systeme9 Автоматический выключатель (АВ) B 10A 3P 6kA 400В	\N	\N
-50	Автоматический выключатель 16A 400В	2026-07-08 22:12:58.03125	2026-07-08 22:12:58.03125	32	1	S9F23416	7950.00	\N	\N	\N	https://api.systeme.ru/catalog/view/S9F23416	Systeme9 Автоматический выключатель (АВ) D 16A 4P 6kA 400В	\N	\N
-46	Автоматический выключатель 16A 230В	2026-07-08 21:51:00.686367	2026-07-08 21:51:00.686367	32	1	S9F21116	1070.00	\N	\N	\N	https://api.systeme.ru/catalog/view/S9F21116	Systeme9 Автоматический выключатель (АВ) B 16A 1P 6kA 230В	\N	\N
-47	Автоматический выключатель 6A 400В	2026-07-08 21:52:40.579833	2026-07-08 21:52:40.579833	32	1	S9F21306	3320.00	\N	\N	\N	https://api.systeme.ru/catalog/view/S9F21306	Systeme9 Автоматический выключатель (АВ) B 6A 3P 6kA 400В	\N	\N
-7	Реле 230V	2026-06-29 19:08:37.99461	2026-07-16 22:22:53.613817	29	1	SXG22P7	1003.00	\N	19.00	\N	https://systeme.ru/product/SXG22P7?ysclid=mp4113fjdn489734512	Реле 8A 2CO 230VAC тест кнопка LED	8	15
-25	Контактор 24В	2026-07-07 11:38:30.754427	2026-07-16 09:24:30.925348	31	1	MP1K1201BD	5819.40	\N	\N	1.00	https://systeme.ru/product/MP1K1201BD?ysclid=mp40uzqrqh438380385	КОНТАКТОР MP1K 12A 1НЗ DC24V	8	\N
-29	Автоматический выключатель 6A 230В	2026-07-08 21:39:22.531255	2026-07-09 00:33:02.446889	32	1	S9F21106	1280.00	\N	\N	\N	https://api.systeme.ru/catalog/view/S9F21106	Systeme9 Автоматический выключатель (АВ) B 6A 1P 6kA 230В	\N	\N
-26	SystemeHD	2026-07-07 12:57:20.772926	2026-07-16 11:17:24.224491	1	1	HD1407E	149500.00	\N	600.00	14.00	https://api.systeme.ru/catalog/view/HD1407E	Контроллер SystemeHD, 6DI 8UI 3DO 2AO 2VO, 2Ethernet 2RS485 BACnet Modbus ~24В/=24В	26	\N
-6	SystemeHD	2026-06-29 19:03:09.38992	2026-07-16 11:18:01.00488	1	1	HD1407	124500.00	\N	600.00	14.00	https://api.systeme.ru/catalog/view/HD1407	Контроллер SystemeHD, 6DI 8UI 3DO 2AO 2VO Ethernet 2RS485 BACnet Modbus ~24В/=24В	27	25
-31	Автоматический выключатель 10A 230В	2026-07-08 21:41:26.515326	2026-07-16 20:16:36.664837	32	1	S9F21110	1180.00	\N	\N	\N	https://api.systeme.ru/catalog/view/S9F21110	Systeme9 Автоматический выключатель (АВ) B 10A 1P 6kA 230В	\N	\N
+COPY public.block_templates (id, name, created_at, updated_at, type_id, manufacturer_id, article, price, labor, weight_grams, power_watts, url, description, ln, tm, "position") FROM stdin;
+7	Реле 230V	2026-06-29 19:08:37.99461	2026-07-19 22:22:57.100864	29	1	SXG22P7	1003.00	\N	19.00	\N	https://systeme.ru/product/SXG22P7	Реле 8A 2CO 230VAC тест кнопка LED	8	15	7
+60	Автоматический выключатель 6A 400В	2026-07-17 23:18:20.337576	2026-07-19 22:22:57.101382	32	1	S9F21306	3320.00	\N	\N	\N	https://api.systeme.ru/catalog/view/S9F21306	Systeme9 Автоматический выключатель (АВ) B 6A 3P 6kA 400В	\N	\N	8
+54	SystemeHD	2026-07-17 23:16:39.74921	2026-07-23 22:30:07.579369	1	1	HD1407	124500.00	\N	600.00	14.00	https://api.systeme.ru/catalog/view/HD1407	Контроллер SystemeHD	27	\N	6
+56	SystemeHD	2026-07-17 23:18:20.330472	2026-07-23 22:34:24.029083	1	1	HD1407E	149500.00	\N	600.00	14.00	https://api.systeme.ru/catalog/view/HD1407E	Контроллер SystemeHD, 6DI 8UI 3DO 2AO 2VO, 2Ethernet 2RS485 BACnet Modbus ~24В/=24В	26	\N	3
+61	Автоматический выключатель 10A 400В	2026-07-17 23:18:20.338828	2026-07-23 22:50:34.127369	32	1	S9F21310	4240.00	\N	\N	\N	https://api.systeme.ru/catalog/view/S9F21310	Systeme9 Автоматический выключатель (АВ) B 10A 3P 6kA 400В	\N	\N	5
+59	Автоматический выключатель 16A 230В	2026-07-17 23:18:20.336092	2026-07-19 22:22:57.094026	32	1	S9F21116	1070.00	\N	\N	\N	https://api.systeme.ru/catalog/view/S9F21116	Systeme9 Автоматический выключатель (АВ) B 16A 1P 6kA 230В	\N	\N	0
+58	Автоматический выключатель 10A 230В	2026-07-17 23:18:20.333565	2026-07-19 22:22:57.096292	32	1	S9F21110	1180.00	\N	\N	\N	https://api.systeme.ru/catalog/view/S9F21110	Systeme9 Автоматический выключатель (АВ) B 10A 1P 6kA 230В	\N	\N	1
+57	Автоматический выключатель 6A 230В	2026-07-17 23:18:20.331737	2026-07-19 22:22:57.096968	32	1	S9F21106	1280.00	\N	\N	\N	https://api.systeme.ru/catalog/view/S9F21106	Systeme9 Автоматический выключатель (АВ) B 6A 1P 6kA 230В	\N	\N	2
+55	Контактор 24В	2026-07-17 23:18:20.329084	2026-07-19 22:22:57.099091	31	1	MP1K1201BD	5819.40	\N	\N	1.00	https://systeme.ru/product/MP1K1201BD?ysclid=mp40uzqrqh438380385	КОНТАКТОР MP1K 12A 1НЗ DC24V	8	\N	4
 \.
 
 
@@ -1729,19 +1787,26 @@ COPY public.breakers (id, name, type, rating, project_id, created_at) FROM stdin
 --
 
 COPY public.cabinet_systems (id, cabinet_id, name, description, system_id, "position") FROM stdin;
-24	10	\N	Раздевалки ЩУВ-П2.50	22	0
 36	10	\N	ПВ (6нП15.1/6нВ18.1) ЩУВ-П2.50	27	0
 37	10	\N	ПВ (6нП15.1/6нВ18.1) ЩУВ-П2.50	28	0
 38	1	\N	\N	\N	0
 39	1	\N	Центральная кроссовая ЩУВ-П2.47	18	1
 23	1	\N	Раздевалки ЩУВ-П2.47	1	2
-25	1	\N	Лифтовые холлы паркинга ЩУВ-П2.47	17	3
 27	1	\N	ПВ (6нП15.2/6нВ18.2) - ИТП П3.17 ЩУВ-П2.47	20	4
 29	1	\N	ПВ (6нП15.3/6нВ18.3) помещения?	24	5
 40	1	\N	Центральная кроссовая ЩУВ-П2.47	19	6
 28	1	\N	ПВ (6нП15.2/6нВ18.2) - ИТП П3.17 ЩУВ-П2.47	21	7
 30	1	\N	ПВ (6нП15.3/6нВ18.3) помещения?	25	8
-41	1	\N	\N	26	9
+46	12	\N	\N	33	0
+47	12	\N	\N	34	0
+49	10	\N	\N	23	0
+50	10	\N	\N	22	0
+53	12	\N	\N	35	0
+54	12	\N	\N	36	0
+57	12	\N	\N	37	0
+59	1	\N	\N	17	0
+61	12	\N	\N	38	0
+62	12	\N	\N	40	0
 \.
 
 
@@ -1750,8 +1815,10 @@ COPY public.cabinet_systems (id, cabinet_id, name, description, system_id, "posi
 --
 
 COPY public.cabinets (id, name, project_id, user_id, created_at, updated_at, description, width, height, depth) FROM stdin;
-10	ЩУВ-П2.50	2	1	2026-07-07 21:17:20.12974	2026-07-14 20:35:47.458453		\N	\N	\N
 1	ЩУВ-П2.47	2	1	2026-06-28 15:41:21.340102	2026-07-14 20:35:50.866953	для сети "Петрович"	\N	\N	\N
+10	ЩУВ-П2.50	2	1	2026-07-07 21:17:20.12974	2026-07-14 20:35:47.458453		\N	\N	\N
+12	ЩУВ-П1.04	2	1	2026-07-18 15:58:58.63267	2026-07-18 16:53:57.649861		\N	\N	\N
+13	Тестовый шкаф	2	1	2026-07-18 17:38:35.903151	2026-07-18 17:38:35.903151	\N	\N	\N	\N
 \.
 
 
@@ -1766,6 +1833,13 @@ COPY public.component_param_values (id, component_id, param_id, value, created_a
 25	6	4	3	2026-06-29 19:03:09.38992
 26	6	6	1	2026-06-29 19:03:09.38992
 27	6	5	2	2026-06-29 19:03:09.38992
+44	7	4	1	2026-07-17 23:18:20.324182
+51	54	1	8	2026-07-23 22:30:07.579369
+52	54	2	2	2026-07-23 22:30:07.579369
+53	54	4	3	2026-07-23 22:30:07.579369
+54	54	5	2	2026-07-23 22:30:07.579369
+55	54	6	1	2026-07-23 22:30:07.579369
+56	54	8	6	2026-07-23 22:30:07.579369
 \.
 
 
@@ -1773,21 +1847,21 @@ COPY public.component_param_values (id, component_id, param_id, value, created_a
 -- Data for Name: component_types; Type: TABLE DATA; Schema: public; Owner: hrroot
 --
 
-COPY public.component_types (id, name, category, description, created_at) FROM stdin;
-32	Автоматический выключатель	\N	\N	2026-06-29 18:54:10.715973
-1	Контроллер		\N	2026-06-26 20:21:03.509978
-2	Модуль расширения		\N	2026-06-27 10:51:00.812674
-24	Блок питания	\N	\N	2026-06-29 18:54:10.711833
-25	Графическая панель оператора	\N	\N	2026-06-29 18:54:10.712633
-26	Коммутатор	\N	\N	2026-06-29 18:54:10.713241
-27	Реле контроля фаз	\N	\N	2026-06-29 18:54:10.713694
-28	Реле промежуточное (колодка)	\N	\N	2026-06-29 18:54:10.714149
-29	Реле промежуточное (реле)	\N	\N	2026-06-29 18:54:10.714797
-30	Реле промежуточное (реле+колодка)	\N	\N	2026-06-29 18:54:10.715208
-31	Контактор	\N	\N	2026-06-29 18:54:10.715597
-33	Выключатель нагрузки	\N	\N	2026-06-29 18:54:10.716299
-34	Вентилятор	\N	\N	2026-06-29 18:54:10.716611
-35	Корпус шкафа	\N	\N	2026-06-29 18:54:10.716939
+COPY public.component_types (id, name, category, description, created_at, "position") FROM stdin;
+34	Вентилятор	\N	\N	2026-06-29 18:54:10.716611	0
+1	Контроллер		\N	2026-06-26 20:21:03.509978	1
+33	Выключатель нагрузки	\N	\N	2026-06-29 18:54:10.716299	2
+25	Графическая панель оператора	\N	\N	2026-06-29 18:54:10.712633	3
+26	Коммутатор	\N	\N	2026-06-29 18:54:10.713241	4
+31	Контактор	\N	\N	2026-06-29 18:54:10.715597	5
+35	Корпус шкафа	\N	\N	2026-06-29 18:54:10.716939	6
+2	Модуль расширения		\N	2026-06-27 10:51:00.812674	7
+27	Реле контроля фаз	\N	\N	2026-06-29 18:54:10.713694	8
+28	Реле промежуточное (колодка)	\N	\N	2026-06-29 18:54:10.714149	9
+29	Реле промежуточное (реле)	\N	\N	2026-06-29 18:54:10.714797	10
+24	Блок питания	\N	\N	2026-06-29 18:54:10.711833	11
+30	Реле промежуточное (реле+колодка)	\N	\N	2026-06-29 18:54:10.715208	12
+32	Автоматический выключатель	\N	\N	2026-06-29 18:54:10.715973	13
 \.
 
 
@@ -1839,51 +1913,23 @@ COPY public.ln_values (id, value, entity_type, entity_id, created_at) FROM stdin
 2	1	material	10	2026-07-06 20:08:10.191038+05
 121	2	block_template	31	2026-07-08 21:41:26.515326+05
 1	1	material	18	2026-07-06 20:08:10.191038+05
-67	2	system_component	41	2026-07-07 09:41:32.207507+05
 120	2	block_template	29	2026-07-08 21:39:22.531255+05
-12	2	system_component	12	2026-07-06 20:08:10.191038+05
-66	2	system_component	40	2026-07-07 09:39:22.126834+05
-11	1	system_component	11	2026-07-06 20:08:10.191038+05
 6	1	material	7	2026-07-06 20:08:10.191038+05
 7	1	material	13	2026-07-06 20:08:10.191038+05
 5	1	material	17	2026-07-06 20:08:10.191038+05
 3	1	material	9	2026-07-06 20:08:10.191038+05
-90	3	system_component	35	2026-07-07 17:32:55.490564+05
-198	3	system_component	60	2026-07-10 12:29:05.897416+05
 4	1	material	16	2026-07-06 20:08:10.191038+05
-10	3	system_component	3	2026-07-06 20:08:10.191038+05
 9	8	block_template	7	2026-07-06 20:08:10.191038+05
-94	1	system_component	48	2026-07-07 17:34:02.764683+05
-95	1	system_component	45	2026-07-07 17:34:10.506203+05
-96	1	system_component	46	2026-07-07 17:34:19.253141+05
-97	1	system_component	49	2026-07-07 17:34:27.438024+05
-361		system_component	68	2026-07-16 22:33:11.171881+05
-59	1	system_component	32	2026-07-06 23:14:47.268696+05
-61	1	system_component	34	2026-07-06 23:46:19.918689+05
-62	1	system_component	36	2026-07-07 09:20:26.051327+05
-65	1	system_component	39	2026-07-07 09:33:47.98721+05
-68	1	system_component	42	2026-07-07 09:43:04.514984+05
-69	1	system_component	43	2026-07-07 09:46:26.345731+05
-70	1	system_component	44	2026-07-07 09:48:23.921594+05
-71	1	system_component	47	2026-07-07 11:43:47.932439+05
-168	1	system_component	53	2026-07-10 08:23:50.481238+05
-98	10	block_template	28	2026-07-07 21:51:30.628963+05
+383	1	block_template	54	2026-07-23 22:30:07.579369+05
+387	\N	block_template	56	2026-07-23 22:34:24.029083+05
+388	\N	block_template	61	2026-07-23 22:50:34.113089+05
 75	26	block_template	26	2026-07-07 13:17:27.551512+05
 8	27	block_template	6	2026-07-06 20:08:10.191038+05
-128	2	block_template	40	2026-07-08 21:45:19.721808+05
+361		system_component	68	2026-07-16 22:33:11.171881+05
 129	2	block_template	46	2026-07-08 21:51:00.686367+05
 130	6	block_template	47	2026-07-08 21:52:40.579833+05
 131	6	block_template	49	2026-07-08 22:07:09.94405+05
 132	6	block_template	50	2026-07-08 22:12:58.03125+05
-187	1	system_component	56	2026-07-10 11:17:33.26816+05
-185	3	system_component	55	2026-07-10 11:05:53.154501+05
-189	1	system_component	57	2026-07-10 11:21:24.459649+05
-183	3	system_component	54	2026-07-10 11:05:03.744461+05
-194	3	system_component	59	2026-07-10 12:22:15.194162+05
-192	1	system_component	58	2026-07-10 12:19:04.780042+05
-101	1	system_component	52	2026-07-07 21:57:31.698012+05
-64	3	system_component	38	2026-07-07 09:30:33.660812+05
-63	2	system_component	37	2026-07-07 09:26:07.201102+05
 74	8	block_template	25	2026-07-07 13:17:27.551512+05
 \.
 
@@ -1892,15 +1938,15 @@ COPY public.ln_values (id, value, entity_type, entity_id, created_at) FROM stdin
 -- Data for Name: manufacturers; Type: TABLE DATA; Schema: public; Owner: hrroot
 --
 
-COPY public.manufacturers (id, name, country, website, created_at) FROM stdin;
-1	Systeme Electric	Россия		2026-06-26 08:23:59.316451
-3	Dekraft	Россия	\N	2026-06-26 08:34:44.04663
-4	DKS	Россия	\N	2026-06-26 08:34:44.047092
-5	IEK	Россия	\N	2026-06-26 08:34:44.047567
-27	Дмитров-Кабель	Россия	\N	2026-07-01 22:57:05.103164
-28	КВТ	\N	\N	2026-07-05 10:40:34.540282
-29	THERMOKON	\N	\N	2026-07-06 16:00:24.668021
-18	Shuft	Дания	https://www.shuft.pro	2026-06-29 21:21:35.452749
+COPY public.manufacturers (id, name, country, website, created_at, "position") FROM stdin;
+3	Dekraft	Россия	\N	2026-06-26 08:34:44.04663	0
+4	DKS	Россия	\N	2026-06-26 08:34:44.047092	0
+5	IEK	Россия	\N	2026-06-26 08:34:44.047567	0
+27	Дмитров-Кабель	Россия	\N	2026-07-01 22:57:05.103164	0
+28	КВТ	\N	\N	2026-07-05 10:40:34.540282	0
+29	THERMOKON	\N	\N	2026-07-06 16:00:24.668021	0
+18	Shuft	Дания	https://www.shuft.pro	2026-06-29 21:21:35.452749	0
+1	Systeme Electric	Россия		2026-06-26 08:23:59.316451	1
 \.
 
 
@@ -1908,19 +1954,19 @@ COPY public.manufacturers (id, name, country, website, created_at) FROM stdin;
 -- Data for Name: materials; Type: TABLE DATA; Schema: public; Owner: hrroot
 --
 
-COPY public.materials (id, article, name, manufacturer, description, unit, price, created_at, updated_at, manufacturer_id, manufacturer_url, ln, tm) FROM stdin;
-10	9888602	ПУГВнг(А)-LS 1х1.5 белый	\N	Провод силовой ПУГВнг(А)-LS 1х1.5 ТРТС белый многопроволочный 100м Дмитров-Кабель	м	27.77	2026-07-02 19:59:34.812034	2026-07-08 22:19:12.459176	27	https://www.etm.ru/cat/nn/9888602	2	2
-20	8806872	Наконечник 2 х 1.5-8	\N	Наконечник штыревой втулочный изолированный НШВИ(2) 1.5-8 79466 КВТ	шт	2.10	2026-07-07 22:07:33.753728	2026-07-16 22:21:30.75207	28	https://www.etm.ru/cat/nn/8806872	1	1
-22	5041367	Клемма проходная, 4 кв.мм, серая	\N	Клемма проходная, винтовой зажим, 2 точки подключения, 4 кв.мм, серая TUR-4 DKC	шт	76.05	2026-07-15 08:28:37.674186	2026-07-16 11:17:40.225764	4	https://www.etm.ru/cat/nn/5041367	2	1
-9	8519116	Клемма двухуровневая, 2.5 кв.мм, серая	\N	Клемма двухуровневая, винтовой зажим, 4 точки подключения, 2.5 кв.мм, серая KRUKB-3 DKC	шт	374.84	2026-07-02 14:03:06.897852	2026-07-16 11:18:06.37474	4	https://www.etm.ru/cat/nn/8519116	1	1
-7	5226932	ПуГВнг(А)-LS 1х0.75 белый	\N	Провод силовой ПуГВнг(А)-LS 1х0.75белый 500м ТРТС Дмитров-Кабель	м	15.08	2026-07-01 22:59:38.992109	2026-07-16 20:11:40.139849	27	https://www.etm.ru/cat/nn/5226932	1	1
-18	5044120	ПУГВнг(А)-LS 1х1.5 синий	\N	Провод силовой ПУГВнг(А)-LS 1х1.5 ТРТС синий многопроволочный Дмитров-Кабель	м	28.48	2026-07-06 10:38:46.471228	2026-07-07 11:40:30.495708	27	https://www.etm.ru/cat/nn/5044120	1	1
-19	4943770	Наконечник 1.5-8	\N	Наконечник штыревой втулочный изолированный НШВИ 1.5-8 79440 КВТ	шт	1.04	2026-07-07 22:06:20.115682	2026-07-16 21:51:06.450323	28	https://www.etm.ru/cat/nn/4943770	1	1
-17	2530140	Наконечник 2 х 0.75-8	\N	Наконечник штыревой втулочный изолированный НШВИ(2) 0.75-8 79462 КВТ	шт	1.64	2026-07-05 10:43:51.209397	2026-07-16 22:23:09.287559	28	https://www.etm.ru/cat/nn/2530140	1	1
-23	5728143	Клемма заземления,  4 кв.мм	\N	Клемма заземления, винтовой зажим, 2 точки подключения, 4 кв.мм TUR-4-PE DKC	шт	250.68	2026-07-15 08:31:21.048041	2026-07-16 09:00:17.014583	4	https://www.etm.ru/cat/nn/5728143	2	1
-21	6016932	Клемма проходная, 4 кв.мм, синяя	\N	Клемма проходная, винтовой зажим, 2 точки подключения, 4 кв.мм, синяя TUR-4-BU DKC	шт	89.35	2026-07-15 08:27:08.568127	2026-07-16 09:04:03.973474	4	https://www.etm.ru/cat/nn/6016932	2	1
-13	7262531	ПуГВнг(А)-LS 1х0.75 синий	\N	Провод силовой ПуГВнг(А)-LS 1х0.75синий 500м ТРТ С Дмитров-Кабель	м	15.51	2026-07-04 11:12:23.024586	2026-07-16 20:11:48.836684	27	https://www.etm.ru/cat/nn/7262531	1	1
-16	2976861	Наконечник  0.75-8	\N	Наконечник штыревой втулочный изолированный НШВИ 0.75-8 79436 КВТ	шт	0.87	2026-07-05 10:41:50.745652	2026-07-16 21:09:35.63942	28	https://www.etm.ru/cat/nn/2976861	1	1
+COPY public.materials (id, article, name, manufacturer, description, unit, price, created_at, updated_at, manufacturer_id, manufacturer_url, ln, tm, "position") FROM stdin;
+22	5041367	Клемма проходная, 4 кв.мм, серая	\N	Клемма проходная, винтовой зажим, 2 точки подключения, 4 кв.мм, серая TUR-4 DKC	шт	76.05	2026-07-15 08:28:37.674186	2026-07-16 11:17:40.225764	4	https://www.etm.ru/cat/nn/5041367	2	1	0
+9	8519116	Клемма двухуровневая, 2.5 кв.мм, серая	\N	Клемма двухуровневая, винтовой зажим, 4 точки подключения, 2.5 кв.мм, серая KRUKB-3 DKC	шт	374.84	2026-07-02 14:03:06.897852	2026-07-16 11:18:06.37474	4	https://www.etm.ru/cat/nn/8519116	1	1	0
+7	5226932	ПуГВнг(А)-LS 1х0.75 белый	\N	Провод силовой ПуГВнг(А)-LS 1х0.75белый 500м ТРТС Дмитров-Кабель	м	15.08	2026-07-01 22:59:38.992109	2026-07-16 20:11:40.139849	27	https://www.etm.ru/cat/nn/5226932	1	1	0
+19	4943770	Наконечник 1.5-8	\N	Наконечник штыревой втулочный изолированный НШВИ 1.5-8 79440 КВТ	шт	1.04	2026-07-07 22:06:20.115682	2026-07-16 21:51:06.450323	28	https://www.etm.ru/cat/nn/4943770	1	1	0
+17	2530140	Наконечник 2 х 0.75-8	\N	Наконечник штыревой втулочный изолированный НШВИ(2) 0.75-8 79462 КВТ	шт	1.64	2026-07-05 10:43:51.209397	2026-07-16 22:23:09.287559	28	https://www.etm.ru/cat/nn/2530140	1	1	0
+23	5728143	Клемма заземления,  4 кв.мм	\N	Клемма заземления, винтовой зажим, 2 точки подключения, 4 кв.мм TUR-4-PE DKC	шт	250.68	2026-07-15 08:31:21.048041	2026-07-16 09:00:17.014583	4	https://www.etm.ru/cat/nn/5728143	2	1	0
+21	6016932	Клемма проходная, 4 кв.мм, синяя	\N	Клемма проходная, винтовой зажим, 2 точки подключения, 4 кв.мм, синяя TUR-4-BU DKC	шт	89.35	2026-07-15 08:27:08.568127	2026-07-16 09:04:03.973474	4	https://www.etm.ru/cat/nn/6016932	2	1	0
+13	7262531	ПуГВнг(А)-LS 1х0.75 синий	\N	Провод силовой ПуГВнг(А)-LS 1х0.75синий 500м ТРТ С Дмитров-Кабель	м	15.51	2026-07-04 11:12:23.024586	2026-07-16 20:11:48.836684	27	https://www.etm.ru/cat/nn/7262531	1	1	0
+16	2976861	Наконечник  0.75-8	\N	Наконечник штыревой втулочный изолированный НШВИ 0.75-8 79436 КВТ	шт	0.87	2026-07-05 10:41:50.745652	2026-07-16 21:09:35.63942	28	https://www.etm.ru/cat/nn/2976861	1	1	0
+20	8806872	Наконечник 2 х 1.5-8	\N	Наконечник штыревой втулочный изолированный НШВИ(2) 1.5-8 79466 КВТ	шт	2.10	2026-07-07 22:07:33.753728	2026-07-23 19:49:06.707889	28	https://www.etm.ru/cat/nn/8806872	1	1	0
+18	5044120	ПУГВнг(А)-LS 1х1.5 синий	\N	Провод силовой ПУГВнг(А)-LS 1х1.5 ТРТС синий многопроволочный Дмитров-Кабель	м	28.48	2026-07-06 10:38:46.471228	2026-07-16 23:58:29.256377	27	https://www.etm.ru/cat/nn/5044120	1	1	0
+10	9888602	ПУГВнг(А)-LS 1х1.5 белый	\N	Провод силовой ПУГВнг(А)-LS 1х1.5 ТРТС белый многопроволочный 100м Дмитров-Кабель	м	27.77	2026-07-02 19:59:34.812034	2026-07-16 23:58:22.75147	27	https://www.etm.ru/cat/nn/9888602	2	2	0
 \.
 
 
@@ -1928,13 +1974,13 @@ COPY public.materials (id, article, name, manufacturer, description, unit, price
 -- Data for Name: parameters; Type: TABLE DATA; Schema: public; Owner: hrroot
 --
 
-COPY public.parameters (id, name, unit, type, description, created_at) FROM stdin;
-1	AI	\N	1	Аналоговый вход	2026-06-26 20:21:17.81597
-2	AO			Аналоговый выход	2026-06-27 10:51:00.825187
-8	DI			Дискретный вход	2026-06-27 11:47:44.599184
-4	DO			Дискретный выход	2026-06-27 11:27:00.975712
-6	Eth			Интернет порт	2026-06-27 11:27:53.341558
-5	RS485			порт RS485	2026-06-27 11:27:23.919453
+COPY public.parameters (id, name, unit, type, description, created_at, "position") FROM stdin;
+1	AI	\N	1	Аналоговый вход	2026-06-26 20:21:17.81597	0
+4	DO			Дискретный выход	2026-06-27 11:27:00.975712	1
+6	Eth			Интернет порт	2026-06-27 11:27:53.341558	2
+8	DI			Дискретный вход	2026-06-27 11:47:44.599184	3
+2	AO			Аналоговый выход	2026-06-27 10:51:00.825187	4
+5	RS485			порт RS485	2026-06-27 11:27:23.919453	5
 \.
 
 
@@ -1951,6 +1997,8 @@ COPY public.project_block_params (id, block_id, param_id, value, created_at) FRO
 --
 
 COPY public.project_blocks (id, project_id, cabinet_id, template_id, "position", created_at, quantity, linked) FROM stdin;
+96	\N	1	56	0	2026-07-23 22:34:24.041711	1	f
+97	\N	1	61	0	2026-07-23 22:50:34.133054	3	f
 \.
 
 
@@ -1959,7 +2007,6 @@ COPY public.project_blocks (id, project_id, cabinet_id, template_id, "position",
 --
 
 COPY public.project_materials (id, project_id, material_id, quantity, created_at, cabinet_id, linked, updated_at) FROM stdin;
-42	1	20	1	2026-07-16 21:45:16.819424	1	f	2026-07-16 21:45:16.819424
 \.
 
 
@@ -1975,9 +2022,10 @@ COPY public.project_results (id, project_id, data, created_at) FROM stdin;
 -- Data for Name: projects; Type: TABLE DATA; Schema: public; Owner: hrroot
 --
 
-COPY public.projects (id, name, description, user_id, created_at, updated_at) FROM stdin;
-1	Ижевск	шкафы автоматики	1	2026-06-26 08:58:55.518043	2026-06-26 08:58:55.518043
-2	Питер	Автоматизация вентиляции	2	2026-06-26 09:15:01.104668	2026-06-28 16:08:08.020327
+COPY public.projects (id, name, description, user_id, created_at, updated_at, "position") FROM stdin;
+11	3	куку	1	2026-07-19 14:16:20.727897	2026-07-19 19:09:14.949428	0
+1	Ижевск	шкафы автоматики	1	2026-06-26 08:58:55.518043	2026-07-19 19:09:14.950128	1
+2	Питер	Автоматизация вентиляции	2	2026-06-26 09:15:01.104668	2026-07-19 19:09:14.950491	2
 \.
 
 
@@ -2090,20 +2138,20 @@ COPY public.system_component_type_materials (id, type_id, material_id, quantity,
 -- Data for Name: system_component_types; Type: TABLE DATA; Schema: public; Owner: hrroot
 --
 
-COPY public.system_component_types (id, name, description, created_at, updated_at) FROM stdin;
-23	привод заслонки 220/0-10/О/З	\N	2026-07-10 08:04:53.801229+05	2026-07-16 21:49:54.669383+05
-21	Двигатель (Частотный преобразователь)	\N	2026-07-07 11:48:47.209634+05	2026-07-10 08:07:43.583589+05
-18	Привод трехходового клапана 24/0-10/статус	\N	2026-07-07 10:29:22.514806+05	2026-07-10 08:09:16.336661+05
-24	привод заслонки 24/0-10/О/З	\N	2026-07-10 08:09:38.654499+05	2026-07-10 08:09:38.654499+05
-6	привод заслонки  220/DO/О/З	1	2026-06-27 12:12:43.894779+05	2026-07-16 22:22:44.696128+05
-26	test	\N	2026-07-16 22:20:47.597211+05	2026-07-16 22:23:12.630361+05
-25	привод заслонки 24/DO/О/З	\N	2026-07-10 08:09:52.596463+05	2026-07-14 17:53:37.094246+05
-17	Датчик температуры - ТЕ	\N	2026-07-06 15:56:03.01345+05	2026-07-16 08:44:44.604872+05
-19	Циркуляционный насос	\N	2026-07-07 11:32:12.961835+05	2026-07-07 11:32:12.961835+05
-20	Термостат	\N	2026-07-07 11:44:58.389633+05	2026-07-07 11:44:58.389633+05
-16	Датчик перепада - PDS	\N	2026-07-06 15:54:14.002119+05	2026-07-16 10:32:51.464572+05
-15	Фильтр	\N	2026-07-02 20:12:58.799329+05	2026-07-16 10:32:55.764425+05
-22	Двигатель (Контактор 3P 220)	\N	2026-07-07 21:56:28.187202+05	2026-07-16 10:42:58.263634+05
+COPY public.system_component_types (id, name, description, created_at, updated_at, "position") FROM stdin;
+15	Фильтр	\N	2026-07-02 20:12:58.799329+05	2026-07-19 18:50:22.614632+05	0
+16	Датчик перепада - PDS	\N	2026-07-06 15:54:14.002119+05	2026-07-19 18:50:22.615605+05	1
+6	привод заслонки  220/DO/О/З	1	2026-06-27 12:12:43.894779+05	2026-07-19 18:50:22.6161+05	2
+17	Датчик температуры - ТЕ	\N	2026-07-06 15:56:03.01345+05	2026-07-19 18:50:22.616551+05	3
+18	Привод трехходового клапана 24/0-10/статус	\N	2026-07-07 10:29:22.514806+05	2026-07-19 18:50:22.61691+05	4
+19	Циркуляционный насос	\N	2026-07-07 11:32:12.961835+05	2026-07-19 18:50:22.617226+05	5
+20	Термостат	\N	2026-07-07 11:44:58.389633+05	2026-07-19 18:50:22.617544+05	6
+21	Двигатель (Частотный преобразователь)	\N	2026-07-07 11:48:47.209634+05	2026-07-19 18:50:22.617903+05	7
+22	Двигатель (Контактор 3P 220)	\N	2026-07-07 21:56:28.187202+05	2026-07-19 18:50:22.618281+05	8
+23	привод заслонки 220/0-10/О/З	\N	2026-07-10 08:04:53.801229+05	2026-07-19 18:50:22.618651+05	9
+24	привод заслонки 24/0-10/О/З	\N	2026-07-10 08:09:38.654499+05	2026-07-19 18:50:22.61901+05	10
+25	привод заслонки 24/DO/О/З	\N	2026-07-10 08:09:52.596463+05	2026-07-19 18:50:22.619312+05	11
+26	test	\N	2026-07-16 22:20:47.597211+05	2026-07-19 18:50:22.619574+05	12
 \.
 
 
@@ -2111,33 +2159,33 @@ COPY public.system_component_types (id, name, description, created_at, updated_a
 -- Data for Name: system_components; Type: TABLE DATA; Schema: public; Owner: hrroot
 --
 
-COPY public.system_components (id, name, type_id, manufacturer_id, article, description, created_at, updated_at, url, module_id, ln, tm) FROM stdin;
-32	Датчик температуры канала притока	17	1	\N	\N	2026-07-06 23:14:47.268696+05	2026-07-07 14:21:12.376611+05	\N	11	1	15
-43	Датчик температуры канала притока после жалюзей	17	1	\N	\N	2026-07-07 09:46:26.345731+05	2026-07-07 14:21:16.980407+05	\N	14	1	15
-47	Датчик температуры обратной воды	17	1	\N	\N	2026-07-07 11:43:47.932439+05	2026-07-07 14:21:25.855248+05	\N	17	1	15
-55	привод заслонки резервного вентилятора	6	18	\N	\N	2026-07-10 11:05:53.154501+05	2026-07-16 11:19:19.911577+05	\N	4	\N	\N
-54	привод заслонки основного вентилятора	6	18	\N	\N	2026-07-10 11:05:03.744461+05	2026-07-16 11:19:29.290467+05	\N	3	\N	\N
-59	привод заслонки вентилятора вытяжки резервного	6	18	\N	\N	2026-07-10 12:22:15.194162+05	2026-07-16 11:19:39.47169+05	\N	13	\N	\N
-58	Двигатель (контактор) вентилятора вытяжки 2	22	\N	\N	\N	2026-07-10 12:19:04.780042+05	2026-07-16 11:19:46.130612+05	\N	16	\N	\N
-52	Двигатель (контактор) вентилятора притока 1	22	\N	\N	\N	2026-07-07 21:57:31.698012+05	2026-07-16 11:19:50.903168+05	\N	10	\N	\N
-36	Датчик температуры вытяжки из помещения	17	1	\N	\N	2026-07-07 09:20:26.051327+05	2026-07-07 09:24:26.210963+05	\N	12	1	15
-68	test	26	\N	\N	\N	2026-07-16 22:33:11.171881+05	2026-07-16 22:33:11.171881+05	\N	19	\N	\N
-38	привод заслонки вытяжки	6	18	\N	\N	2026-07-07 09:30:33.660812+05	2026-07-16 11:44:57.414082+05	\N	2	4	30
-48	Термостат угрозы заморозки	20	\N	\N	\N	2026-07-07 11:45:32.852089+05	2026-07-07 17:34:02.764683+05	\N	17	1	15
-45	Привод трехходового клапана контура тепла	18	\N	\N	\N	2026-07-07 10:29:33.487908+05	2026-07-07 17:34:10.506203+05	\N	17	1	15
-46	Циркуляционный насос фодяного контура нагрева	19	\N	\N	\N	2026-07-07 11:37:11.308804+05	2026-07-07 17:34:19.253141+05	\N	17	1	15
-49	Частотный преобразователь вентилятора притока 1	21	\N	\N	\N	2026-07-07 11:50:24.461961+05	2026-07-07 17:34:27.438024+05	\N	10	1	30
-35	привод заслонки рециркуляции	6	18	\N	\N	2026-07-07 08:29:54.739483+05	2026-07-16 21:49:01.794203+05	\N	2	4	30
-60	привод заслонки вентилятора вытяжки основного	6	18	\N	\N	2026-07-10 12:29:05.897416+05	2026-07-16 21:49:08.584903+05	\N	16	\N	\N
-3	привод заслонки притока	23	18	\N	\N	2026-06-27 12:05:35.484324+05	2026-07-16 21:53:12.767766+05	/api/system-components/3	1	4	30
-53	Двигатель (контактор) вентилятора вытяжки 1	22	\N	\N	\N	2026-07-10 08:23:50.481238+05	2026-07-10 08:40:32.235566+05	\N	13	\N	\N
-37	Датчик перепада на Вентиляторе вытяжки 1	16	29	\N	привет это описание	2026-07-07 09:26:07.201102+05	2026-07-14 17:53:57.03406+05	\N	13	1	15
-41	Датчик перепада на Вентиляторе вытяжки 2	16	29	\N	\N	2026-07-07 09:41:32.207507+05	2026-07-16 08:44:06.648336+05	\N	16	1	15
-56	Частотный преобразователь вентилятора притока 2	21	\N	\N	\N	2026-07-10 11:17:33.26816+05	2026-07-10 11:17:47.404424+05	\N	15	\N	\N
-57	Датчик температуры в помещении	17	1	\N	\N	2026-07-10 11:21:24.459649+05	2026-07-10 11:21:42.431077+05	\N	18	\N	\N
-12	Датчик перепада на Вентиляторе притока 1	16	29	\N	\N	2026-07-06 15:59:58.5888+05	2026-07-16 08:46:23.741316+05	\N	10	2	15
-40	Датчик перепада на Вентиляторе притока 2	16	29	\N	\N	2026-07-07 09:39:22.126834+05	2026-07-16 08:46:28.74405+05	\N	15	1	15
-11	Датчик перепада на Фильтре	16	29	\N	\N	2026-07-02 20:17:20.770039+05	2026-07-16 08:46:34.087306+05	\N	6	1	15
+COPY public.system_components (id, name, type_id, manufacturer_id, article, description, created_at, updated_at, url, module_id, ln, tm, "position") FROM stdin;
+32	Датчик температуры канала притока	17	1	\N	\N	2026-07-06 23:14:47.268696+05	2026-07-22 23:54:49.214695+05	\N	11	1	15	17
+36	Датчик температуры вытяжки из помещения	17	1	\N	\N	2026-07-07 09:20:26.051327+05	2026-07-22 23:54:49.215127+05	\N	12	1	15	18
+57	Датчик температуры в помещении	17	1	\N	\N	2026-07-10 11:21:24.459649+05	2026-07-22 23:54:49.215532+05	\N	18	\N	\N	19
+11	Датчик перепада на Фильтре	16	29	\N	\N	2026-07-02 20:17:20.770039+05	2026-07-22 23:54:49.21584+05	\N	6	1	15	20
+40	Датчик перепада на Вентиляторе притока 2	16	29	\N	\N	2026-07-07 09:39:22.126834+05	2026-07-22 23:54:49.216135+05	\N	15	1	15	21
+56	Частотный преобразователь вентилятора притока 2	21	\N	\N	\N	2026-07-10 11:17:33.26816+05	2026-07-22 23:54:49.204941+05	\N	15	\N	\N	0
+3	привод заслонки притока	23	18	\N	\N	2026-06-27 12:05:35.484324+05	2026-07-22 23:54:49.207128+05	/api/system-components/3	1	4	30	1
+49	Частотный преобразователь вентилятора притока 1	21	\N	\N	\N	2026-07-07 11:50:24.461961+05	2026-07-22 23:54:49.207689+05	\N	10	1	30	2
+46	Циркуляционный насос фодяного контура нагрева	19	\N	\N	\N	2026-07-07 11:37:11.308804+05	2026-07-22 23:54:49.208071+05	\N	17	1	15	3
+48	Термостат угрозы заморозки	20	\N	\N	\N	2026-07-07 11:45:32.852089+05	2026-07-22 23:54:49.208525+05	\N	17	1	15	4
+45	Привод трехходового клапана контура тепла	18	\N	\N	\N	2026-07-07 10:29:33.487908+05	2026-07-22 23:54:49.209114+05	\N	17	1	15	5
+35	привод заслонки рециркуляции	6	18	\N	\N	2026-07-07 08:29:54.739483+05	2026-07-22 23:54:49.209832+05	\N	2	4	30	6
+55	привод заслонки резервного вентилятора	6	18	\N	\N	2026-07-10 11:05:53.154501+05	2026-07-22 23:54:49.210724+05	\N	4	\N	\N	7
+54	привод заслонки основного вентилятора	6	18	\N	\N	2026-07-10 11:05:03.744461+05	2026-07-22 23:54:49.211323+05	\N	3	\N	\N	8
+38	привод заслонки вытяжки	6	18	\N	\N	2026-07-07 09:30:33.660812+05	2026-07-22 23:54:49.211805+05	\N	2	4	30	9
+59	привод заслонки вентилятора вытяжки резервного	6	18	\N	\N	2026-07-10 12:22:15.194162+05	2026-07-22 23:54:49.212271+05	\N	13	\N	\N	10
+12	Датчик перепада на Вентиляторе притока 1	16	29	\N	\N	2026-07-06 15:59:58.5888+05	2026-07-22 23:54:49.216453+05	\N	10	2	15	22
+60	привод заслонки вентилятора вытяжки основного	6	18	\N	\N	2026-07-10 12:29:05.897416+05	2026-07-22 23:54:49.212672+05	\N	16	\N	\N	11
+41	Датчик перепада на Вентиляторе вытяжки 2	16	29	\N	\N	2026-07-07 09:41:32.207507+05	2026-07-22 23:54:49.216796+05	\N	16	1	15	23
+37	Датчик перепада на Вентиляторе вытяжки 1	16	29	\N	привет это описание	2026-07-07 09:26:07.201102+05	2026-07-22 23:54:49.217104+05	\N	13	1	15	24
+68	test	26	\N	\N	\N	2026-07-16 22:33:11.171881+05	2026-07-22 23:54:49.217653+05	\N	19	\N	\N	25
+52	Двигатель (контактор) вентилятора притока 1	22	\N	\N	\N	2026-07-07 21:57:31.698012+05	2026-07-22 23:54:49.213021+05	\N	10	\N	\N	12
+58	Двигатель (контактор) вентилятора вытяжки 2	22	\N	\N	\N	2026-07-10 12:19:04.780042+05	2026-07-22 23:54:49.213382+05	\N	16	\N	\N	13
+53	Двигатель (контактор) вентилятора вытяжки 1	22	\N	\N	\N	2026-07-10 08:23:50.481238+05	2026-07-22 23:54:49.213678+05	\N	13	\N	\N	14
+47	Датчик температуры обратной воды	17	1	\N	\N	2026-07-07 11:43:47.932439+05	2026-07-22 23:54:49.21397+05	\N	17	1	15	15
+43	Датчик температуры канала притока после жалюзей	17	1	\N	\N	2026-07-07 09:46:26.345731+05	2026-07-22 23:54:49.214318+05	\N	14	1	15	16
 \.
 
 
@@ -2228,26 +2276,26 @@ COPY public.system_components_link (id, system_id, component_id, quantity, "posi
 -- Data for Name: system_modules; Type: TABLE DATA; Schema: public; Owner: hrroot
 --
 
-COPY public.system_modules (id, name, description, created_at, updated_at) FROM stdin;
-5	Воздушная заслонка рециркуляции приточной и вытяжной систем	\N	2026-07-02 09:05:24.107873	2026-07-02 09:05:24.107873
-1	Воздушная заслонка приточной системы	\N	2026-07-02 09:00:22.242057	2026-07-02 09:05:31.126324
-6	Фильтр притока 1	\N	2026-07-02 20:13:35.621091	2026-07-02 20:13:35.621091
-7	Фильтр притока 2	\N	2026-07-02 20:13:48.356623	2026-07-02 20:13:48.356623
-8	Фильтр вытяжки 1	\N	2026-07-02 20:14:29.45965	2026-07-02 20:14:29.45965
-9	Фильтр вытяжки 2	\N	2026-07-02 20:14:37.038154	2026-07-02 20:14:37.038154
-2	Воздушная заслонка вытяжной системы	Описание	2026-07-02 09:00:22.242057	2026-07-05 13:20:52.686613
-3	Воздушная заслонка приточной для основного вентилятора	Описание	2026-07-02 09:04:26.781373	2026-07-05 13:46:42.686505
-4	Воздушная заслонка приточной для резервного вентилятора	12	2026-07-02 09:04:39.690032	2026-07-05 20:03:44.513922
-10	Вентилятор притока 1	\N	2026-07-06 15:57:53.449467	2026-07-06 15:57:53.449467
-11	Выход канала притока	\N	2026-07-06 15:58:44.43052	2026-07-06 15:58:44.43052
-12	Вход канала вытяжки	\N	2026-07-06 15:58:55.711705	2026-07-06 15:58:55.711705
-13	Вентилятор вытяжки 1	\N	2026-07-07 09:26:53.815148	2026-07-07 09:26:53.815148
-14	Канал притока после жалюзей	\N	2026-07-07 09:33:38.469489	2026-07-07 09:33:38.469489
-15	Вентилятор притока 2	\N	2026-07-07 09:40:02.304192	2026-07-07 09:40:02.304192
-16	Вентиляторе вытяжки 2	\N	2026-07-07 09:42:04.994077	2026-07-07 09:42:04.994077
-17	Водяной контур нагрева	\N	2026-07-07 10:28:17.993438	2026-07-07 10:28:17.993438
-18	Помещение	\N	2026-07-10 11:21:07.392534	2026-07-10 11:21:07.392534
-19	test	\N	2026-07-16 22:20:58.185368	2026-07-16 22:20:58.185368
+COPY public.system_modules (id, name, description, created_at, updated_at, "position") FROM stdin;
+14	Канал притока после жалюзей	\N	2026-07-07 09:33:38.469489	2026-07-19 18:50:33.865738	13
+15	Вентилятор притока 2	\N	2026-07-07 09:40:02.304192	2026-07-19 18:50:33.866096	14
+16	Вентиляторе вытяжки 2	\N	2026-07-07 09:42:04.994077	2026-07-19 18:50:33.866404	15
+17	Водяной контур нагрева	\N	2026-07-07 10:28:17.993438	2026-07-19 18:50:33.866778	16
+18	Помещение	\N	2026-07-10 11:21:07.392534	2026-07-19 18:50:33.867173	17
+19	test	\N	2026-07-16 22:20:58.185368	2026-07-19 18:50:33.867518	18
+3	Воздушная заслонка приточной для основного вентилятора	Описание	2026-07-02 09:04:26.781373	2026-07-19 18:50:33.858383	0
+2	Воздушная заслонка вытяжной системы	Описание	2026-07-02 09:00:22.242057	2026-07-19 18:50:33.860997	1
+4	Воздушная заслонка приточной для резервного вентилятора	12	2026-07-02 09:04:39.690032	2026-07-19 18:50:33.861818	2
+1	Воздушная заслонка приточной системы	\N	2026-07-02 09:00:22.242057	2026-07-19 18:50:33.862266	3
+5	Воздушная заслонка рециркуляции приточной и вытяжной систем	\N	2026-07-02 09:05:24.107873	2026-07-19 18:50:33.862647	4
+6	Фильтр притока 1	\N	2026-07-02 20:13:35.621091	2026-07-19 18:50:33.863043	5
+7	Фильтр притока 2	\N	2026-07-02 20:13:48.356623	2026-07-19 18:50:33.863415	6
+8	Фильтр вытяжки 1	\N	2026-07-02 20:14:29.45965	2026-07-19 18:50:33.863787	7
+9	Фильтр вытяжки 2	\N	2026-07-02 20:14:37.038154	2026-07-19 18:50:33.864135	8
+10	Вентилятор притока 1	\N	2026-07-06 15:57:53.449467	2026-07-19 18:50:33.864454	9
+11	Выход канала притока	\N	2026-07-06 15:58:44.43052	2026-07-19 18:50:33.86477	10
+12	Вход канала вытяжки	\N	2026-07-06 15:58:55.711705	2026-07-19 18:50:33.865087	11
+13	Вентилятор вытяжки 1	\N	2026-07-07 09:26:53.815148	2026-07-19 18:50:33.865397	12
 \.
 
 
@@ -2255,12 +2303,13 @@ COPY public.system_modules (id, name, description, created_at, updated_at) FROM 
 -- Data for Name: system_parameter_types; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.system_parameter_types (id, name, value, created_at, updated_at) FROM stdin;
-1	AI	Аналоговый вход	2026-07-06 11:34:24.671796+05	2026-07-06 11:34:24.671796+05
-2	AO	Аналоговый выход	2026-07-06 11:34:50.302082+05	2026-07-06 11:35:26.653533+05
-3	DI	Дискретный вход	2026-07-06 11:35:48.229822+05	2026-07-06 11:35:48.229822+05
-4	DO	Дискретный выход	2026-07-06 11:36:13.567957+05	2026-07-06 11:36:13.567957+05
-5	rs485	интерфейс rs485	2026-07-07 11:51:01.970834+05	2026-07-07 17:35:27.352622+05
+COPY public.system_parameter_types (id, name, value, created_at, updated_at, "position") FROM stdin;
+1	AI	Аналоговый вход	2026-07-06 11:34:24.671796+05	2026-07-06 11:34:24.671796+05	0
+4	DO	Дискретный выход	2026-07-06 11:36:13.567957+05	2026-07-06 11:36:13.567957+05	1
+3	DI	Дискретный вход	2026-07-06 11:35:48.229822+05	2026-07-06 11:35:48.229822+05	2
+2	AO	Аналоговый выход	2026-07-06 11:34:50.302082+05	2026-07-06 11:35:26.653533+05	3
+5	rs485	интерфейс rs485	2026-07-07 11:51:01.970834+05	2026-07-07 17:35:27.352622+05	4
+6	rest	\N	2026-07-23 14:42:54.245558+05	2026-07-23 14:42:54.245558+05	\N
 \.
 
 
@@ -2268,15 +2317,15 @@ COPY public.system_parameter_types (id, name, value, created_at, updated_at) FRO
 -- Data for Name: system_parameters; Type: TABLE DATA; Schema: public; Owner: hrroot
 --
 
-COPY public.system_parameters (id, name, value, description, created_at, updated_at, type, ln, tm) FROM stdin;
-7	статус закрыто	\N	Описание	2026-06-28 13:08:32.605933+05	2026-07-05 12:49:00.632345+05	DI	1	1
-18	Статус засора	\N	Описание	2026-07-02 20:16:38.875105+05	2026-07-05 12:49:05.947785+05	DI	1	1
-6	статус открыто	\N	Описание	2026-06-28 13:07:09.795998+05	2026-07-05 12:49:12.508217+05	DI	1	1
-19	Статус AI	\N	\N	2026-07-06 21:15:31.383048+05	2026-07-07 09:25:30.808801+05	AI	1	1
-17	Команда управление 0-10 В	\N	Описание	2026-07-02 09:40:01.07852+05	2026-07-07 09:28:42.760332+05	AO	1	1
-8	Команда управления - открыть	\N	Описание	2026-06-28 13:14:14.654716+05	2026-07-07 09:28:57.548497+05	DO	1	1
-20	Статус DI	\N	\N	2026-07-07 11:33:55.836712+05	2026-07-07 17:34:55.051966+05	DI	1	1
-21	интерфейс rs485	\N	\N	2026-07-07 11:50:13.895142+05	2026-07-07 17:34:58.515923+05	rs485	1	1
+COPY public.system_parameters (id, name, value, description, created_at, updated_at, type, ln, tm, "position") FROM stdin;
+17	Команда управление 0-10 В	\N	Описание	2026-07-02 09:40:01.07852+05	2026-07-19 18:50:28.337695+05	AO	1	1	0
+7	статус закрыто	\N	Описание	2026-06-28 13:08:32.605933+05	2026-07-19 18:50:28.338474+05	DI	1	1	1
+8	Команда управления - открыть	\N	Описание	2026-06-28 13:14:14.654716+05	2026-07-19 18:50:28.338862+05	DO	1	1	2
+6	статус открыто	\N	Описание	2026-06-28 13:07:09.795998+05	2026-07-19 18:50:28.339166+05	DI	1	1	3
+18	Статус засора	\N	Описание	2026-07-02 20:16:38.875105+05	2026-07-19 18:50:28.33946+05	DI	1	1	4
+19	Статус AI	\N	\N	2026-07-06 21:15:31.383048+05	2026-07-19 18:50:28.339788+05	AI	1	1	5
+20	Статус DI	\N	\N	2026-07-07 11:33:55.836712+05	2026-07-19 18:50:28.340256+05	DI	1	1	6
+21	интерфейс rs485	\N	\N	2026-07-07 11:50:13.895142+05	2026-07-19 18:50:28.340857+05	rs485	1	1	7
 \.
 
 
@@ -2284,20 +2333,26 @@ COPY public.system_parameters (id, name, value, description, created_at, updated
 -- Data for Name: systems; Type: TABLE DATA; Schema: public; Owner: hrroot
 --
 
-COPY public.systems (id, name, description, created_at) FROM stdin;
-23	6нВ17	Лифтовые холлы паркинга ЩУВ-П2.50	2026-07-06 10:02:27.815297
-21	6нВ18.2	ИТП П3.17 ЩУВ-П2.47	2026-07-06 09:59:29.33203
-19	6нВ14	Центральная кроссовая ЩУВ-П2.47	2026-07-06 09:58:40.20832
-25	6нВ18.3	уточнить в какое помещение работает и шкаф	2026-07-06 10:03:23.389963
-18	6нП12	Центральная кроссовая ЩУВ-П2.47	2026-07-06 09:58:01.633482
-1	6нП14	Раздевалки ЩУВ-П2.47	2026-06-28 16:46:41.681613
-20	6нП15.2	ИТП П3.17 ЩУВ-П2.47	2026-07-06 09:59:13.178276
-24	6нП15.3	уточнить в какое помещение работает и шкаф	2026-07-06 10:03:07.178812
-17	6нП16	Лифтовые холлы паркинга ЩУВ-П2.47	2026-07-06 09:57:18.793545
-26	test	\N	2026-07-06 21:44:30.056454
-27	6нВ18.1	\N	2026-07-07 21:40:53.385833
-28	6нП15.1	\N	2026-07-07 21:41:16.161244
-22	6нВ16	Раздевалки ЩУВ-П2.50	2026-07-06 10:02:08.301098
+COPY public.systems (id, name, description, created_at, "position") FROM stdin;
+35	6нВ13	Насосная АУПТ, КНС	2026-07-18 16:00:10.847747	4
+34	6нВ15.1	Складские пом. кухни на Р1 категории В4	2026-07-18 15:59:51.011384	5
+33	6нВ15.2	Складские пом. кухни на Р1 категории В3	2026-07-18 15:59:21.595282	6
+28	6нП15.1	\N	2026-07-07 21:41:16.161244	7
+27	6нВ18.1	\N	2026-07-07 21:40:53.385833	8
+25	6нВ18.3	уточнить в какое помещение работает и шкаф	2026-07-06 10:03:23.389963	9
+24	6нП15.3	уточнить в какое помещение работает и шкаф	2026-07-06 10:03:07.178812	10
+23	6нВ17	Лифтовые холлы паркинга	2026-07-06 10:02:27.815297	11
+22	6нВ16	Раздевалки	2026-07-06 10:02:08.301098	12
+21	6нВ18.2	ИТП П3.17 ЩУВ-П2.47	2026-07-06 09:59:29.33203	13
+20	6нП15.2	ИТП П3.17 ЩУВ-П2.47	2026-07-06 09:59:13.178276	14
+19	6нВ14	Центральная кроссовая ЩУВ-П2.47	2026-07-06 09:58:40.20832	15
+18	6нП12	Центральная кроссовая ЩУВ-П2.47	2026-07-06 09:58:01.633482	16
+17	6нП16	Лифтовые холлы паркинга ЩУВ-П2.47	2026-07-06 09:57:18.793545	17
+1	6нП14	Раздевалки ЩУВ-П2.47	2026-06-28 16:46:41.681613	18
+38	6нП13.2	Складские пом. кухни на Р1 категории В3 - стр 40	2026-07-18 16:06:14.452077	0
+40	6нВ14.1	ИБП-3 - стр 43	2026-07-18 18:45:39.762676	1
+37	6нП13.1	Складские пом. кухни на Р1 категории В4 - стр 40	2026-07-18 16:05:08.806757	2
+36	6нП11	Насосная АУПТ, КНС - стр 39	2026-07-18 16:03:13.181883	3
 \.
 
 
@@ -2308,11 +2363,6 @@ COPY public.systems (id, name, description, created_at) FROM stdin;
 COPY public.tm_values (id, value, entity_type, entity_id, created_at) FROM stdin;
 2	1	material	10	2026-07-06 20:08:10.192251+05
 1	1	material	18	2026-07-06 20:08:10.192251+05
-192	30	system_component	59	2026-07-10 12:22:15.194162+05
-190	15	system_component	58	2026-07-10 12:19:04.780042+05
-105	15	system_component	52	2026-07-07 21:57:31.698012+05
-68	30	system_component	38	2026-07-07 09:30:33.660812+05
-126	15	block_template	40	2026-07-08 21:45:19.721808+05
 127	15	block_template	46	2026-07-08 21:51:00.686367+05
 128	30	block_template	47	2026-07-08 21:52:40.579833+05
 129	30	block_template	49	2026-07-08 22:07:09.94405+05
@@ -2323,38 +2373,15 @@ COPY public.tm_values (id, value, entity_type, entity_id, created_at) FROM stdin
 3	1	material	9	2026-07-06 20:08:10.192251+05
 83	30	block_template	25	2026-07-07 13:43:48.701987+05
 4	1	material	16	2026-07-06 20:08:10.192251+05
-67	16	system_component	37	2026-07-07 09:26:07.201102+05
 124	15	block_template	29	2026-07-08 21:39:22.531255+05
 125	15	block_template	31	2026-07-08 21:41:26.515326+05
-71	16	system_component	41	2026-07-07 09:41:32.207507+05
-12	16	system_component	12	2026-07-06 20:08:10.192251+05
-63	15	system_component	32	2026-07-06 23:14:47.268696+05
-70	16	system_component	40	2026-07-07 09:39:22.126834+05
-65	15	system_component	34	2026-07-06 23:46:19.918689+05
-66	15	system_component	36	2026-07-07 09:20:26.051327+05
-69	15	system_component	39	2026-07-07 09:33:47.98721+05
-72	15	system_component	42	2026-07-07 09:43:04.514984+05
-73	15	system_component	43	2026-07-07 09:46:26.345731+05
-74	15	system_component	44	2026-07-07 09:48:23.921594+05
-75	15	system_component	47	2026-07-07 11:43:47.932439+05
-11	15	system_component	11	2026-07-06 20:08:10.192251+05
-100	15	system_component	48	2026-07-07 17:34:02.764683+05
-101	15	system_component	45	2026-07-07 17:34:10.506203+05
-102	15	system_component	46	2026-07-07 17:34:19.253141+05
-103	15	system_component	49	2026-07-07 17:34:27.438024+05
-96	30	system_component	35	2026-07-07 17:32:55.490564+05
-196	30	system_component	60	2026-07-10 12:29:05.897416+05
-10	30	system_component	3	2026-07-06 20:08:10.192251+05
 9	16	block_template	7	2026-07-06 20:08:10.192251+05
+368	1	block_template	54	2026-07-23 22:30:07.579369+05
+369	\N	block_template	56	2026-07-23 22:34:24.029083+05
+370	\N	block_template	61	2026-07-23 22:50:34.113089+05
 354		system_component	68	2026-07-16 22:33:11.171881+05
-166	15	system_component	53	2026-07-10 08:23:50.481238+05
-185	15	system_component	56	2026-07-10 11:17:33.26816+05
-187	15	system_component	57	2026-07-10 11:21:24.459649+05
-104	30	block_template	28	2026-07-07 21:51:30.628963+05
 82	30	block_template	26	2026-07-07 13:43:35.473497+05
 8	30	block_template	6	2026-07-06 20:08:10.192251+05
-183	30	system_component	55	2026-07-10 11:05:53.154501+05
-181	30	system_component	54	2026-07-10 11:05:03.744461+05
 \.
 
 
@@ -2371,6 +2398,32 @@ COPY public.user_sessions (id, user_id, token, created_at) FROM stdin;
 6	2	eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwidXNlcm5hbWUiOiJ0ZXN0Iiwicm9sZSI6InVzZXIiLCJpYXQiOjE3ODI0NDkwNjYsImV4cCI6MTc4MjUzNTQ2Nn0.YJtAtIrcVGB__04Pa280QOyN111H21TlnXHZBfPHSyk	2026-06-26 09:44:26.34615
 7	1	eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc4MjQ0OTE1OCwiZXhwIjoxNzgyNTM1NTU4fQ.ZrG0HdElK4lz4PICEG0KSfxsNx6RiZUahgdRAcYykms	2026-06-26 09:45:58.058532
 8	1	eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc4MjQ0OTg4MywiZXhwIjoxNzgyNTM2MjgzfQ.tXAfX8Vi_Lj3A3950ijxxgO_P4TkZ92usuQO1Wac6Rw	2026-06-26 09:58:03.065206
+\.
+
+
+--
+-- Data for Name: user_table_sort; Type: TABLE DATA; Schema: public; Owner: hrroot
+--
+
+COPY public.user_table_sort (id, user_id, table_name, sort_order, sort_key, sort_dir, filter_data, updated_at) FROM stdin;
+1	1	systems	[]	\N	asc	{"cabinets": []}	2026-07-23 09:33:36.881138
+192	1	system-components	[]	\N	asc	{"names": [], "types": [], "modules": []}	2026-07-23 10:26:27.905539
+404	1	system_components_20	["52", "145", "102", "59", "58", "56", "57"]	type_name	desc	{}	2026-07-23 19:17:45.247412
+279	1	system-parameters	[17, 8, 21, 7, 18, 6, 19, 20]	\N	asc	{}	2026-07-23 14:37:12.88353
+282	1	system-modules	[13, 10, 15, 16, 17, 2, 3, 4, 1, 5, 12, 11, 14, 18, 8, 9, 6, 7, 19]	name	asc	{}	2026-07-23 14:40:44.83475
+247	1	system-component-types	[26, 19, 15, 20, 18, 25, 24, 23, 6, 21, 22, 17, 16]	name	desc	{}	2026-07-24 18:58:01.0864
+284	1	system-parameter-types	[5, 4, 3, 6, 2, 1]	\N	asc	{}	2026-07-23 14:43:19.440445
+407	1	system_components_1	["83", "86", "81", "76", "87", "80", "85", "79", "77", "78"]	type_name	desc	{}	2026-07-23 19:18:25.2941
+291	1	component-types	[32, 24, 34, 33, 25, 26, 31, 1, 35, 2, 27, 28, 29, 30]	name	asc	{}	2026-07-23 14:49:58.938436
+402	1	system_components_18	["130", "128", "127", "125", "126", "119", "118", "129", "117", "116", "115", "114"]	id	desc	{}	2026-07-23 19:21:54.081362
+294	1	parameters	[5, 6, 4, 8, 2, 1]	description	desc	{}	2026-07-23 14:51:09.283408
+409	1	system_components_17	[134, 138, 136, 135, 131, 137, 132, 140, 133, 139]	\N	asc	{}	2026-07-24 18:46:09.158449
+314	1	cabinet_systems	[59, 40, 39, 30, 29, 28, 27, 23]	id	desc	{}	2026-07-24 18:46:31.528959
+287	1	block-templates	[]	\N	asc	{"names": [], "types": [], "manufacturers": []}	2026-07-23 14:53:58.115925
+311	1	cabinet-systems	[59, 23, 39, 27, 29, 40, 28, 30]	\N	asc	{}	2026-07-23 15:14:01.487201
+400	1	system_components_19	[]	\N	asc	{"name": []}	2026-07-23 19:25:50.770648
+475	1	cabinet_blocks	["block_1", "block_0", "block_2", "block_3", "block_4", "block_6", "block_5"]	component_name	desc	{}	2026-07-23 21:59:16.312916
+496	1	cabinet_materials	["mat_32", "mat_33", "mat_34", "mat_35", "mat_36", "mat_37", "mat_38", "mat_18", "mat_19", "mat_20", "mat_21", "mat_22", "mat_23", "mat_24", "mat_25", "mat_26", "mat_27", "mat_28", "mat_29", "mat_30", "mat_31", "mat_0", "mat_1", "mat_2", "mat_3", "mat_4", "mat_5", "mat_6", "mat_7", "mat_8", "mat_9", "mat_10", "mat_11", "mat_12", "mat_13", "mat_14", "mat_15", "mat_16", "mat_17"]	name	asc	{}	2026-07-23 22:23:01.199315
 \.
 
 
@@ -2395,7 +2448,7 @@ SELECT pg_catalog.setval('public.block_template_materials_id_seq', 11, true);
 -- Name: block_templates_id_seq; Type: SEQUENCE SET; Schema: public; Owner: hrroot
 --
 
-SELECT pg_catalog.setval('public.block_templates_id_seq', 53, true);
+SELECT pg_catalog.setval('public.block_templates_id_seq', 61, true);
 
 
 --
@@ -2409,21 +2462,21 @@ SELECT pg_catalog.setval('public.breakers_id_seq', 1, false);
 -- Name: cabinet_systems_id_seq; Type: SEQUENCE SET; Schema: public; Owner: hrroot
 --
 
-SELECT pg_catalog.setval('public.cabinet_systems_id_seq', 41, true);
+SELECT pg_catalog.setval('public.cabinet_systems_id_seq', 62, true);
 
 
 --
 -- Name: cabinets_id_seq; Type: SEQUENCE SET; Schema: public; Owner: hrroot
 --
 
-SELECT pg_catalog.setval('public.cabinets_id_seq', 11, true);
+SELECT pg_catalog.setval('public.cabinets_id_seq', 14, true);
 
 
 --
 -- Name: component_param_values_id_seq; Type: SEQUENCE SET; Schema: public; Owner: hrroot
 --
 
-SELECT pg_catalog.setval('public.component_param_values_id_seq', 27, true);
+SELECT pg_catalog.setval('public.component_param_values_id_seq', 56, true);
 
 
 --
@@ -2472,7 +2525,7 @@ SELECT pg_catalog.setval('public.consumables_id_seq', 1, false);
 -- Name: ln_values_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.ln_values_id_seq', 361, true);
+SELECT pg_catalog.setval('public.ln_values_id_seq', 390, true);
 
 
 --
@@ -2507,14 +2560,14 @@ SELECT pg_catalog.setval('public.project_block_params_id_seq', 1, false);
 -- Name: project_blocks_id_seq; Type: SEQUENCE SET; Schema: public; Owner: hrroot
 --
 
-SELECT pg_catalog.setval('public.project_blocks_id_seq', 94, true);
+SELECT pg_catalog.setval('public.project_blocks_id_seq', 99, true);
 
 
 --
 -- Name: project_materials_id_seq; Type: SEQUENCE SET; Schema: public; Owner: hrroot
 --
 
-SELECT pg_catalog.setval('public.project_materials_id_seq', 42, true);
+SELECT pg_catalog.setval('public.project_materials_id_seq', 43, true);
 
 
 --
@@ -2528,7 +2581,7 @@ SELECT pg_catalog.setval('public.project_results_id_seq', 1, false);
 -- Name: projects_id_seq; Type: SEQUENCE SET; Schema: public; Owner: hrroot
 --
 
-SELECT pg_catalog.setval('public.projects_id_seq', 10, true);
+SELECT pg_catalog.setval('public.projects_id_seq', 11, true);
 
 
 --
@@ -2584,7 +2637,7 @@ SELECT pg_catalog.setval('public.system_components_id_seq', 68, true);
 -- Name: system_components_link_id_seq; Type: SEQUENCE SET; Schema: public; Owner: hrroot
 --
 
-SELECT pg_catalog.setval('public.system_components_link_id_seq', 154, true);
+SELECT pg_catalog.setval('public.system_components_link_id_seq', 157, true);
 
 
 --
@@ -2598,7 +2651,7 @@ SELECT pg_catalog.setval('public.system_modules_id_seq', 19, true);
 -- Name: system_parameter_types_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.system_parameter_types_id_seq', 5, true);
+SELECT pg_catalog.setval('public.system_parameter_types_id_seq', 6, true);
 
 
 --
@@ -2612,14 +2665,14 @@ SELECT pg_catalog.setval('public.system_parameters_id_seq', 21, true);
 -- Name: systems_id_seq; Type: SEQUENCE SET; Schema: public; Owner: hrroot
 --
 
-SELECT pg_catalog.setval('public.systems_id_seq', 29, true);
+SELECT pg_catalog.setval('public.systems_id_seq', 40, true);
 
 
 --
 -- Name: tm_values_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.tm_values_id_seq', 354, true);
+SELECT pg_catalog.setval('public.tm_values_id_seq', 372, true);
 
 
 --
@@ -2627,6 +2680,13 @@ SELECT pg_catalog.setval('public.tm_values_id_seq', 354, true);
 --
 
 SELECT pg_catalog.setval('public.user_sessions_id_seq', 8, true);
+
+
+--
+-- Name: user_table_sort_id_seq; Type: SEQUENCE SET; Schema: public; Owner: hrroot
+--
+
+SELECT pg_catalog.setval('public.user_table_sort_id_seq', 512, true);
 
 
 --
@@ -3058,6 +3118,22 @@ ALTER TABLE ONLY public.tm_values
 
 ALTER TABLE ONLY public.user_sessions
     ADD CONSTRAINT user_sessions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_table_sort user_table_sort_pkey; Type: CONSTRAINT; Schema: public; Owner: hrroot
+--
+
+ALTER TABLE ONLY public.user_table_sort
+    ADD CONSTRAINT user_table_sort_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_table_sort user_table_sort_user_id_table_name_key; Type: CONSTRAINT; Schema: public; Owner: hrroot
+--
+
+ALTER TABLE ONLY public.user_table_sort
+    ADD CONSTRAINT user_table_sort_user_id_table_name_key UNIQUE (user_id, table_name);
 
 
 --
@@ -3852,6 +3928,14 @@ ALTER TABLE ONLY public.user_sessions
 
 
 --
+-- Name: user_table_sort user_table_sort_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: hrroot
+--
+
+ALTER TABLE ONLY public.user_table_sort
+    ADD CONSTRAINT user_table_sort_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
 -- Name: SCHEMA public; Type: ACL; Schema: -; Owner: pg_database_owner
 --
 
@@ -3925,7 +4009,7 @@ GRANT ALL ON TABLE public.ln_values TO hrroot;
 -- Name: SEQUENCE ln_values_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.ln_values_id_seq TO hrroot;
+GRANT ALL ON SEQUENCE public.ln_values_id_seq TO hrroot;
 
 
 --
@@ -3953,7 +4037,7 @@ GRANT ALL ON TABLE public.system_component_type_blocks TO hrroot;
 -- Name: SEQUENCE system_component_type_blocks_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.system_component_type_blocks_id_seq TO hrroot;
+GRANT ALL ON SEQUENCE public.system_component_type_blocks_id_seq TO hrroot;
 
 
 --
@@ -3967,7 +4051,7 @@ GRANT ALL ON TABLE public.system_component_type_materials TO hrroot;
 -- Name: SEQUENCE system_component_type_materials_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.system_component_type_materials_id_seq TO hrroot;
+GRANT ALL ON SEQUENCE public.system_component_type_materials_id_seq TO hrroot;
 
 
 --
@@ -3981,7 +4065,7 @@ GRANT ALL ON TABLE public.system_parameter_types TO hrroot;
 -- Name: SEQUENCE system_parameter_types_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.system_parameter_types_id_seq TO hrroot;
+GRANT ALL ON SEQUENCE public.system_parameter_types_id_seq TO hrroot;
 
 
 --
@@ -3995,12 +4079,12 @@ GRANT ALL ON TABLE public.tm_values TO hrroot;
 -- Name: SEQUENCE tm_values_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,USAGE ON SEQUENCE public.tm_values_id_seq TO hrroot;
+GRANT ALL ON SEQUENCE public.tm_values_id_seq TO hrroot;
 
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict xXeGosxKKnVnQfA4Xc7PRm3qR5eRFpA3LSmJFbYipsaORZq3YA6bDd1F3KiFDCa
+\unrestrict e7KtXmox32yykyBDqtYp34LHIlEpnIGpMfBqVhBSwlQqQQ9kIdxz4qpBCDFgSoW
 
