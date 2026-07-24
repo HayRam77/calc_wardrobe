@@ -7,7 +7,7 @@ const XLSX = require('xlsx');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Получение списка всех систем с агрегацией компонентов за 1 SQL-запрос
+// GET /api/systems — Список систем с агрегированными компонентами
 router.get('/', auth, async (req, res) => {
   try {
     const query = `
@@ -23,8 +23,8 @@ router.get('/', auth, async (req, res) => {
                 'link_id', scl.id,
                 'name', sc.name,
                 'article', sc.article,
-                'ln', COALESCE(ln.value, ''),
-                'tm', COALESCE(tm.value, ''),
+                'ln', COALESCE(sc.ln, ''),
+                'tm', COALESCE(sc.tm, ''),
                 'type_name', sct.name,
                 'position', scl.position
               ) ORDER BY scl.position, sc.name
@@ -32,8 +32,6 @@ router.get('/', auth, async (req, res) => {
             FROM system_components_link scl
             JOIN system_components sc ON scl.component_id = sc.id
             LEFT JOIN system_component_types sct ON sc.type_id = sct.id
-            LEFT JOIN ln_values ln ON ln.entity_type = 'system_component' AND ln.entity_id = sc.id
-            LEFT JOIN tm_values tm ON tm.entity_type = 'system_component' AND tm.entity_id = sc.id
             WHERE scl.system_id = s.id
           ), '[]'::json
         ) as components
@@ -51,6 +49,7 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// GET /api/systems/export — Экспорт в Excel
 router.get('/export', auth, async (req, res) => {
   try {
     const result = await pool.query('SELECT id as ID, name as Название, description as Описание FROM systems ORDER BY id');
@@ -61,6 +60,7 @@ router.get('/export', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка экспорта' }); }
 });
 
+// POST /api/systems/import — Импорт из Excel
 router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
   try {
     const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
@@ -73,37 +73,57 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
 });
 
-router.put('/sort-order', auth, isAdmin, async (req, res) => {
+// PUT /api/systems/sort-order & POST /reorder
+router.post('/reorder', auth, isAdmin, async (req, res) => {
   try {
-    var items = req.body.items;
-    if (!items || !Array.isArray(items)) return res.status(400).json({ message: 'items required' });
-    for (var i = 0; i < items.length; i++) {
-      await pool.query('UPDATE systems SET position = $1 WHERE id = $2', [items[i].position, items[i].id]);
+    const rawList = req.body.items || req.body.ids;
+    if (!rawList || !Array.isArray(rawList)) return res.status(400).json({ message: 'items or ids array required' });
+    for (let i = 0; i < rawList.length; i++) {
+      const item = rawList[i];
+      const id = typeof item === 'object' ? parseInt(item.id) : parseInt(item);
+      const pos = typeof item === 'object' ? parseInt(item.position) : i;
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE systems SET position = $1 WHERE id = $2', [pos, id]);
     }
     res.json({ message: 'ok' });
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+router.put('/sort-order', auth, isAdmin, async (req, res) => {
+  try {
+    const rawList = req.body.items || req.body.ids;
+    if (!rawList || !Array.isArray(rawList)) return res.status(400).json({ message: 'items or ids array required' });
+    for (let i = 0; i < rawList.length; i++) {
+      const item = rawList[i];
+      const id = typeof item === 'object' ? parseInt(item.id) : parseInt(item);
+      const pos = typeof item === 'object' ? parseInt(item.position) : i;
+      if (isNaN(id) || isNaN(pos)) continue;
+      await pool.query('UPDATE systems SET position = $1 WHERE id = $2', [pos, id]);
+    }
+    res.json({ message: 'ok' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+});
+
+// GET /api/systems/:id — Информация об одной системе и её компонентах
 router.get('/:id', auth, async (req, res) => {
   try {
     const sys = await pool.query('SELECT * FROM systems WHERE id = $1', [req.params.id]);
     if (sys.rows.length === 0) return res.status(404).json({ message: 'Не найдена' });
     const comps = await pool.query(`
       SELECT scl.id as link_id, scl.*, sc.id, sc.name, sc.article, sc.type_id, sc.module_id, 
-             COALESCE(ln.value, '') AS ln, COALESCE(tm.value, '') AS tm,
+             COALESCE(sc.ln, '') AS ln, COALESCE(sc.tm, '') AS tm,
              sct.name as type_name, sm.name as module_name
       FROM system_components_link scl
       JOIN system_components sc ON scl.component_id = sc.id
       LEFT JOIN system_component_types sct ON sc.type_id = sct.id
       LEFT JOIN system_modules sm ON sc.module_id = sm.id
-      LEFT JOIN ln_values ln ON ln.entity_type = 'system_component' AND ln.entity_id = sc.id
-      LEFT JOIN tm_values tm ON tm.entity_type = 'system_component' AND tm.entity_id = sc.id
       WHERE scl.system_id = $1 ORDER BY scl.position
     `, [req.params.id]);
     res.json({ ...sys.rows[0], components: comps.rows });
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
+  } catch (err) { console.error('Ошибка получения системы:', err); res.status(500).json({ message: 'Ошибка получения системы' }); }
 });
 
+// POST /api/systems
 router.post('/', auth, isAdmin, async (req, res) => {
   try {
     const { name, description, cabinet_ids } = req.body;
@@ -119,6 +139,7 @@ router.post('/', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+// GET /api/systems/:id/cabinets
 router.get('/:id/cabinets', auth, async (req, res) => {
   try {
     const result = await pool.query('SELECT cabinet_id FROM cabinet_systems WHERE system_id = $1', [req.params.id]);
@@ -126,6 +147,7 @@ router.get('/:id/cabinets', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+// PUT /api/systems/:id
 router.put('/:id', auth, isAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -150,12 +172,13 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
   finally { client.release(); }
 });
 
+// DELETE /api/systems/:id
 router.delete('/:id', auth, isAdmin, async (req, res) => {
   try { await pool.query('DELETE FROM systems WHERE id=$1', [req.params.id]); res.json({ message: 'Удалена' }); }
   catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// Получить связь по ID
+// GET /api/systems/link/:id
 router.get('/link/:id', auth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM system_components_link WHERE id=$1', [req.params.id]);
@@ -164,7 +187,7 @@ router.get('/link/:id', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// Обновить связь компонента с системой
+// PUT /api/systems/link/:id
 router.put('/link/:id', auth, isAdmin, async (req, res) => {
   try {
     const { quantity } = req.body;
@@ -173,7 +196,7 @@ router.put('/link/:id', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// Удалить связь компонента с системой
+// DELETE /api/systems/link/:id
 router.delete('/link/:id', auth, isAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM system_components_link WHERE id=$1', [req.params.id]);
@@ -181,7 +204,7 @@ router.delete('/link/:id', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// Копирование состава системы в другую
+// POST /api/systems/:sourceId/copy-to/:targetId
 router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -224,7 +247,7 @@ router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Очистка всех компонентов системы
+// DELETE /api/systems/:id/components — Очистка всех компонентов системы
 router.delete('/:id/components', auth, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -236,24 +259,24 @@ router.delete('/:id/components', auth, isAdmin, async (req, res) => {
   }
 });
 
-// Добавить компонент в систему
+// POST /api/systems/:id/components — Добавить компонент в систему
 router.post('/:id/components', auth, isAdmin, async (req, res) => {
-    try {
-        const { component_id, quantity } = req.body;
-        const result = await pool.query(
-            `INSERT INTO system_components_link (system_id, component_id, quantity)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (system_id, component_id) 
-             DO UPDATE SET quantity = EXCLUDED.quantity
-             RETURNING *`,
-            [req.params.id, component_id, quantity || 1]
-        );
-        const status = result.rows[0].created_at === result.rows[0].updated_at ? 201 : 200;
-        res.status(status).json(result.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Ошибка добавления компонента в систему' });
-    }
+  try {
+    const { component_id, quantity } = req.body;
+    const result = await pool.query(
+      `INSERT INTO system_components_link (system_id, component_id, quantity)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (system_id, component_id) 
+       DO UPDATE SET quantity = EXCLUDED.quantity
+       RETURNING *`,
+      [req.params.id, component_id, quantity || 1]
+    );
+    const status = result.rows[0].created_at === result.rows[0].updated_at ? 201 : 200;
+    res.status(status).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка добавления компонента в систему' });
+  }
 });
 
 module.exports = router;
