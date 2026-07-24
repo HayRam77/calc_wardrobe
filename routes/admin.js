@@ -6,6 +6,10 @@ const auth = require('../middleware/auth');
 const isAdmin = require('../middleware/isAdmin');
 const { body, validationResult } = require('express-validator');
 const validate = require('../middleware/validation');
+const { exec } = require('child_process');
+const fs = require('fs');
+const multer = require('multer');
+const upload = multer({ dest: '/tmp/' });
 
 // Все маршруты требуют авторизации и роль admin
 router.use(auth);
@@ -22,7 +26,7 @@ router.get('/users', async (req, res) => {
   }
 });
 
-// Создать пользователя (админ может создать другого админа или пользователя)
+// Создать пользователя
 router.post('/users', validate([
   body('username').trim().notEmpty().withMessage('Имя обязательно'),
   body('email').optional().isEmail().withMessage('Некорректный email'),
@@ -35,11 +39,14 @@ router.post('/users', validate([
     const hashed = await bcrypt.hash(password, 10);
     const result = await pool.query(
       'INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
-      [username, email, hashed, role || 'user']
+      [username, email || null, hashed, role || 'user']
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
+    if (err.code === '23505') {
+      return res.status(400).json({ message: 'Пользователь с таким именем или email уже существует' });
+    }
     res.status(500).json({ message: 'Ошибка создания пользователя' });
   }
 });
@@ -56,7 +63,7 @@ router.delete('/users/:id', async (req, res) => {
   }
 });
 
-// Получить все проекты (админ видит все)
+// Получить все проекты
 router.get('/projects', async (req, res) => {
   try {
     const result = await pool.query('SELECT p.*, u.username as owner FROM projects p JOIN users u ON p.user_id = u.id ORDER BY p.created_at DESC');
@@ -67,7 +74,7 @@ router.get('/projects', async (req, res) => {
   }
 });
 
-// Получить все шкафы (админ)
+// Получить все шкафы
 router.get('/cabinets', async (req, res) => {
   try {
     const result = await pool.query('SELECT c.*, u.username as owner FROM cabinets c JOIN users u ON c.user_id = u.id ORDER BY c.created_at DESC');
@@ -78,39 +85,75 @@ router.get('/cabinets', async (req, res) => {
   }
 });
 
-
-const { exec } = require('child_process');
-
-// Экспорт дампа БД (только данные)
-router.get('/db/export', auth, isAdmin, async (req, res) => {
+// ========== ЭКСПОРТ ДАМПА БД ==========
+router.get('/db/export', async (req, res) => {
   try {
     const fileName = 'bd_calc_dump_' + new Date().toISOString().slice(0,10) + '.sql';
     res.setHeader('Content-Disposition', 'attachment; filename=' + fileName);
     res.setHeader('Content-Type', 'application/sql');
-    const cmd = 'PGPASSWORD=' + (process.env.DB_PASSWORD || '') + ' pg_dump --data-only --inserts --on-conflict-do-nothing -U ' + (process.env.DB_USER || 'hrroot') + ' -h ' + (process.env.DB_HOST || 'localhost') + ' -d ' + (process.env.DB_NAME || 'bd_calc');
-    exec(cmd, { maxBuffer: 100 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) { console.error(stderr); return res.status(500).json({ message: 'Ошибка экспорта' }); }
+
+    const dbUser = process.env.DB_USER || 'hrroot';
+    const dbHost = process.env.DB_HOST || 'localhost';
+    const dbName = process.env.DB_NAME || 'bd_calc';
+    const dbPassword = process.env.DB_PASSWORD || 'CalcWardrobe2026!';
+
+    const cmd = `pg_dump --data-only --inserts --on-conflict-do-nothing -U ${dbUser} -h ${dbHost} -d ${dbName}`;
+
+    exec(cmd, { 
+      maxBuffer: 100 * 1024 * 1024,
+      env: { ...process.env, PGPASSWORD: dbPassword }
+    }, (err, stdout, stderr) => {
+      if (err) {
+        console.error('Ошибка pg_dump:', stderr);
+        return res.status(500).json({ message: 'Ошибка экспорта базы данных' });
+      }
       res.send(stdout);
     });
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка экспорта' }); }
+  } catch (err) {
+    console.error('Ошибка экспорта:', err);
+    res.status(500).json({ message: 'Ошибка экспорта' });
+  }
 });
 
-// Импорт дампа БД
-const multer = require('multer');
-const upload = multer({ dest: '/tmp/' });
-router.post('/db/import', auth, isAdmin, upload.single('file'), async (req, res) => {
+// ========== ИМПОРТ ДАМПА БД ==========
+router.post('/db/import', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'Файл дампа не загружен' });
+  }
+  const filePath = req.file.path;
   try {
-    const filePath = req.file.path;
-    const cmd = 'PGPASSWORD=' + (process.env.DB_PASSWORD || '') + ' psql -U ' + (process.env.DB_USER || 'hrroot') + ' -h ' + (process.env.DB_HOST || 'localhost') + ' -d ' + (process.env.DB_NAME || 'bd_calc') + ' -f ' + filePath;
-    exec(cmd, { maxBuffer: 100 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) { console.error(stderr); return res.status(500).json({ message: 'Ошибка импорта: ' + stderr }); }
-      res.json({ message: 'Дамп успешно импортирован' });
+    const dbUser = process.env.DB_USER || 'hrroot';
+    const dbHost = process.env.DB_HOST || 'localhost';
+    const dbName = process.env.DB_NAME || 'bd_calc';
+    const dbPassword = process.env.DB_PASSWORD || 'CalcWardrobe2026!';
+
+    const cmd = `psql -U ${dbUser} -h ${dbHost} -d ${dbName} -f "${filePath}"`;
+
+    exec(cmd, { 
+      maxBuffer: 100 * 1024 * 1024,
+      env: { ...process.env, PGPASSWORD: dbPassword }
+    }, (err, stdout, stderr) => {
+      if (fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch (e) {}
+      }
+
+      if (err) {
+        console.error('Ошибка импорта psql:', stderr);
+        return res.status(500).json({ message: 'Ошибка импорта дампа: ' + (stderr || err.message) });
+      }
+      res.json({ message: 'Дамп успешно импортирован!' });
     });
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
+  } catch (err) {
+    if (fs.existsSync(filePath)) {
+      try { fs.unlinkSync(filePath); } catch (e) {}
+    }
+    console.error('Ошибка импорта:', err);
+    res.status(500).json({ message: 'Ошибка импорта: ' + err.message });
+  }
 });
 
-// Обновление пользователя
-router.put('/users/:id', auth, isAdmin, validate([
+// ========== ОБНОВЛЕНИЕ ПОЛЬЗОВАТЕЛЯ ==========
+router.put('/users/:id', validate([
     body('username').optional().trim().notEmpty().withMessage('Имя пользователя не может быть пустым'),
     body('email').optional().trim(),
     body('password').optional(),
@@ -172,37 +215,19 @@ router.put('/users/:id', auth, isAdmin, validate([
 });
 
 // ========== ОПТИМИЗАЦИЯ БД ==========
-router.post('/db/optimize', auth, isAdmin, async (req, res) => {
+router.post('/db/optimize', async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         let totalRemoved = 0;
         
-        // 1. Удаляем осиротевшие записи в ln_values (entity_id не существует)
-        const lnResult = await client.query(
-            `DELETE FROM ln_values WHERE 
-             (entity_type = 'system_component' AND entity_id NOT IN (SELECT id FROM system_components)) OR
-             (entity_type = 'block_template' AND entity_id NOT IN (SELECT id FROM block_templates)) OR
-             (entity_type = 'material' AND entity_id NOT IN (SELECT id FROM materials))`
-        );
-        totalRemoved += lnResult.rowCount;
-        
-        // 2. Удаляем осиротевшие записи в tm_values
-        const tmResult = await client.query(
-            `DELETE FROM tm_values WHERE 
-             (entity_type = 'system_component' AND entity_id NOT IN (SELECT id FROM system_components)) OR
-             (entity_type = 'block_template' AND entity_id NOT IN (SELECT id FROM block_templates)) OR
-             (entity_type = 'material' AND entity_id NOT IN (SELECT id FROM materials))`
-        );
-        totalRemoved += tmResult.rowCount;
-        
-        // 3. Удаляем пустые cabinet_systems (без system_id)
+        // 1. Удаляем пустые/осиротевшие cabinet_systems
         const emptySystems = await client.query(
-            `DELETE FROM cabinet_systems WHERE system_id IS NULL OR system_id NOT IN (SELECT id FROM systems)`
+            `DELETE FROM cabinet_systems WHERE system_id IS NULL OR system_id NOT IN (SELECT id FROM systems) OR cabinet_id NOT IN (SELECT id FROM cabinets)`
         );
         totalRemoved += emptySystems.rowCount;
         
-        // 4. Удаляем неиспользуемые system_block_links
+        // 2. Удаляем осиротевшие system_block_links
         const sblResult = await client.query(
             `DELETE FROM system_block_links WHERE 
              system_component_id NOT IN (SELECT id FROM system_components) OR
@@ -210,7 +235,7 @@ router.post('/db/optimize', auth, isAdmin, async (req, res) => {
         );
         totalRemoved += sblResult.rowCount;
         
-        // 5. Удаляем неиспользуемые system_component_materials
+        // 3. Удаляем осиротевшие system_component_materials
         const scmResult = await client.query(
             `DELETE FROM system_component_materials WHERE 
              system_component_id NOT IN (SELECT id FROM system_components) OR
@@ -218,7 +243,7 @@ router.post('/db/optimize', auth, isAdmin, async (req, res) => {
         );
         totalRemoved += scmResult.rowCount;
         
-        // 6. Удаляем неиспользуемые project_blocks
+        // 4. Удаляем осиротевшие project_blocks
         const pbResult = await client.query(
             `DELETE FROM project_blocks WHERE 
              cabinet_id NOT IN (SELECT id FROM cabinets) OR
@@ -226,7 +251,7 @@ router.post('/db/optimize', auth, isAdmin, async (req, res) => {
         );
         totalRemoved += pbResult.rowCount;
         
-        // 7. Удаляем неиспользуемые project_materials
+        // 5. Удаляем осиротевшие project_materials
         const pmResult = await client.query(
             `DELETE FROM project_materials WHERE 
              cabinet_id NOT IN (SELECT id FROM cabinets) OR
@@ -234,7 +259,7 @@ router.post('/db/optimize', auth, isAdmin, async (req, res) => {
         );
         totalRemoved += pmResult.rowCount;
         
-        // 8. Удаляем неиспользуемые system_components_link
+        // 6. Удаляем осиротевшие system_components_link
         const sclResult = await client.query(
             `DELETE FROM system_components_link WHERE 
              system_id NOT IN (SELECT id FROM systems) OR
@@ -242,19 +267,27 @@ router.post('/db/optimize', auth, isAdmin, async (req, res) => {
         );
         totalRemoved += sclResult.rowCount;
         
-        // 9. Очищаем пустые параметры компонентов
+        // 7. Очищаем осиротевшие параметры компонентов
         const paramsResult = await client.query(
             `DELETE FROM system_component_params WHERE 
              component_id NOT IN (SELECT id FROM system_components) OR
              parameter_id NOT IN (SELECT id FROM system_parameters)`
         );
         totalRemoved += paramsResult.rowCount;
+
+        // 8. Очищаем осиротевшие параметры шаблонов блоков
+        const blockParamsResult = await client.query(
+            `DELETE FROM component_param_values WHERE 
+             component_id NOT IN (SELECT id FROM block_templates) OR
+             param_id NOT IN (SELECT id FROM parameters)`
+        );
+        totalRemoved += blockParamsResult.rowCount;
         
         await client.query('COMMIT');
-        res.json({ message: 'Оптимизация завершена. Удалено записей: ' + totalRemoved });
+        res.json({ message: 'Оптимизация базы данных завершена. Удалено устаревших записей: ' + totalRemoved });
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error(err);
+        console.error('Ошибка оптимизации БД:', err);
         res.status(500).json({ message: 'Ошибка оптимизации: ' + err.message });
     } finally {
         client.release();
@@ -262,5 +295,3 @@ router.post('/db/optimize', auth, isAdmin, async (req, res) => {
 });
 
 module.exports = router;
-
-

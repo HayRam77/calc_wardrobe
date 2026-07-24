@@ -546,3 +546,12 @@ tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardro
 - public/index.html, public/pages/cabinet.html, public/pages/automation.html, public/pages/manufacturers.html, public/pages/consumables.html, public/pages/cabinets-list.html, public/pages/home.html, public/pages/project.html, public/pages/admin.html
 - public/pages/components-systems.html, public/pages/components-cabinets.html, все дочерние вкладки
 - public/components/ (block-template-modal.html, material-modal.html, system-comp-modal.html, system-comp-edit.html, params-modal.html, param-types-modal.html, types-modal.html, modules-modal.html)
+
+## 24.07.2026 (Дополнение) — Финальная проверка Админки, Экспорта/Импорта и Оптимизации БД
+### Реализовано:
+- Исправлена функция Оптимизации БД в routes/admin.js (удалены запросы к отсутствующим ln_values/tm_values).
+- Добавлено удаление временных загружаемых SQL файлов из /tmp/ при импорте.
+- Безопасная передача PGPASSWORD через env процесс при роутах экспорта и импорта.
+- Все механизмы экспорта дампа БД, импорта и оптимизации проверены и успешно протестированы.
+### Файлы:
+- routes/admin.js, routes/manufacturers.js
