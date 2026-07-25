@@ -7,7 +7,7 @@ const XLSX = require('xlsx');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
-// GET /api/systems
+// GET /api/systems — Список систем с агрегированными компонентами
 router.get('/', auth, async (req, res) => {
   try {
     const query = `
@@ -49,10 +49,10 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// GET /api/systems/export
+// GET /api/systems/export — Экспорт систем в Excel
 router.get('/export', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id as ID, name as Название, description as Описание, room as Помещение, note as Примечание FROM systems ORDER BY id');
+    const result = await pool.query('SELECT id as ID, name as Название, page as Страница, installation as Установка, description as Описание, room as Помещение FROM systems ORDER BY id');
     const ws = XLSX.utils.json_to_sheet(result.rows);
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Системы');
     res.setHeader('Content-Disposition', 'attachment; filename=systems.xlsx');
@@ -60,7 +60,7 @@ router.get('/export', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка экспорта' }); }
 });
 
-// POST /api/systems/import
+// POST /api/systems/import — Импорт систем из Excel
 router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
   try {
     const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
@@ -69,8 +69,8 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
     for (const row of data) {
       try { 
         await pool.query(
-          'INSERT INTO systems (name, description, room, note) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET description=$2, room=$3, note=$4', 
-          [row['Название'], row['Описание'] || null, row['Помещение'] || null, row['Примечание'] || null]
+          'INSERT INTO systems (name, page, installation, description, room) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (name) DO UPDATE SET page=$2, installation=$3, description=$4, room=$5', 
+          [row['Название'], row['Страница'] || null, row['Установка'] || null, row['Описание'] || null, row['Помещение'] || null]
         ); 
         imported++; 
       } catch (e) {}
@@ -79,7 +79,7 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
 });
 
-// PUT /api/systems/sort-order & POST /reorder
+// POST /reorder & PUT /sort-order — Изменение порядка строк
 router.post('/reorder', auth, isAdmin, async (req, res) => {
   try {
     const rawList = req.body.items || req.body.ids;
@@ -110,7 +110,7 @@ router.put('/sort-order', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// GET /api/systems/:id
+// GET /api/systems/:id — Детали системы
 router.get('/:id', auth, async (req, res) => {
   try {
     const sys = await pool.query('SELECT * FROM systems WHERE id = $1', [req.params.id]);
@@ -129,13 +129,13 @@ router.get('/:id', auth, async (req, res) => {
   } catch (err) { console.error('Ошибка получения системы:', err); res.status(500).json({ message: 'Ошибка получения системы' }); }
 });
 
-// POST /api/systems
+// POST /api/systems — Создание системы
 router.post('/', auth, isAdmin, async (req, res) => {
   try {
-    const { name, description, room, note, cabinet_ids } = req.body;
+    const { name, page, installation, description, room, cabinet_ids } = req.body;
     const result = await pool.query(
-      'INSERT INTO systems (name, description, room, note) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, room = EXCLUDED.room, note = EXCLUDED.note RETURNING *', 
-      [name, description || null, room || null, note || null]
+      'INSERT INTO systems (name, page, installation, description, room) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (name) DO UPDATE SET page = EXCLUDED.page, installation = EXCLUDED.installation, description = EXCLUDED.description, room = EXCLUDED.room RETURNING *', 
+      [name, page || null, installation || null, description || null, room || null]
     );
     const status = result.rows[0].created_at === result.rows[0].updated_at ? 201 : 200;
     const sysId = result.rows[0].id;
@@ -148,7 +148,7 @@ router.post('/', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// GET /api/systems/:id/cabinets
+// GET /api/systems/:id/cabinets — Привязанные шкафы
 router.get('/:id/cabinets', auth, async (req, res) => {
   try {
     const result = await pool.query('SELECT cabinet_id FROM cabinet_systems WHERE system_id = $1', [req.params.id]);
@@ -156,16 +156,16 @@ router.get('/:id/cabinets', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// PUT /api/systems/:id
+// PUT /api/systems/:id — Редактирование системы
 router.put('/:id', auth, isAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { name, description, room, note, components, cabinet_ids } = req.body;
+    const { name, page, installation, description, room, components, cabinet_ids } = req.body;
     if (name) {
       await client.query(
-        'UPDATE systems SET name=$1, description=$2, room=$3, note=$4 WHERE id=$5', 
-        [name, description || null, room || null, note || null, req.params.id]
+        'UPDATE systems SET name=$1, page=$2, installation=$3, description=$4, room=$5 WHERE id=$6', 
+        [name, page || null, installation || null, description || null, room || null, req.params.id]
       );
     }
     if (cabinet_ids && Array.isArray(cabinet_ids)) {
@@ -186,7 +186,7 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
   finally { client.release(); }
 });
 
-// DELETE /api/systems/:id
+// DELETE /api/systems/:id — Удалить систему
 router.delete('/:id', auth, isAdmin, async (req, res) => {
   try { await pool.query('DELETE FROM systems WHERE id=$1', [req.params.id]); res.json({ message: 'Удалена' }); }
   catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
@@ -218,7 +218,7 @@ router.delete('/link/:id', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// POST /api/systems/:sourceId/copy-to/:targetId
+// POST /api/systems/:sourceId/copy-to/:targetId — Копирование компонентов
 router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -261,7 +261,7 @@ router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/systems/:id/components — Очистка всех компонентов системы
+// DELETE /api/systems/:id/components — Очистить все компоненты
 router.delete('/:id/components', auth, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -273,7 +273,7 @@ router.delete('/:id/components', auth, isAdmin, async (req, res) => {
   }
 });
 
-// POST /api/systems/:id/components — Добавить компонент в систему
+// POST /api/systems/:id/components — Привязать компонент
 router.post('/:id/components', auth, isAdmin, async (req, res) => {
   try {
     const { component_id, quantity } = req.body;

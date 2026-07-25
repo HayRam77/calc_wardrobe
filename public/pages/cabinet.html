@@ -99,7 +99,6 @@
         return d.innerHTML;
     }
 
-    // ===== УНИВЕРСАЛЬНЫЙ БЕЗОПАСНЫЙ DRAG-AND-DROP (БЕЗ УТЕЧЕК) =====
     function setupDragAndDrop(tbody, tableName, onComplete) {
         var dragInfo = null;
 
@@ -154,7 +153,6 @@
         });
     }
 
-    // ===== ЗАГРУЗКА ИНИЦИАЛИЗАЦИИ ШКАФА =====
     fetch('/api/cabinets/' + cabinetId)
         .then(function(res) { return res.json(); })
         .then(function(cabinet) {
@@ -198,7 +196,6 @@
                 });
             });
 
-            // Последовательная загрузка всех модулей
             refreshAllData();
 
             document.getElementById('addSystemBtn').addEventListener('click', function(){ openSystemModal(); });
@@ -214,7 +211,6 @@
         loadCabinetCalculation();
     }
 
-    // ===== 1. СИСТЕМЫ ШКАФА =====
     function loadSystems() {
         var container = document.getElementById('cabinetSystems');
         container.innerHTML = '';
@@ -222,7 +218,10 @@
         var table = document.createElement('table');
         table.className = 'data-table';
         var thead = document.createElement('thead');
-        thead.innerHTML = '<tr><th style="width:1%"></th><th data-sort="id" style="width:50px;text-align:center;">ID</th><th data-sort="system_name">Система</th><th data-sort="description">Описание</th><th>Действия</th></tr>';
+        thead.innerHTML = '<tr><th style="width:1%"></th><th data-sort="id" style="width:50px;text-align:center;">ID</th><th data-sort="system_name">Система</th>' +
+            '<th data-sort="page" style="position:relative;">Страница<span class="filter-icon" data-col="page" style="cursor:pointer;font-size:14px;margin-left:4px;">⚙</span></th>' +
+            '<th data-sort="installation" style="position:relative;">Установка<span class="filter-icon" data-col="installation" style="cursor:pointer;font-size:14px;margin-left:4px;">⚙</span></th>' +
+            '<th data-sort="description">Описание</th><th data-sort="room">Помещение</th><th>Действия</th></tr>';
         table.appendChild(thead);
         var tbody = document.createElement('tbody');
         table.appendChild(tbody);
@@ -234,15 +233,14 @@
             fetch('/api/table-sort/cabinet_systems').then(function(r){ return r.json(); }).catch(function(){ return {}; })
         ]).then(function(results) {
             var data = results[0];
-            var saved = results[1];
+            var saved = results[1] || {};
 
             if (!data.length) {
                 container.innerHTML = '<p>Нет систем</p>';
                 return;
             }
 
-            var sortKey = saved.sort_key || null;
-            var sortDir = saved.sort_dir || 'asc';
+            var filterData = saved.filter_data || {};
 
             if (saved.sort_order && saved.sort_order.length) {
                 var orderMap = {};
@@ -254,42 +252,99 @@
                 });
             }
 
-            if (sortKey) {
-                data.sort(function(a, b) {
-                    var va = (a[sortKey] || '').toString().trim();
-                    var vb = (b[sortKey] || '').toString().trim();
-                    var na = parseFloat(va.replace(',', '.'));
-                    var nb = parseFloat(vb.replace(',', '.'));
-                    if (!isNaN(na) && !isNaN(nb) && va == na.toString() && vb == nb.toString()) {
-                        return sortDir === 'asc' ? na - nb : nb - na;
-                    }
-                    return sortDir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
-                });
-            }
-
             data.forEach(function(s) {
                 var tr = document.createElement('tr');
                 tr.setAttribute('data-id', s.id);
                 tr.setAttribute('data-system-id', s.system_id);
                 tr.innerHTML = '<td class="drag-handle" style="cursor:grab;">\u282F</td>' +
                     '<td style="text-align:center;">' + s.id + '</td>' +
-                    '<td>' + esc(s.system_name || '') + '</td>' +
+                    '<td><strong>' + esc(s.system_name || '') + '</strong></td>' +
+                    '<td>' + esc(s.page || '') + '</td>' +
+                    '<td>' + esc(s.installation || '') + '</td>' +
                     '<td>' + esc(s.description || '') + '</td>' +
+                    '<td>' + esc(s.room || '') + '</td>' +
                     '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">\u270F\uFE0F</button> ' +
                     '<button class="btn btn-sm btn-copy" onclick="copySystemTo(' + s.system_id + ')">\uD83D\uDCCB</button> ' +
                     '<button class="btn btn-sm btn-delete" onclick="delSystem(' + s.id + ')">\uD83D\uDDD1\uFE0F</button></td>';
                 tbody.appendChild(tr);
             });
 
-            // Безбезопасный Drag-and-drop
+            Object.keys(filterData).forEach(function(col) {
+                var selectedValues = filterData[col] || [];
+                if (selectedValues.length > 0) {
+                    tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
+                        var colIdx = Array.from(thead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === col; });
+                        var cellValue = (tr.cells[colIdx]?.textContent || '').trim() || '-';
+                        if (selectedValues.indexOf(cellValue) < 0) {
+                            tr.style.display = 'none';
+                        }
+                    });
+                    var icon = thead.querySelector('.filter-icon[data-col="' + col + '"]');
+                    if (icon) icon.textContent = '⚙️';
+                }
+            });
+
             setupDragAndDrop(tbody, 'cabinet_systems', function() {
                 loadSystemComponents();
             });
 
-            // Сортировка по клику
+            thead.querySelectorAll('.filter-icon').forEach(function(icon) {
+                icon.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    var col = icon.dataset.col;
+                    var colIdx = Array.from(thead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === col; });
+                    var values = {};
+                    tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
+                        var v = (tr.cells[colIdx]?.textContent || '').trim() || '-';
+                        values[v] = 1;
+                    });
+
+                    var selectedValues = filterData[col] || [];
+
+                    var modal = document.createElement('div');
+                    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;';
+                    modal.innerHTML = '<div style="background:#fff;border-radius:8px;padding:20px;max-width:400px;max-height:80vh;overflow-y:auto;"><h3 style="margin-top:0;">Фильтр: ' + col + '</h3><div id="fc_cab_sys_' + col + '"></div><div style="margin-top:15px;display:flex;gap:10px;"><button class="btn-sel-all" style="padding:6px 12px;background:#e0e0e0;border:none;border-radius:4px;cursor:pointer;">Выбрать все</button><button class="btn-desel-all" style="padding:6px 12px;background:#e0e0e0;border:none;border-radius:4px;cursor:pointer;">Снять все</button><button class="btn-close-f" style="padding:8px 16px;background:#1a5f7a;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-left:auto;">Закрыть</button></div></div>';
+                    document.body.appendChild(modal);
+
+                    var content = modal.querySelector('#fc_cab_sys_' + col);
+                    content.innerHTML = Object.keys(values).sort().map(function(v) {
+                        var ch = selectedValues.indexOf(v) >= 0 ? ' checked' : '';
+                        return '<label style="display:block;font-size:13px;cursor:pointer;white-space:nowrap;"><input type="checkbox" class="f-cb" value="' + v.replace(/"/g, '&quot;') + '"' + ch + '> ' + v + '</label>';
+                    }).join('');
+
+                    modal.querySelector('.btn-close-f').addEventListener('click', function() {
+                        var newSelected = [];
+                        content.querySelectorAll('.f-cb:checked').forEach(function(cb) { newSelected.push(cb.value); });
+                        filterData[col] = newSelected;
+                        icon.textContent = newSelected.length > 0 ? '⚙️' : '⚙';
+
+                        tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
+                            var cellValue = (tr.cells[colIdx]?.textContent || '').trim() || '-';
+                            if (newSelected.length > 0 && newSelected.indexOf(cellValue) < 0) {
+                                tr.style.display = 'none';
+                            } else {
+                                tr.style.display = '';
+                            }
+                        });
+
+                        fetch('/api/table-sort/cabinet_systems', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ filter_data: filterData })
+                        }).catch(function(err) { console.error(err); });
+
+                        modal.remove();
+                    });
+
+                    modal.querySelector('.btn-sel-all').onclick = function() { content.querySelectorAll('.f-cb').forEach(function(cb) { cb.checked = true; }); };
+                    modal.querySelector('.btn-desel-all').onclick = function() { content.querySelectorAll('.f-cb').forEach(function(cb) { cb.checked = false; }); };
+                    modal.onclick = function(ev) { if (ev.target === modal) modal.remove(); };
+                });
+            });
+
             thead.addEventListener('click', function(e) {
                 var th = e.target.closest('th[data-sort]');
-                if (!th) return;
+                if (!th || e.target.closest('.filter-icon')) return;
                 e.stopPropagation();
 
                 var key = th.dataset.sort;
@@ -504,11 +559,9 @@
 
         var tableName = 'system_components_' + systemId;
 
-        // Удаляем информационную строку, если она есть
         var existingStatusLine = systemBlock.querySelector('.comp-status-line');
         if (existingStatusLine) existingStatusLine.remove();
 
-        // Безбезопасный Drag-and-drop компонентов
         setupDragAndDrop(tbody, tableName);
 
         function getRowId(tr) {
@@ -944,7 +997,6 @@
 
 })();
 
-// ===== 7. ЕДИНЫЙ ГЛОБАЛЬНЫЙ ДЕЛЕГИРОВАННЫЙ TOOLTIP ДЛЯ СВЯЗЕЙ =====
 (function setupGlobalTooltips() {
     var chainTooltipStyles = document.createElement("style");
     chainTooltipStyles.textContent = ".material-chain-tooltip{position:fixed;z-index:99999;background:#1e293b;color:#f1f5f9;padding:10px 14px;border-radius:8px;font-size:13px;line-height:1.5;box-shadow:0 4px 16px rgba(0,0,0,0.5);pointer-events:none;opacity:0;transition:opacity 0.15s;max-width:420px;}.material-chain-tooltip.visible{opacity:1;}.chain-header{font-weight:600;margin-bottom:6px;color:#fbbf24;}.chain-line{color:#e2e8f0;}.chain-arrow{color:#94a3b8;margin:0 4px;}";

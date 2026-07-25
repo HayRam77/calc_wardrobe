@@ -4,12 +4,30 @@
         <button id="exportBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
         <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls">
         <button id="importBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
-        <span id="filterBadge" style="display:none; margin-left:10px; font-size:13px; color:#1a5f7a;"></span>
+        <span id="filterBadge" style="display:none; margin-left:10px; font-size:13px; color:#1a5f7a; font-weight:600;"></span>
     </div>
     <div class="table-container">
         <table class="data-table" id="systemsTable">
-            <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="cabinet_names" style="position:relative;"><span id="cabinetFilterIcon" style="cursor:pointer; font-size:14px;" title="Фильтр по шкафам">⚙</span> Шкаф<div id="cabinetDropdown" style="display:none; position:absolute; background:#fff; border:1px solid #ccc; border-radius:4px; padding:8px; z-index:1000; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th data-sort="room">Помещение</th><th data-sort="note">Примечание</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
-            <tbody id="systemsBody"><tr><td colspan="8" class="loading">Загрузка...</td></tr></tbody>
+            <thead>
+                <tr>
+                    <th style="width:1%"></th>
+                    <th data-sort="id">ID</th>
+                    <th data-sort="cabinet_names" style="position:relative;">
+                        Шкаф <span class="filter-icon" data-col="cabinet_names" style="cursor:pointer; font-size:14px;" title="Шкафам">⚙</span>
+                    </th>
+                    <th data-sort="name">Название</th>
+                    <th data-sort="page" style="position:relative;">
+                        Страница <span class="filter-icon" data-col="page" style="cursor:pointer; font-size:14px;" title="Страницам">⚙</span>
+                    </th>
+                    <th data-sort="installation" style="position:relative;">
+                        Установка <span class="filter-icon" data-col="installation" style="cursor:pointer; font-size:14px;" title="Установке">⚙</span>
+                    </th>
+                    <th data-sort="description">Описание</th>
+                    <th data-sort="room">Помещение</th>
+                    <th id="actionsCol" style="display:none;">Действия</th>
+                </tr>
+            </thead>
+            <tbody id="systemsBody"><tr><td colspan="9" class="loading">Загрузка...</td></tr></tbody>
         </table>
     </div>
     <div id="modal" class="modal" style="display:none;">
@@ -36,7 +54,7 @@
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
 
     var sysSortKey = null, sysSortDir = 'asc';
-    var selectedCabinets = JSON.parse(localStorage.getItem('systems_filter')||'[]');
+    var filterData = { cabinet_names: [], page: [], installation: [] };
 
     function setupDragAndDrop(tbody) {
         var dragInfo = null;
@@ -66,7 +84,7 @@
                 if (id) { items.push({ id: id, position: idx }); ids.push(id); }
             });
             localStorage.setItem('systems_order', JSON.stringify(ids));
-            fetch('/api/table-sort/systems', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sort_order: ids }) }).catch(function(e){ console.error(e); });
+            fetch('/api/table-sort/systems', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sort_order: ids, filter_data: filterData }) }).catch(function(e){ console.error(e); });
             fetch('/api/systems/sort-order', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e){ console.error(e); });
             dragInfo = null;
         }
@@ -86,21 +104,171 @@
 
     function renderSystems(data) {
         var tbody = document.getElementById('systemsBody');
-        var filtered = data;
-        if (selectedCabinets.length > 0) {
-            filtered = data.filter(function(s) {
-                var cabinets = (s.cabinet_names || '').split(', ').filter(Boolean);
-                return selectedCabinets.some(function(sc) { return cabinets.includes(sc); });
-            });
-        }
-        if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="8">Нет систем</td></tr>'; return; }
-        tbody.innerHTML = filtered.map(function(s) {
-            var cabHtml = (s.cabinet_names||'').split(', ').filter(Boolean).map(function(n,i){var ids=(s.cabinet_ids||'').split(',');return '<a href="/cabinet/'+(ids[i]||'')+'" target="_blank" style="color:#1a5f7a;">'+esc(n)+'</a>';}).join(', ')||'-';
-            return '<tr data-id="'+s.id+'"><td class="drag-handle" style="cursor:grab;">⠿</td><td>'+s.id+'</td><td>'+cabHtml+'</td><td><a href="#" style="color:#1a5f7a;text-decoration:underline;cursor:pointer;" onclick="openSystemModal('+s.id+');return false;">'+esc(s.name)+'</a></td><td>'+esc(s.description||'')+'</td><td>'+esc(s.room||'')+'</td><td>'+esc(s.note||'')+'</td>' +
-                (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')">🗑️</button></td>' : '') + '</tr>';
+        if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="9">Нет систем</td></tr>'; return; }
+        
+        tbody.innerHTML = data.map(function(s) {
+            var cabHtml = (s.cabinet_names||'').split(', ').filter(Boolean).map(function(n,i){
+                var ids = (s.cabinet_ids||'').split(',');
+                return '<a href="/cabinet/' + (ids[i]||'') + '" target="_blank" style="color:#1a5f7a;">' + esc(n) + '</a>';
+            }).join(', ')||'-';
+
+            return '<tr data-id="'+s.id+'">' +
+                '<td class="drag-handle" style="cursor:grab;">⠿</td>' +
+                '<td>' + s.id + '</td>' +
+                '<td>' + cabHtml + '</td>' +
+                '<td><a href="#" style="color:#1a5f7a;text-decoration:underline;cursor:pointer;" onclick="openSystemModal('+s.id+');return false;">' + esc(s.name) + '</a></td>' +
+                '<td>' + esc(s.page || '') + '</td>' +
+                '<td>' + esc(s.installation || '') + '</td>' +
+                '<td>' + esc(s.description || '') + '</td>' +
+                '<td>' + esc(s.room || '') + '</td>' +
+                (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')">🗑️</button></td>' : '') +
+            '</tr>';
         }).join('');
 
         setupDragAndDrop(tbody);
+        applyAllFilters();
+    }
+
+    function updateFilterIcons() {
+        var table = document.getElementById('systemsTable');
+        if (!table) return;
+        ['cabinet_names', 'page', 'installation'].forEach(function(col) {
+            var icon = table.querySelector('.filter-icon[data-col="' + col + '"]');
+            if (icon) {
+                var active = filterData[col] && filterData[col].length > 0;
+                icon.textContent = active ? '⚙️' : '⚙';
+            }
+        });
+
+        var badge = document.getElementById('filterBadge');
+        var totalActive = (filterData.cabinet_names?.length || 0) + (filterData.page?.length || 0) + (filterData.installation?.length || 0);
+        if (badge) {
+            if (totalActive > 0) {
+                badge.style.display = '';
+                badge.textContent = 'Фильтров выбрано: ' + totalActive;
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    }
+
+    function applyAllFilters() {
+        var tbody = document.getElementById('systemsBody');
+        var thead = document.querySelector('#systemsTable thead tr');
+        if (!tbody || !thead) return;
+
+        var allTh = Array.from(thead.querySelectorAll('th'));
+        var cabIdx = allTh.findIndex(function(th) { return th.dataset.sort === 'cabinet_names'; });
+        var pageIdx = allTh.findIndex(function(th) { return th.dataset.sort === 'page'; });
+        var instIdx = allTh.findIndex(function(th) { return th.dataset.sort === 'installation'; });
+
+        tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
+            var show = true;
+
+            // 1. Фильтр по шкафам
+            if (filterData.cabinet_names && filterData.cabinet_names.length > 0 && cabIdx >= 0) {
+                var rowCabs = (tr.cells[cabIdx]?.textContent || '').split(', ').map(function(s){ return s.trim(); }).filter(Boolean);
+                var matchCab = filterData.cabinet_names.some(function(fc) { return rowCabs.indexOf(fc) >= 0; });
+                if (!matchCab) show = false;
+            }
+
+            // 2. Фильтр по странице
+            if (show && filterData.page && filterData.page.length > 0 && pageIdx >= 0) {
+                var rowPage = (tr.cells[pageIdx]?.textContent || '').trim() || '-';
+                if (filterData.page.indexOf(rowPage) < 0) show = false;
+            }
+
+            // 3. Фильтр по установке
+            if (show && filterData.installation && filterData.installation.length > 0 && instIdx >= 0) {
+                var rowInst = (tr.cells[instIdx]?.textContent || '').trim() || '-';
+                if (filterData.installation.indexOf(rowInst) < 0) show = false;
+            }
+
+            tr.style.display = show ? '' : 'none';
+        });
+
+        updateFilterIcons();
+    }
+
+    function initFilterIcons() {
+        var table = document.getElementById('systemsTable');
+        if (!table) return;
+
+        table.querySelectorAll('.filter-icon').forEach(function(icon) {
+            icon.onclick = function(e) {
+                e.stopPropagation();
+                var col = icon.dataset.col;
+                var thead = table.querySelector('thead tr');
+                var tbody = document.getElementById('systemsBody');
+                var allTh = Array.from(thead.querySelectorAll('th'));
+                var colIdx = allTh.findIndex(function(th) { return th.dataset.sort === col; });
+                if (colIdx < 0) return;
+
+                var values = {};
+                tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
+                    var rawVal = (tr.cells[colIdx]?.textContent || '').trim();
+                    if (col === 'cabinet_names') {
+                        var parts = rawVal.split(', ').map(function(s){ return s.trim(); }).filter(Boolean);
+                        if (parts.length) {
+                            parts.forEach(function(p){ values[p] = 1; });
+                        } else {
+                            values['-'] = 1;
+                        }
+                    } else {
+                        values[rawVal || '-'] = 1;
+                    }
+                });
+
+                var selectedValues = filterData[col] || [];
+
+                var filterModal = document.createElement('div');
+                filterModal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;';
+                filterModal.innerHTML = '<div style="background:#fff;border-radius:8px;padding:20px;max-width:450px;width:90vw;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.3);">' +
+                    '<h3 style="margin-top:0;">Фильтр по ' + (icon.title || col) + '</h3>' +
+                    '<div id="filterContentContainer" style="max-height:50vh;overflow-y:auto;margin-bottom:15px;border:1px solid #eee;padding:10px;border-radius:4px;"></div>' +
+                    '<div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">' +
+                        '<button type="button" class="btn-sel-all btn btn-sm btn-secondary">Выбрать все</button>' +
+                        '<button type="button" class="btn-desel-all btn btn-sm btn-secondary">Снять все</button>' +
+                        '<button type="button" class="btn-close-f btn btn-sm btn-primary">Применить</button>' +
+                    '</div>' +
+                '</div>';
+                document.body.appendChild(filterModal);
+
+                var contentContainer = filterModal.querySelector('#filterContentContainer');
+                var sortedKeys = Object.keys(values).sort(function(a,b){ return a.localeCompare(b, 'ru'); });
+
+                contentContainer.innerHTML = sortedKeys.map(function(v) {
+                    var ch = selectedValues.indexOf(v) >= 0 ? ' checked' : '';
+                    return '<label style="display:block;font-size:13px;cursor:pointer;padding:3px 0;white-space:nowrap;"><input type="checkbox" class="f-cb" value="' + esc(v) + '"' + ch + '> ' + esc(v) + '</label>';
+                }).join('');
+
+                filterModal.querySelector('.btn-sel-all').onclick = function() {
+                    contentContainer.querySelectorAll('.f-cb').forEach(function(cb) { cb.checked = true; });
+                };
+                filterModal.querySelector('.btn-desel-all').onclick = function() {
+                    contentContainer.querySelectorAll('.f-cb').forEach(function(cb) { cb.checked = false; });
+                };
+
+                var closeHandler = function() {
+                    var newSelected = [];
+                    contentContainer.querySelectorAll('.f-cb:checked').forEach(function(cb) { newSelected.push(cb.value); });
+                    filterData[col] = newSelected;
+
+                    applyAllFilters();
+
+                    fetch('/api/table-sort/systems', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ filter_data: filterData })
+                    }).catch(function(err) { console.error(err); });
+
+                    filterModal.remove();
+                };
+
+                filterModal.querySelector('.btn-close-f').onclick = closeHandler;
+                filterModal.onclick = function(ev) { if (ev.target === filterModal) closeHandler(); };
+            };
+        });
     }
 
     function applyHeaderSort(key, dir, saveToDb) {
@@ -136,7 +304,7 @@
             fetch('/api/table-sort/systems', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sort_order: sortedIds, sort_key: key, sort_dir: dir })
+                body: JSON.stringify({ sort_order: sortedIds, sort_key: key, sort_dir: dir, filter_data: filterData })
             }).catch(function(e){ console.error(e); });
         }
     }
@@ -146,7 +314,7 @@
         table.querySelectorAll('th[data-sort]').forEach(function(th) {
             th.style.cursor = 'pointer';
             th.onclick = function(e) {
-                if (e.target.closest('#cabinetFilterIcon') || e.target.closest('#cabinetDropdown')) return;
+                if (e.target.closest('.filter-icon')) return;
                 e.stopPropagation();
                 var key = this.dataset.sort;
                 var newDir = (sysSortKey === key && sysSortDir === 'asc') ? 'desc' : 'asc';
@@ -162,7 +330,7 @@
         ]).then(function(results) {
             var data = results[0];
             var saved = results[1] || {};
-            if (!data || !data.length) { document.getElementById('systemsBody').innerHTML = '<tr><td colspan="8">Нет систем</td></tr>'; return; }
+            if (!data || !data.length) { document.getElementById('systemsBody').innerHTML = '<tr><td colspan="9">Нет систем</td></tr>'; return; }
             
             var savedOrder = saved.sort_order || [];
             if (savedOrder.length > 0) {
@@ -176,12 +344,16 @@
 
             window._systemsData = data;
 
-            if (saved.filter_data && saved.filter_data.cabinets) {
-                selectedCabinets = saved.filter_data.cabinets;
+            if (saved.filter_data) {
+                filterData = {
+                    cabinet_names: saved.filter_data.cabinet_names || saved.filter_data.cabinets || [],
+                    page: saved.filter_data.page || [],
+                    installation: saved.filter_data.installation || []
+                };
             }
 
-            buildCabinetDropdown(data);
             initSortableHeaders();
+            initFilterIcons();
 
             var savedKey = saved.sort_key || (JSON.parse(localStorage.getItem('systems_sort') || '{}').key);
             var savedDir = saved.sort_dir || (JSON.parse(localStorage.getItem('systems_sort') || '{}').dir) || 'asc';
@@ -194,43 +366,6 @@
         });
     }
 
-    function buildCabinetDropdown(data) {
-        var allCabinets = [];
-        data.forEach(function(s) {
-            var names = (s.cabinet_names || '').split(', ').filter(Boolean);
-            names.forEach(function(n) { if (allCabinets.indexOf(n) === -1) allCabinets.push(n); });
-        });
-        allCabinets.sort();
-        var dropdown = document.getElementById('cabinetDropdown');
-        dropdown.innerHTML = allCabinets.map(function(c) {
-            return '<label style="display:block; font-size:13px; cursor:pointer; padding:2px 0;"><input type="checkbox" class="cabinet-filter-cb" value="' + esc(c) + '" ' + (selectedCabinets.indexOf(c)!==-1?'checked':'') + '> ' + esc(c) + '</label>';
-        }).join('');
-        dropdown.querySelectorAll('.cabinet-filter-cb').forEach(function(cb) {
-            cb.addEventListener('change', function() {
-                selectedCabinets = [];
-                dropdown.querySelectorAll('.cabinet-filter-cb:checked').forEach(function(c) { selectedCabinets.push(c.value); });
-                updateFilterBadge();
-                localStorage.setItem('systems_filter', JSON.stringify(selectedCabinets));
-                fetch('/api/table-sort/systems',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({filter_data:{cabinets:selectedCabinets}})}).catch(function(e){console.error(e);});
-                renderSystems(window._systemsData || []);
-            });
-            cb.addEventListener('click', function(e) { e.stopPropagation(); });
-        });
-        updateFilterBadge();
-    }
-
-    function updateFilterBadge() {
-        var badge = document.getElementById('filterBadge');
-        var icon = document.getElementById('cabinetFilterIcon');
-        if (selectedCabinets.length > 0) { badge.style.display = ''; badge.textContent = 'Выбрано: ' + selectedCabinets.length; icon.textContent = '⚙️'; }
-        else { badge.style.display = 'none'; icon.textContent = '⚙'; }
-    }
-
-    var filterIcon = document.getElementById('cabinetFilterIcon');
-    var dropdown = document.getElementById('cabinetDropdown');
-    filterIcon.addEventListener('click', function(e) { e.stopPropagation(); dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none'; });
-    document.addEventListener('click', function() { dropdown.style.display = 'none'; });
-
     document.getElementById('addSystemBtn').addEventListener('click', function() { openSystemForm(); });
 
     function openSystemForm(sys) {
@@ -239,9 +374,10 @@
 
         var h = '<input type="hidden" id="sysId" value="' + (sys ? sys.id : '') + '">';
         h += '<div class="form-group"><label for="sysName">Название *</label><input type="text" id="sysName" class="form-control" value="' + esc(sys ? sys.name : '') + '" required></div>';
+        h += '<div class="form-group"><label for="sysPage">Страница</label><input type="text" id="sysPage" class="form-control" value="' + esc(sys ? sys.page || '' : '') + '"></div>';
+        h += '<div class="form-group"><label for="sysInstallation">Установка</label><textarea id="sysInstallation" class="form-control" rows="2">' + esc(sys ? sys.installation || '' : '') + '</textarea></div>';
         h += '<div class="form-group"><label for="sysDesc">Описание</label><textarea id="sysDesc" class="form-control" rows="2">' + esc(sys ? sys.description || '' : '') + '</textarea></div>';
         h += '<div class="form-group"><label for="sysRoom">Помещение</label><input type="text" id="sysRoom" class="form-control" value="' + esc(sys ? sys.room || '' : '') + '"></div>';
-        h += '<div class="form-group"><label for="sysNote">Примечание</label><textarea id="sysNote" class="form-control" rows="2">' + esc(sys ? sys.note || '' : '') + '</textarea></div>';
         h += '<div class="form-group"><label for="cabinetSelect">Привязанные шкафы</label>' +
              '<div style="display:flex;gap:5px;margin-bottom:5px;"><input type="text" id="newCabinetName" class="form-control" placeholder="Новый шкаф" style="flex:1;"><select id="newCabinetProject" class="form-control" style="width:140px;"><option value="">Проект</option></select><button type="button" id="addCabinetBtn" class="btn btn-sm btn-primary">+ Создать</button></div>' +
              '<select id="cabinetSelect" multiple class="form-control" style="width:100%;height:120px;"><option value="">Загрузка...</option></select></div>';
@@ -332,9 +468,10 @@
 
             var body = {
                 name: name,
+                page: modalForm.querySelector('#sysPage').value.trim() || null,
+                installation: modalForm.querySelector('#sysInstallation').value.trim() || null,
                 description: modalForm.querySelector('#sysDesc').value.trim() || null,
                 room: modalForm.querySelector('#sysRoom').value.trim() || null,
-                note: modalForm.querySelector('#sysNote').value.trim() || null,
                 cabinet_ids: sc
             };
 
