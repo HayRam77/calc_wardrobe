@@ -8,12 +8,12 @@
     </div>
     <div class="table-container">
         <table class="data-table" id="systemsTable">
-            <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="cabinet_names"><span id="cabinetFilterIcon" style="cursor:pointer; font-size:14px;" title="Фильтр по шкафам">⚙</span> Шкаф<div id="cabinetDropdown" style="display:none; position:absolute; background:#fff; border:1px solid #ccc; border-radius:4px; padding:8px; z-index:1000; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
-            <tbody id="systemsBody"><tr><td colspan="6" class="loading">Загрузка...</td></tr></tbody>
+            <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="cabinet_names" style="position:relative;"><span id="cabinetFilterIcon" style="cursor:pointer; font-size:14px;" title="Фильтр по шкафам">⚙</span> Шкаф<div id="cabinetDropdown" style="display:none; position:absolute; background:#fff; border:1px solid #ccc; border-radius:4px; padding:8px; z-index:1000; max-height:200px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="name">Название</th><th data-sort="description">Описание</th><th data-sort="room">Помещение</th><th data-sort="note">Примечание</th><th id="actionsCol" style="display:none;">Действия</th></tr></thead>
+            <tbody id="systemsBody"><tr><td colspan="8" class="loading">Загрузка...</td></tr></tbody>
         </table>
     </div>
     <div id="modal" class="modal" style="display:none;">
-        <div class="modal-content" style="max-width:600px;">
+        <div class="modal-content" style="max-width:600px;width:95vw;">
             <span class="close-modal">&times;</span>
             <h3 id="modalTitle"></h3>
             <form id="modalForm"></form>
@@ -35,8 +35,7 @@
     modal.querySelector('.close-modal').addEventListener('click', function() { modal.style.display = 'none'; });
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
 
-    var sysSortState = JSON.parse(localStorage.getItem('systems_sort') || '{}');
-    var sysSortKey = sysSortState.key || null, sysSortDir = sysSortState.dir || 'asc';
+    var sysSortKey = null, sysSortDir = 'asc';
     var selectedCabinets = JSON.parse(localStorage.getItem('systems_filter')||'[]');
 
     function setupDragAndDrop(tbody) {
@@ -94,35 +93,76 @@
                 return selectedCabinets.some(function(sc) { return cabinets.includes(sc); });
             });
         }
-        if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="6">Нет систем</td></tr>'; return; }
+        if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="8">Нет систем</td></tr>'; return; }
         tbody.innerHTML = filtered.map(function(s) {
             var cabHtml = (s.cabinet_names||'').split(', ').filter(Boolean).map(function(n,i){var ids=(s.cabinet_ids||'').split(',');return '<a href="/cabinet/'+(ids[i]||'')+'" target="_blank" style="color:#1a5f7a;">'+esc(n)+'</a>';}).join(', ')||'-';
-            return '<tr data-id="'+s.id+'"><td class="drag-handle" style="cursor:grab;">⠿</td><td>'+s.id+'</td><td>'+cabHtml+'</td><td><a href="#" style="color:#1a5f7a;text-decoration:underline;cursor:pointer;" onclick="openSystemModal('+s.id+');return false;">'+esc(s.name)+'</a></td><td>'+esc(s.description||'')+'</td>' +
+            return '<tr data-id="'+s.id+'"><td class="drag-handle" style="cursor:grab;">⠿</td><td>'+s.id+'</td><td>'+cabHtml+'</td><td><a href="#" style="color:#1a5f7a;text-decoration:underline;cursor:pointer;" onclick="openSystemModal('+s.id+');return false;">'+esc(s.name)+'</a></td><td>'+esc(s.description||'')+'</td><td>'+esc(s.room||'')+'</td><td>'+esc(s.note||'')+'</td>' +
                 (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')">🗑️</button></td>' : '') + '</tr>';
         }).join('');
 
         setupDragAndDrop(tbody);
     }
 
+    function applyHeaderSort(key, dir, saveToDb) {
+        if (!window._systemsData || !key) return;
+        sysSortKey = key;
+        sysSortDir = dir;
+
+        var table = document.getElementById('systemsTable');
+        table.querySelectorAll('th[data-sort]').forEach(function(th) {
+            th.classList.remove('sorted-asc', 'sorted-desc');
+            if (th.dataset.sort === key) {
+                th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+            }
+        });
+
+        var data = (window._systemsData || []).slice();
+        data.sort(function(a, b) {
+            var va = (a[key] || '').toString().trim();
+            var vb = (b[key] || '').toString().trim();
+            var na = parseFloat(va);
+            var nb = parseFloat(vb);
+            if (!isNaN(na) && !isNaN(nb) && va == na.toString() && vb == nb.toString()) {
+                return dir === 'asc' ? na - nb : nb - na;
+            }
+            return dir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+        });
+
+        renderSystems(data);
+
+        if (saveToDb !== false) {
+            var sortedIds = data.map(function(item){ return item.id; });
+            localStorage.setItem('systems_sort', JSON.stringify({ key: key, dir: dir }));
+            fetch('/api/table-sort/systems', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sort_order: sortedIds, sort_key: key, sort_dir: dir })
+            }).catch(function(e){ console.error(e); });
+        }
+    }
+
+    function initSortableHeaders() {
+        var table = document.getElementById('systemsTable');
+        table.querySelectorAll('th[data-sort]').forEach(function(th) {
+            th.style.cursor = 'pointer';
+            th.onclick = function(e) {
+                if (e.target.closest('#cabinetFilterIcon') || e.target.closest('#cabinetDropdown')) return;
+                e.stopPropagation();
+                var key = this.dataset.sort;
+                var newDir = (sysSortKey === key && sysSortDir === 'asc') ? 'desc' : 'asc';
+                applyHeaderSort(key, newDir, true);
+            };
+        });
+    }
+
     function loadSystems() {
         Promise.all([
-            fetch('/api/systems').then(function(r) { return r.json(); }),
-            fetch('/api/table-sort/systems').then(function(r) { return r.json(); })
+            fetch('/api/systems?_=' + Date.now()).then(function(r) { return r.json(); }),
+            fetch('/api/table-sort/systems?_=' + Date.now()).then(function(r) { return r.json(); }).catch(function(){ return {}; })
         ]).then(function(results) {
             var data = results[0];
             var saved = results[1] || {};
-            if (!data.length) { document.getElementById('systemsBody').innerHTML = '<tr><td colspan="6">Нет систем</td></tr>'; return; }
-            window._systemsData = data;
-            
-            if (saved.filter_data && saved.filter_data.cabinets) {
-                selectedCabinets = saved.filter_data.cabinets;
-            }
-            if (saved.sort_key) {
-                sysSortKey = saved.sort_key;
-                sysSortDir = saved.sort_dir || 'asc';
-            }
-            
-            buildCabinetDropdown(data);
+            if (!data || !data.length) { document.getElementById('systemsBody').innerHTML = '<tr><td colspan="8">Нет систем</td></tr>'; return; }
             
             var savedOrder = saved.sort_order || [];
             if (savedOrder.length > 0) {
@@ -133,7 +173,24 @@
                 data.forEach(function(item) { if (savedOrder.indexOf(item.id) < 0) ordered.push(item); });
                 data = ordered;
             }
-            renderSystems(data);
+
+            window._systemsData = data;
+
+            if (saved.filter_data && saved.filter_data.cabinets) {
+                selectedCabinets = saved.filter_data.cabinets;
+            }
+
+            buildCabinetDropdown(data);
+            initSortableHeaders();
+
+            var savedKey = saved.sort_key || (JSON.parse(localStorage.getItem('systems_sort') || '{}').key);
+            var savedDir = saved.sort_dir || (JSON.parse(localStorage.getItem('systems_sort') || '{}').dir) || 'asc';
+            
+            if (savedKey) {
+                applyHeaderSort(savedKey, savedDir, false);
+            } else {
+                renderSystems(data);
+            }
         });
     }
 
@@ -159,6 +216,7 @@
             });
             cb.addEventListener('click', function(e) { e.stopPropagation(); });
         });
+        updateFilterBadge();
     }
 
     function updateFilterBadge() {
@@ -173,89 +231,132 @@
     filterIcon.addEventListener('click', function(e) { e.stopPropagation(); dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none'; });
     document.addEventListener('click', function() { dropdown.style.display = 'none'; });
 
-    var table = document.getElementById('systemsTable');
-    table.querySelectorAll('th[data-sort]').forEach(function(th) {
-        th.style.cursor = 'pointer';
-        th.addEventListener('click', function(e) {
-            if (e.target.closest('#cabinetFilterIcon') || e.target.closest('#cabinetDropdown')) return;
-            var key = this.dataset.sort;
-            if (sysSortKey === key) { sysSortDir = sysSortDir === 'asc' ? 'desc' : 'asc'; }
-            else { sysSortKey = key; sysSortDir = 'asc'; }
-            localStorage.setItem('systems_sort', JSON.stringify({key: sysSortKey, dir: sysSortDir}));
-            var data = (window._systemsData || []).slice();
-            data.sort(function(a, b) {
-                var va = (a[key] || '').toString().toLowerCase();
-                var vb = (b[key] || '').toString().toLowerCase();
-                if (key === 'id') { va = parseInt(a.id) || 0; vb = parseInt(b.id) || 0; }
-                if (va < vb) return sysSortDir === 'asc' ? -1 : 1;
-                if (va > vb) return sysSortDir === 'asc' ? 1 : -1;
-                return 0;
-            });
-            renderSystems(data);
-            var sortedIds = data.map(function(item){return item.id;});
-            localStorage.setItem('systems_order', JSON.stringify(sortedIds));
-            fetch('/api/table-sort/systems',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sort_order:sortedIds, sort_key:sysSortKey, sort_dir:sysSortDir})}).catch(function(e){console.error(e);});
-
-            table.querySelectorAll('th').forEach(function(h) { h.classList.remove('sorted-asc', 'sorted-desc'); });
-            th.classList.add(sysSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
-        });
-    });
-
     document.getElementById('addSystemBtn').addEventListener('click', function() { openSystemForm(); });
 
     function openSystemForm(sys) {
         var isEdit = !!sys;
+        var sysId = sys ? sys.id : null;
+
         var h = '<input type="hidden" id="sysId" value="' + (sys ? sys.id : '') + '">';
-        h += '<div class="form-group"><label>Название *</label><input type="text" id="sysName" value="' + esc(sys ? sys.name : '') + '" required></div>';
-        h += '<div class="form-group"><label>Описание</label><textarea id="sysDesc" rows="2">' + esc(sys ? sys.description || '' : '') + '</textarea></div>';
-        h += '<div class="form-group"><label>Шкафы</label><div style="display:flex;gap:5px;margin-bottom:5px;"><input type="text" id="newCabinetName" placeholder="Новый шкаф" style="flex:1;"><select id="newCabinetProject" style="width:130px;"><option value="">Проект</option></select><button type="button" id="addCabinetBtn" class="btn btn-sm btn-primary">+ Создать</button></div><select id="cabinetSelect" multiple style="width:100%;height:100px;"><option value="">Загрузка...</option></select></div>';
-        modalTitle.textContent = isEdit ? 'Редактировать систему' : 'Добавить систему';
-        modalForm.innerHTML = h + '<div class="form-actions"><button type="submit" class="btn btn-primary">Сохранить</button> <button type="button" class="btn btn-secondary" onclick="document.getElementById(\'modal\').style.display=\'none\'">Отмена</button></div>';
-        modal.style.display = 'flex';
+        h += '<div class="form-group"><label for="sysName">Название *</label><input type="text" id="sysName" class="form-control" value="' + esc(sys ? sys.name : '') + '" required></div>';
+        h += '<div class="form-group"><label for="sysDesc">Описание</label><textarea id="sysDesc" class="form-control" rows="2">' + esc(sys ? sys.description || '' : '') + '</textarea></div>';
+        h += '<div class="form-group"><label for="sysRoom">Помещение</label><input type="text" id="sysRoom" class="form-control" value="' + esc(sys ? sys.room || '' : '') + '"></div>';
+        h += '<div class="form-group"><label for="sysNote">Примечание</label><textarea id="sysNote" class="form-control" rows="2">' + esc(sys ? sys.note || '' : '') + '</textarea></div>';
+        h += '<div class="form-group"><label for="cabinetSelect">Привязанные шкафы</label>' +
+             '<div style="display:flex;gap:5px;margin-bottom:5px;"><input type="text" id="newCabinetName" class="form-control" placeholder="Новый шкаф" style="flex:1;"><select id="newCabinetProject" class="form-control" style="width:140px;"><option value="">Проект</option></select><button type="button" id="addCabinetBtn" class="btn btn-sm btn-primary">+ Создать</button></div>' +
+             '<select id="cabinetSelect" multiple class="form-control" style="width:100%;height:120px;"><option value="">Загрузка...</option></select></div>';
         
-        setTimeout(function(){
-            fetch('/api/projects').then(function(r){return r.json()}).then(function(projects){
-                var ps=document.getElementById('newCabinetProject');
-                if(ps){ps.innerHTML='<option value="">Проект</option>';projects.forEach(function(p){ps.innerHTML+='<option value="'+p.id+'">'+esc(p.name)+'</option>';});}
-            });
-            fetch('/api/cabinets').then(function(r){return r.json()}).then(function(cabs){
-                var sel=document.getElementById('cabinetSelect');
-                if(!sel) return;
-                sel.innerHTML='<option value="0">-- Без шкафа --</option>';
-                cabs.forEach(function(c){sel.innerHTML+='<option value="'+c.id+'">'+esc(c.name)+'</option>';});
-            });
-            var ab=document.getElementById('addCabinetBtn');if(ab)ab.onclick=function(){
-                var n=document.getElementById('newCabinetName').value.trim();
-                var ps=document.getElementById('newCabinetProject');
-                if(!n){alert('Введите название');return;}
-                if(!ps||!ps.value){alert('Выберите проект');return;}
-                fetch('/api/cabinets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,project_id:parseInt(ps.value)})})
-                .then(function(r){return r.json()}).then(function(nc){
-                    if(nc.error){alert(nc.error);return;}
-                    var s=document.getElementById('cabinetSelect');
-                    var o=document.createElement('option');o.value=nc.id;o.textContent=nc.name;o.selected=true;s.appendChild(o);
-                    document.getElementById('newCabinetName').value='';
-                }).catch(function(e){alert(e.message)});
-            };
-        }, 100);
+        modalTitle.textContent = isEdit ? 'Редактировать систему' : 'Добавить систему';
+        modalForm.innerHTML = h + '<div class="form-actions" style="margin-top:15px;display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary cancel-sys-form-btn">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';
+        
+        modal.querySelector('.cancel-sys-form-btn').onclick = function() { modal.style.display = 'none'; };
+        modal.style.display = 'flex';
+
+        var reqs = [
+            fetch('/api/projects').then(function(r){ return r.json(); }),
+            fetch('/api/cabinets').then(function(r){ return r.json(); })
+        ];
+        if (isEdit && sysId) {
+            reqs.push(fetch('/api/systems/' + sysId + '/cabinets').then(function(r){ return r.json(); }).catch(function(){ return []; }));
+        }
+
+        Promise.all(reqs).then(function(results) {
+            var projects = results[0] || [];
+            var cabs = results[1] || [];
+            var linkedCabinetRows = (isEdit && results.length > 2) ? results[2] : [];
+            
+            var linkedIds = {};
+            if (linkedCabinetRows && linkedCabinetRows.length) {
+                linkedCabinetRows.forEach(function(row){ linkedIds[row.cabinet_id] = true; });
+            } else if (sys && sys.cabinet_ids) {
+                (sys.cabinet_ids + '').split(',').forEach(function(cid){ if(cid) linkedIds[parseInt(cid)] = true; });
+            }
+
+            var ps = modalForm.querySelector('#newCabinetProject');
+            if (ps) {
+                ps.innerHTML = '<option value="">Проект</option>';
+                projects.forEach(function(p){ ps.innerHTML += '<option value="' + p.id + '">' + esc(p.name) + '</option>'; });
+            }
+
+            var sel = modalForm.querySelector('#cabinetSelect');
+            if (sel) {
+                sel.innerHTML = '';
+                if (!cabs.length) {
+                    sel.innerHTML = '<option value="0">-- Нет доступных шкафов --</option>';
+                } else {
+                    cabs.forEach(function(c) {
+                        var isSelected = linkedIds[c.id] ? ' selected' : '';
+                        sel.innerHTML += '<option value="' + c.id + '"' + isSelected + '>' + esc(c.name) + (c.project_name ? ' (' + esc(c.project_name) + ')' : '') + '</option>';
+                    });
+                }
+            }
+
+            var ab = modalForm.querySelector('#addCabinetBtn');
+            if (ab) {
+                ab.onclick = function() {
+                    var n = modalForm.querySelector('#newCabinetName').value.trim();
+                    var pVal = ps ? ps.value : '';
+                    if (!n) { alert('Введите название шкафа'); return; }
+                    if (!pVal) { alert('Выберите проект'); return; }
+                    fetch('/api/cabinets', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: n, project_id: parseInt(pVal) })
+                    })
+                    .then(function(r){ return r.json(); })
+                    .then(function(nc) {
+                        if (nc.error || nc.message && !nc.id) { alert(nc.error || nc.message); return; }
+                        var o = document.createElement('option');
+                        o.value = nc.id;
+                        o.textContent = nc.name;
+                        o.selected = true;
+                        sel.appendChild(o);
+                        modalForm.querySelector('#newCabinetName').value = '';
+                    }).catch(function(e){ alert(e.message); });
+                };
+            }
+        });
 
         modalForm.onsubmit = function(e) {
             e.preventDefault();
-            var name = document.getElementById('sysName').value.trim();
-            if (!name) { alert('Введите название'); return; }
-            var sc=[],sel=document.getElementById('cabinetSelect');
-            for(var i=0;i<sel.options.length;i++){var v=parseInt(sel.options[i].value); if(sel.options[i].selected && v>0)sc.push(v);}
-            var body = { name: name, description: document.getElementById('sysDesc').value.trim(), cabinet_ids: sc };
+            var name = modalForm.querySelector('#sysName').value.trim();
+            if (!name) { alert('Введите название системы'); return; }
+
+            var sc = [], sel = modalForm.querySelector('#cabinetSelect');
+            if (sel) {
+                for (var i = 0; i < sel.options.length; i++) {
+                    var v = parseInt(sel.options[i].value);
+                    if (sel.options[i].selected && v > 0) sc.push(v);
+                }
+            }
+
+            var body = {
+                name: name,
+                description: modalForm.querySelector('#sysDesc').value.trim() || null,
+                room: modalForm.querySelector('#sysRoom').value.trim() || null,
+                note: modalForm.querySelector('#sysNote').value.trim() || null,
+                cabinet_ids: sc
+            };
+
             var url = sys ? '/api/systems/' + sys.id : '/api/systems';
-            fetch(url, { method: sys ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-                .then(function(r) { if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); }); modal.style.display = 'none'; loadSystems(); })
-                .catch(function(e) { alert(e.message); });
+            fetch(url, {
+                method: sys ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+            .then(function(r) {
+                if (!r.ok) return r.json().then(function(d) { throw new Error(d.message || 'Ошибка'); });
+                modal.style.display = 'none';
+                loadSystems();
+            })
+            .catch(function(e) { alert(e.message); });
         };
     }
 
-    window.editSystem = function(id) { fetch('/api/systems/' + id).then(function(r) { return r.json(); }).then(function(s) { openSystemForm(s); }); };
+    window.editSystem = function(id) {
+        fetch('/api/systems/' + id).then(function(r) { return r.json(); }).then(function(s) { openSystemForm(s); });
+    };
 
-    // УЛУЧШЕННОЕ МОДАЛЬНОЕ ОКНО ПРОСМОТРА И УПРАВЛЕНИЯ КОМПОНЕНТАМИ СИСТЕМЫ
     window.openSystemModal = function(sysId) {
         var modal = document.createElement('div'); 
         modal.className = 'modal'; 

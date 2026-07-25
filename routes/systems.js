@@ -7,7 +7,7 @@ const XLSX = require('xlsx');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
-// GET /api/systems — Список систем с агрегированными компонентами
+// GET /api/systems
 router.get('/', auth, async (req, res) => {
   try {
     const query = `
@@ -49,10 +49,10 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// GET /api/systems/export — Экспорт в Excel
+// GET /api/systems/export
 router.get('/export', auth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id as ID, name as Название, description as Описание FROM systems ORDER BY id');
+    const result = await pool.query('SELECT id as ID, name as Название, description as Описание, room as Помещение, note as Примечание FROM systems ORDER BY id');
     const ws = XLSX.utils.json_to_sheet(result.rows);
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Системы');
     res.setHeader('Content-Disposition', 'attachment; filename=systems.xlsx');
@@ -60,14 +60,20 @@ router.get('/export', auth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка экспорта' }); }
 });
 
-// POST /api/systems/import — Импорт из Excel
+// POST /api/systems/import
 router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
   try {
     const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
     const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
     let imported = 0;
     for (const row of data) {
-      try { await pool.query('INSERT INTO systems (name, description) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET description=$2', [row['Название'], row['Описание'] || null]); imported++; } catch (e) {}
+      try { 
+        await pool.query(
+          'INSERT INTO systems (name, description, room, note) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET description=$2, room=$3, note=$4', 
+          [row['Название'], row['Описание'] || null, row['Помещение'] || null, row['Примечание'] || null]
+        ); 
+        imported++; 
+      } catch (e) {}
     }
     res.json({ message: 'Импортировано ' + imported + ' записей' });
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
@@ -104,7 +110,7 @@ router.put('/sort-order', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// GET /api/systems/:id — Информация об одной системе и её компонентах
+// GET /api/systems/:id
 router.get('/:id', auth, async (req, res) => {
   try {
     const sys = await pool.query('SELECT * FROM systems WHERE id = $1', [req.params.id]);
@@ -126,8 +132,11 @@ router.get('/:id', auth, async (req, res) => {
 // POST /api/systems
 router.post('/', auth, isAdmin, async (req, res) => {
   try {
-    const { name, description, cabinet_ids } = req.body;
-    const result = await pool.query('INSERT INTO systems (name, description) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description RETURNING *', [name, description || null]);
+    const { name, description, room, note, cabinet_ids } = req.body;
+    const result = await pool.query(
+      'INSERT INTO systems (name, description, room, note) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, room = EXCLUDED.room, note = EXCLUDED.note RETURNING *', 
+      [name, description || null, room || null, note || null]
+    );
     const status = result.rows[0].created_at === result.rows[0].updated_at ? 201 : 200;
     const sysId = result.rows[0].id;
     if (cabinet_ids && Array.isArray(cabinet_ids)) {
@@ -152,8 +161,13 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { name, description, components, cabinet_ids } = req.body;
-    if (name) await client.query('UPDATE systems SET name=$1, description=$2 WHERE id=$3', [name, description || null, req.params.id]);
+    const { name, description, room, note, components, cabinet_ids } = req.body;
+    if (name) {
+      await client.query(
+        'UPDATE systems SET name=$1, description=$2, room=$3, note=$4 WHERE id=$5', 
+        [name, description || null, room || null, note || null, req.params.id]
+      );
+    }
     if (cabinet_ids && Array.isArray(cabinet_ids)) {
       await client.query('DELETE FROM cabinet_systems WHERE system_id = $1', [req.params.id]);
       for (const cid of cabinet_ids) {
