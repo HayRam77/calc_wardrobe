@@ -198,7 +198,7 @@
 
             refreshAllData();
 
-            document.getElementById('addSystemBtn').addEventListener('click', function(){ openSystemModal(); });
+            document.getElementById('addSystemBtn').addEventListener('click', function(){ openAddSystemToCabinetModal(); });
             document.getElementById('addBlockBtn').addEventListener('click', window.openBlockModal);
             document.getElementById('addMaterialToCabinetBtn').addEventListener('click', openAddMaterialToCabinet);
         });
@@ -258,14 +258,14 @@
                 tr.setAttribute('data-system-id', s.system_id);
                 tr.innerHTML = '<td class="drag-handle" style="cursor:grab;">\u282F</td>' +
                     '<td style="text-align:center;">' + s.id + '</td>' +
-                    '<td><strong>' + esc(s.system_name || '') + '</strong></td>' +
+                    '<td><strong><a href="#" style="color:#1a5f7a;text-decoration:underline;cursor:pointer;" onclick="openSystemModal(' + s.system_id + ');return false;" title="Просмотр и редактирование компонентов системы">' + esc(s.system_name || '') + '</a></strong></td>' +
                     '<td>' + esc(s.page || '') + '</td>' +
                     '<td>' + esc(s.installation || '') + '</td>' +
                     '<td>' + esc(s.description || '') + '</td>' +
                     '<td>' + esc(s.room || '') + '</td>' +
-                    '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">\u270F\uFE0F</button> ' +
-                    '<button class="btn btn-sm btn-copy" onclick="copySystemTo(' + s.system_id + ')">\uD83D\uDCCB</button> ' +
-                    '<button class="btn btn-sm btn-delete" onclick="delSystem(' + s.id + ')">\uD83D\uDDD1\uFE0F</button></td>';
+                    '<td><button class="btn btn-sm btn-edit" onclick="openSystemEditModal(' + s.system_id + ')" title="Редактировать параметры системы">\u270F\uFE0F</button> ' +
+                    '<button class="btn btn-sm btn-copy" onclick="copySystemTo(' + s.system_id + ')" title="Копировать систему">\uD83D\uDCCB</button> ' +
+                    '<button class="btn btn-sm btn-delete" onclick="delSystem(' + s.id + ')" title="Удалить систему из шкафа">\uD83D\uDDD1\uFE0F</button></td>';
                 tbody.appendChild(tr);
             });
 
@@ -385,7 +385,61 @@
         });
     }
 
-    function openSystemModal(sysId) {
+    // МОДАЛЬНОЕ ОКНО РЕДАКТИРОВАНИЯ ПАРАМЕТРОВ САМОЙ СИСТЕМЫ
+    window.openSystemEditModal = function(sysId) {
+        var m = document.createElement('div');
+        m.className = 'modal';
+        m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3000;';
+        m.innerHTML = '<div class="modal-content" style="max-width:600px;width:95vw;padding:20px;background:#fff;border-radius:8px;position:relative;"><span class="modal-close" style="position:absolute;top:15px;right:20px;font-size:24px;cursor:pointer;">&times;</span><h3 style="margin-top:0;">Редактировать параметры системы</h3><form id="editSystemForm"><div class="form-group" style="margin-bottom:12px;"><label style="font-weight:bold;display:block;margin-bottom:4px;">Название *</label><input type="text" id="sysEditName" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;" required></div><div class="form-row" style="display:flex;gap:10px;margin-bottom:12px;"><div class="form-group" style="flex:1;"><label style="font-weight:bold;display:block;margin-bottom:4px;">Страница</label><input type="text" id="sysEditPage" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;"></div><div class="form-group" style="flex:1;"><label style="font-weight:bold;display:block;margin-bottom:4px;">Помещение</label><input type="text" id="sysEditRoom" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;"></div></div><div class="form-group" style="margin-bottom:12px;"><label style="font-weight:bold;display:block;margin-bottom:4px;">Установка</label><input type="text" id="sysEditInstallation" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;"></div><div class="form-group" style="margin-bottom:12px;"><label style="font-weight:bold;display:block;margin-bottom:4px;">Описание</label><textarea id="sysEditDescription" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;" rows="3"></textarea></div><div style="margin-top:15px;display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary cancel-edit-sys-btn">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div></form></div>';
+        document.body.appendChild(m);
+
+        var closeModal = function() { m.remove(); };
+        m.querySelector('.modal-close').onclick = closeModal;
+        m.querySelector('.cancel-edit-sys-btn').onclick = closeModal;
+        m.onclick = function(e) { if (e.target === m) closeModal(); };
+
+        fetch('/api/systems/' + sysId)
+            .then(function(r) { return r.json(); })
+            .then(function(sys) {
+                m.querySelector('#sysEditName').value = sys.name || '';
+                m.querySelector('#sysEditPage').value = sys.page || '';
+                m.querySelector('#sysEditRoom').value = sys.room || '';
+                m.querySelector('#sysEditInstallation').value = sys.installation || '';
+                m.querySelector('#sysEditDescription').value = sys.description || '';
+            })
+            .catch(function(err) { alert('Ошибка загрузки данных системы: ' + err.message); });
+
+        m.querySelector('#editSystemForm').onsubmit = function(e) {
+            e.preventDefault();
+            var name = m.querySelector('#sysEditName').value.trim();
+            if (!name) return;
+
+            var bodyData = {
+                name: name,
+                page: m.querySelector('#sysEditPage').value.trim() || null,
+                room: m.querySelector('#sysEditRoom').value.trim() || null,
+                installation: m.querySelector('#sysEditInstallation').value.trim() || null,
+                description: m.querySelector('#sysEditDescription').value.trim() || null
+            };
+
+            fetch('/api/systems/' + sysId, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(bodyData)
+            })
+            .then(function(r) {
+                if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); });
+                return r.json();
+            })
+            .then(function() {
+                closeModal();
+                refreshAllData();
+            })
+            .catch(function(err) { alert('Ошибка сохранения: ' + err.message); });
+        };
+    };
+
+    function openAddSystemToCabinetModal() {
         document.getElementById('systemDescription').value = '';
         fetch('/api/cabinets?project_id=' + (window.projectId || ''))
           .then(function(r){ return r.json(); })
@@ -412,19 +466,6 @@
                 document.getElementById('systemForm').dataset.editId = '';
                 document.querySelector('.new-system-row').style.display = 'none';
 
-                if (sysId) {
-                    fetch('/api/cabinets/' + cabinetId + '/systems')
-                        .then(function(r){ return r.json(); })
-                        .then(function(sysData){
-                            var sys = sysData.find(function(s){ return s.id === sysId; });
-                            if (sys) {
-                                sel.value = sys.system_id;
-                                document.getElementById('systemDescription').value = sys.description || '';
-                                document.getElementById('cabinetSelect').value = sys.cabinet_id || '';
-                            }
-                            document.getElementById('systemForm').dataset.editId = sysId;
-                        });
-                }
                 document.getElementById('systemModal').style.display = 'flex';
                 sel.onchange = function() {
                     document.querySelector('.new-system-row').style.display = sel.value === '__new__' ? 'flex' : 'none';
@@ -472,11 +513,202 @@
         .catch(function(e){ alert(e.message); });
     });
 
-    window.editSystem = function(id) { openSystemModal(id); };
+    window.editSystem = function(sysId) { openSystemEditModal(sysId); };
     window.delSystem = function(id) {
         if (!confirm('Удалить систему из шкафа?')) return;
         fetch('/api/cabinets/' + cabinetId + '/systems/' + id, { method: 'DELETE' })
             .then(function(){ refreshAllData(); });
+    };
+
+    // МОДАЛЬНОЕ ОКНО ПРОСМОТРА И РЕДАКТИРОВАНИЯ КОМПОНЕНТОВ СИСТЕМЫ
+    window.openSystemModal = function(sysId) {
+        var modal = document.createElement('div'); 
+        modal.className = 'modal'; 
+        modal.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3000;';
+        modal.innerHTML = '<div class="modal-content" style="max-width:900px;width:95vw;max-height:90vh;overflow-y:auto;position:relative;"><span class="modal-close" style="position:absolute;top:15px;right:20px;font-size:24px;cursor:pointer;">&times;</span><h3 id="sysModTitle" style="margin-top:0;display:flex;justify-content:space-between;align-items:center;padding-right:30px;"><span>Система</span></h3><div id="sysModBody">Загрузка...</div></div>';
+        document.body.appendChild(modal);
+
+        var closeModal = function() { modal.remove(); refreshAllData(); };
+        modal.querySelector('.modal-close').onclick = closeModal;
+        modal.addEventListener('click', function(e){ if(e.target === modal) closeModal(); });
+
+        function loadSysData() { 
+            window._currentSysLoadFn = loadSysData;
+            var bodyEl = modal.querySelector('#sysModBody');
+            var titleEl = modal.querySelector('#sysModTitle');
+            bodyEl.innerHTML = '<p style="color:#666;">Загрузка компонентов...</p>';
+
+            var tableName = 'system_components_' + sysId;
+
+            Promise.all([
+                fetch('/api/systems/' + sysId + '?_=' + Date.now()).then(function(r){ return r.json(); }),
+                fetch('/api/table-sort/' + tableName + '?_=' + Date.now()).then(function(r){ return r.json(); }).catch(function(){ return {}; })
+            ]).then(function(results){
+                var data = results[0];
+                var saved = results[1] || {};
+
+                titleEl.innerHTML = '<span>Система: ' + esc(data.name || '') + '</span>' +
+                    '<button class="btn btn-sm btn-delete" id="clearSysCompsBtn" style="font-size:12px;margin-left:15px;" title="Очистить все компоненты системы">🗑️ Очистить</button>';
+                
+                var clearBtn = titleEl.querySelector('#clearSysCompsBtn');
+                if (clearBtn) {
+                    clearBtn.onclick = function() {
+                        if (!confirm('Удалить ВСЕ компоненты из этой системы? Это действие нельзя отменить.')) return;
+                        fetch('/api/systems/' + sysId + '/components', { method: 'DELETE' })
+                            .then(function(r){ return r.json(); })
+                            .then(function(res){
+                                alert('✅ ' + (res.message || 'Система очищена'));
+                                loadSysData();
+                                refreshAllData();
+                            })
+                            .catch(function(e){ alert('Ошибка: ' + e.message); });
+                    };
+                }
+
+                var comps = data.components || [];
+
+                if (saved.sort_order && saved.sort_order.length) {
+                    var orderMap = {};
+                    saved.sort_order.forEach(function(id, idx) { orderMap[id] = idx; });
+                    comps.sort(function(a, b) {
+                        var idA = a.link_id || a.id;
+                        var idB = b.link_id || b.id;
+                        var ia = orderMap.hasOwnProperty(idA) ? orderMap[idA] : (orderMap.hasOwnProperty(a.id) ? orderMap[a.id] : 999999);
+                        var ib = orderMap.hasOwnProperty(idB) ? orderMap[idB] : (orderMap.hasOwnProperty(b.id) ? orderMap[b.id] : 999999);
+                        return ia - ib;
+                    });
+                }
+
+                var h = '';
+                if (!comps.length) {
+                    h += '<p style="color:#888;margin-bottom:15px;">К системе не привязано ни одного компонента.</p>';
+                } else {
+                    h += '<div class="table-container" style="margin-bottom:15px;"><table class="data-table" id="modalSysCompTable"><thead><tr>' +
+                        '<th style="width:1%"></th>' +
+                        '<th data-sort="id" style="cursor:pointer;">ID</th>' +
+                        '<th data-sort="name" style="cursor:pointer;">Компонент</th>' +
+                        '<th data-sort="type_name" style="cursor:pointer;">Тип</th>' +
+                        '<th data-sort="module_name" style="cursor:pointer;">Модуль</th>' +
+                        '<th data-sort="quantity" style="cursor:pointer;">Кол-во</th>' +
+                        '<th>Действия</th>' +
+                    '</tr></thead><tbody>';
+
+                    comps.forEach(function(c){
+                        var linkId = c.link_id || c.id;
+                        h += '<tr data-id="' + linkId + '">' +
+                            '<td class="drag-handle" style="cursor:grab;">⠿</td>' +
+                            '<td>' + c.id + '</td>' +
+                            '<td><strong>' + esc(c.name) + '</strong></td>' +
+                            '<td>' + esc(c.type_name || '-') + '</td>' +
+                            '<td>' + esc(c.module_name || '-') + '</td>' +
+                            '<td>' + (c.quantity || 1) + '</td>' +
+                            '<td>' +
+                                '<button class="btn btn-sm btn-edit" onclick="editSysCompInModal(' + c.id + ')">✏️</button> ' +
+                                '<button class="btn btn-sm btn-delete" onclick="deleteCompFromSys(' + sysId + ',' + linkId + ')">🗑️</button>' +
+                            '</td>' +
+                        '</tr>';
+                    });
+                    h += '</tbody></table></div>';
+                }
+
+                h += '<div style="display:flex;gap:10px;justify-content:flex-start;">' +
+                    '<button class="btn btn-primary btn-sm" id="attachCompToSysBtn">+ Привязать</button>' +
+                    '<button class="btn btn-secondary btn-sm" id="addCompToSysBtn">+ Создать</button>' +
+                '</div>';
+
+                bodyEl.innerHTML = h;
+
+                modal.querySelector('#attachCompToSysBtn').onclick = function(){ attachCompToSys(sysId, function() { loadSysData(); refreshAllData(); }); };
+                modal.querySelector('#addCompToSysBtn').onclick = function(){ addCompToSys(sysId, function() { loadSysData(); refreshAllData(); }); };
+
+                var modalTable = bodyEl.querySelector('#modalSysCompTable');
+                if (modalTable) {
+                    var tbody = modalTable.querySelector('tbody');
+                    var thead = modalTable.querySelector('thead tr');
+
+                    setupDragAndDrop(tbody, tableName, function() {
+                        refreshAllData();
+                    });
+
+                    var currentSortKey = saved.sort_key || null;
+                    var currentSortDir = saved.sort_dir || 'asc';
+
+                    function applyModalSort(key, dir, saveToDb) {
+                        currentSortKey = key;
+                        currentSortDir = dir;
+
+                        thead.querySelectorAll('th[data-sort]').forEach(function(th) {
+                            th.classList.remove('sorted-asc', 'sorted-desc');
+                            if (th.dataset.sort === key) {
+                                th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                            }
+                        });
+
+                        var colIdx = Array.from(thead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === key; });
+                        if (colIdx < 0) return;
+
+                        var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+                        rows.sort(function(a, b) {
+                            var va = (a.cells[colIdx]?.textContent || '').trim();
+                            var vb = (b.cells[colIdx]?.textContent || '').trim();
+                            var na = parseFloat(va);
+                            var nb = parseFloat(vb);
+                            if (!isNaN(na) && !isNaN(nb) && va == na.toString() && vb == nb.toString()) {
+                                return dir === 'asc' ? na - nb : nb - na;
+                            }
+                            return dir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+                        });
+                        rows.forEach(function(row) { tbody.appendChild(row); });
+
+                        if (saveToDb !== false) {
+                            var ids = rows.map(function(r) { return parseInt(r.dataset.id); }).filter(Boolean);
+                            fetch('/api/table-sort/' + tableName, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ sort_order: ids, sort_key: key, sort_dir: dir })
+                            }).catch(function(e) { console.error(e); });
+                        }
+                    }
+
+                    thead.querySelectorAll('th[data-sort]').forEach(function(th) {
+                        th.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            var key = this.dataset.sort;
+                            var newDir = (currentSortKey === key && currentSortDir === 'asc') ? 'desc' : 'asc';
+                            applyModalSort(key, newDir, true);
+                        });
+                    });
+
+                    if (currentSortKey) {
+                        applyModalSort(currentSortKey, currentSortDir, false);
+                    }
+                }
+
+            }).catch(function(err){
+                bodyEl.innerHTML = '<p style="color:red;">Ошибка загрузки данных системы: ' + esc(err.message) + '</p>';
+            });
+        }
+
+        loadSysData();
+    };
+
+    window.deleteCompFromSys = function(sysId, linkId) {
+        if (!confirm('Удалить компонент из системы?')) return;
+        fetch('/api/systems/link/' + linkId, { method: 'DELETE' })
+        .then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+            if (window._currentSysLoadFn) window._currentSysLoadFn();
+            refreshAllData();
+        })
+        .catch(function(e){ alert(e.message); });
+    };
+
+    window.editSysCompInModal = function(compId) {
+        if (typeof SystemCompModal !== 'undefined') {
+            SystemCompModal.open(compId, function(){
+                if (window._currentSysLoadFn) window._currentSysLoadFn();
+                refreshAllData();
+            });
+        }
     };
 
     // ===== 2. КОМПОНЕНТЫ СИСТЕМ =====

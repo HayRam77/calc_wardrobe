@@ -695,3 +695,9 @@ tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardro
 
 ### Файлы:
 - routes/systems.js, routes/cabinets.js, public/pages/automation.html, public/pages/cabinet.html, PROJECT_MAP.md
+
+###---###
+## 26.07.2026 — Фиксация: Автоматическое сохранение и обновление проекта
+- **Дамп БД:** bd_calc_20260726_164859.sql
+- **Архив файлов:** calc_wardrobe_20260726_164859.tar.gz
+- **Изменения:** Автоматическое сохранение и обновление проекта

@@ -56,7 +56,7 @@
     var sysSortKey = null, sysSortDir = 'asc';
     var filterData = { cabinet_names: [], page: [], installation: [] };
 
-    function setupDragAndDrop(tbody) {
+    function setupDragAndDrop(tbody, tableName, onComplete) {
         var dragInfo = null;
         function onMouseMove(e) {
             if (!dragInfo) return;
@@ -83,9 +83,16 @@
                 var id = parseInt(tr.dataset.id);
                 if (id) { items.push({ id: id, position: idx }); ids.push(id); }
             });
-            localStorage.setItem('systems_order', JSON.stringify(ids));
-            fetch('/api/table-sort/systems', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sort_order: ids, filter_data: filterData }) }).catch(function(e){ console.error(e); });
-            fetch('/api/systems/sort-order', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e){ console.error(e); });
+
+            if (tableName === 'systems') {
+                localStorage.setItem('systems_order', JSON.stringify(ids));
+                fetch('/api/table-sort/systems', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sort_order: ids, filter_data: filterData }) }).catch(function(e){ console.error(e); });
+                fetch('/api/systems/sort-order', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e){ console.error(e); });
+            } else if (tableName) {
+                fetch('/api/table-sort/' + tableName, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sort_order: ids }) }).catch(function(e){ console.error(e); });
+            }
+
+            if (onComplete) onComplete(ids);
             dragInfo = null;
         }
 
@@ -121,11 +128,16 @@
                 '<td>' + esc(s.installation || '') + '</td>' +
                 '<td>' + esc(s.description || '') + '</td>' +
                 '<td>' + esc(s.room || '') + '</td>' +
-                (isAdmin ? '<td><button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')">✏️</button> <button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')">🗑️</button></td>' : '') +
+                (isAdmin ? '<td>' +
+                    '<button class="btn btn-sm btn-edit" onclick="editSystem(' + s.id + ')" title="Редактировать">✏️</button> ' +
+                    '<button class="btn btn-sm btn-duplicate" onclick="duplicateSystem(' + s.id + ')" title="Дублировать систему (создать копию)">📄</button> ' +
+                    '<button class="btn btn-sm btn-copy" onclick="copySystemComponents(' + s.id + ')" title="Копировать состав в другую систему">📋</button> ' +
+                    '<button class="btn btn-sm btn-delete" onclick="deleteSystem(' + s.id + ')" title="Удалить">🗑️</button>' +
+                '</td>' : '') +
             '</tr>';
         }).join('');
 
-        setupDragAndDrop(tbody);
+        setupDragAndDrop(tbody, 'systems');
         applyAllFilters();
     }
 
@@ -165,20 +177,17 @@
         tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
             var show = true;
 
-            // 1. Фильтр по шкафам
             if (filterData.cabinet_names && filterData.cabinet_names.length > 0 && cabIdx >= 0) {
                 var rowCabs = (tr.cells[cabIdx]?.textContent || '').split(', ').map(function(s){ return s.trim(); }).filter(Boolean);
                 var matchCab = filterData.cabinet_names.some(function(fc) { return rowCabs.indexOf(fc) >= 0; });
                 if (!matchCab) show = false;
             }
 
-            // 2. Фильтр по странице
             if (show && filterData.page && filterData.page.length > 0 && pageIdx >= 0) {
                 var rowPage = (tr.cells[pageIdx]?.textContent || '').trim() || '-';
                 if (filterData.page.indexOf(rowPage) < 0) show = false;
             }
 
-            // 3. Фильтр по установке
             if (show && filterData.installation && filterData.installation.length > 0 && instIdx >= 0) {
                 var rowInst = (tr.cells[instIdx]?.textContent || '').trim() || '-';
                 if (filterData.installation.indexOf(rowInst) < 0) show = false;
@@ -494,6 +503,63 @@
         fetch('/api/systems/' + id).then(function(r) { return r.json(); }).then(function(s) { openSystemForm(s); });
     };
 
+    window.duplicateSystem = function(id) {
+        if (!confirm('Создать копию этой системы со всеми привязанными компонентами?')) return;
+        fetch('/api/systems/' + id + '/duplicate', { method: 'POST' })
+            .then(function(r){
+                if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+                return r.json();
+            })
+            .then(function(data){
+                alert('✅ ' + (data.message || 'Система продублирована'));
+                loadSystems();
+            })
+            .catch(function(err){ alert('Ошибка: ' + err.message); });
+    };
+
+    window.copySystemComponents = function(sourceSystemId) {
+        fetch('/api/systems')
+            .then(function(r){ return r.json(); })
+            .then(function(systems){
+                var copyModal = document.createElement('div');
+                copyModal.className = 'modal';
+                copyModal.style.cssText = 'display:flex;justify-content:center;align-items:center;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:4000;';
+                copyModal.innerHTML = '<div class="modal-content" style="max-width:500px;width:90vw;padding:20px;background:#fff;border-radius:8px;"><span class="modal-close" style="float:right;font-size:20px;cursor:pointer;">&times;</span><h3 style="margin-top:0;">Скопировать состав компонентов в систему</h3><div class="form-group" style="margin-bottom:15px;"><label style="font-weight:bold;display:block;margin-bottom:5px;">Целевая система *</label><select id="copyTargetSelect" class="form-control" style="width:100%;"><option value="">-- выберите систему --</option></select></div><div style="display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary cancel-copy-btn">Отмена</button><button type="button" id="execCopyBtn" class="btn btn-primary">Скопировать</button></div></div>';
+                document.body.appendChild(copyModal);
+
+                var closeCopyModal = function() { copyModal.remove(); };
+                copyModal.querySelector('.modal-close').onclick = closeCopyModal;
+                copyModal.querySelector('.cancel-copy-btn').onclick = closeCopyModal;
+
+                var sel = copyModal.querySelector('#copyTargetSelect');
+                systems.forEach(function(s){
+                    if (s.id != sourceSystemId) {
+                        sel.innerHTML += '<option value="' + s.id + '">' + esc(s.name) + '</option>';
+                    }
+                });
+
+                copyModal.querySelector('#execCopyBtn').onclick = function() {
+                    var targetId = sel.value;
+                    if (!targetId) { alert('Выберите целевую систему'); return; }
+                    fetch('/api/systems/' + sourceSystemId + '/copy-to/' + targetId, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    })
+                    .then(function(r){
+                        if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+                        return r.json();
+                    })
+                    .then(function(data){
+                        alert('✅ ' + data.message);
+                        closeCopyModal();
+                        loadSystems();
+                    })
+                    .catch(function(e){ alert('Ошибка: ' + e.message); });
+                };
+            });
+    };
+
     window.openSystemModal = function(sysId) {
         var modal = document.createElement('div'); 
         modal.className = 'modal'; 
@@ -511,7 +577,15 @@
             var titleEl = modal.querySelector('#sysModTitle');
             bodyEl.innerHTML = '<p style="color:#666;">Загрузка компонентов...</p>';
 
-            fetch('/api/systems/' + sysId + '?_=' + Date.now()).then(function(r){ return r.json(); }).then(function(data){
+            var tableName = 'system_components_' + sysId;
+
+            Promise.all([
+                fetch('/api/systems/' + sysId + '?_=' + Date.now()).then(function(r){ return r.json(); }),
+                fetch('/api/table-sort/' + tableName + '?_=' + Date.now()).then(function(r){ return r.json(); }).catch(function(){ return {}; })
+            ]).then(function(results){
+                var data = results[0];
+                var saved = results[1] || {};
+
                 titleEl.innerHTML = '<span>Система: ' + esc(data.name || '') + '</span>' +
                     '<button class="btn btn-sm btn-delete" id="clearSysCompsBtn" style="font-size:12px;margin-left:15px;" title="Очистить все компоненты системы">🗑️ Очистить</button>';
                 
@@ -530,13 +604,38 @@
                     };
                 }
 
+                var comps = data.components || [];
+
+                if (saved.sort_order && saved.sort_order.length) {
+                    var orderMap = {};
+                    saved.sort_order.forEach(function(id, idx) { orderMap[id] = idx; });
+                    comps.sort(function(a, b) {
+                        var idA = a.link_id || a.id;
+                        var idB = b.link_id || b.id;
+                        var ia = orderMap.hasOwnProperty(idA) ? orderMap[idA] : (orderMap.hasOwnProperty(a.id) ? orderMap[a.id] : 999999);
+                        var ib = orderMap.hasOwnProperty(idB) ? orderMap[idB] : (orderMap.hasOwnProperty(b.id) ? orderMap[b.id] : 999999);
+                        return ia - ib;
+                    });
+                }
+
                 var h = '';
-                if (!data.components || !data.components.length) {
+                if (!comps.length) {
                     h += '<p style="color:#888;margin-bottom:15px;">К системе не привязано ни одного компонента.</p>';
                 } else {
-                    h += '<div class="table-container" style="margin-bottom:15px;"><table class="data-table"><thead><tr><th>ID</th><th>Компонент</th><th>Тип</th><th>Модуль</th><th>Кол-во</th><th>Действия</th></tr></thead><tbody>';
-                    data.components.forEach(function(c){
-                        h += '<tr>' +
+                    h += '<div class="table-container" style="margin-bottom:15px;"><table class="data-table" id="modalSysCompTable"><thead><tr>' +
+                        '<th style="width:1%"></th>' +
+                        '<th data-sort="id" style="cursor:pointer;">ID</th>' +
+                        '<th data-sort="name" style="cursor:pointer;">Компонент</th>' +
+                        '<th data-sort="type_name" style="cursor:pointer;">Тип</th>' +
+                        '<th data-sort="module_name" style="cursor:pointer;">Модуль</th>' +
+                        '<th data-sort="quantity" style="cursor:pointer;">Кол-во</th>' +
+                        '<th>Действия</th>' +
+                    '</tr></thead><tbody>';
+
+                    comps.forEach(function(c){
+                        var linkId = c.link_id || c.id;
+                        h += '<tr data-id="' + linkId + '">' +
+                            '<td class="drag-handle" style="cursor:grab;">⠿</td>' +
                             '<td>' + c.id + '</td>' +
                             '<td><strong>' + esc(c.name) + '</strong></td>' +
                             '<td>' + esc(c.type_name || '-') + '</td>' +
@@ -544,7 +643,7 @@
                             '<td>' + (c.quantity || 1) + '</td>' +
                             '<td>' +
                                 '<button class="btn btn-sm btn-edit" onclick="editSysCompInModal(' + c.id + ')">✏️</button> ' +
-                                '<button class="btn btn-sm btn-delete" onclick="deleteCompFromSys(' + sysId + ',' + c.link_id + ')">🗑️</button>' +
+                                '<button class="btn btn-sm btn-delete" onclick="deleteCompFromSys(' + sysId + ',' + linkId + ')">🗑️</button>' +
                             '</td>' +
                         '</tr>';
                     });
@@ -560,6 +659,70 @@
 
                 modal.querySelector('#attachCompToSysBtn').onclick = function(){ attachCompToSys(sysId, loadSysData); };
                 modal.querySelector('#addCompToSysBtn').onclick = function(){ addCompToSys(sysId, loadSysData); };
+
+                var modalTable = bodyEl.querySelector('#modalSysCompTable');
+                if (modalTable) {
+                    var tbody = modalTable.querySelector('tbody');
+                    var thead = modalTable.querySelector('thead tr');
+
+                    setupDragAndDrop(tbody, tableName, function() {
+                        if (typeof loadSystems === 'function') loadSystems();
+                    });
+
+                    var currentSortKey = saved.sort_key || null;
+                    var currentSortDir = saved.sort_dir || 'asc';
+
+                    function applyModalSort(key, dir, saveToDb) {
+                        currentSortKey = key;
+                        currentSortDir = dir;
+
+                        thead.querySelectorAll('th[data-sort]').forEach(function(th) {
+                            th.classList.remove('sorted-asc', 'sorted-desc');
+                            if (th.dataset.sort === key) {
+                                th.classList.add(dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                            }
+                        });
+
+                        var colIdx = Array.from(thead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === key; });
+                        if (colIdx < 0) return;
+
+                        var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+                        rows.sort(function(a, b) {
+                            var va = (a.cells[colIdx]?.textContent || '').trim();
+                            var vb = (b.cells[colIdx]?.textContent || '').trim();
+                            var na = parseFloat(va);
+                            var nb = parseFloat(vb);
+                            if (!isNaN(na) && !isNaN(nb) && va == na.toString() && vb == nb.toString()) {
+                                return dir === 'asc' ? na - nb : nb - na;
+                            }
+                            return dir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
+                        });
+                        rows.forEach(function(row) { tbody.appendChild(row); });
+
+                        if (saveToDb !== false) {
+                            var ids = rows.map(function(r) { return parseInt(r.dataset.id); }).filter(Boolean);
+                            fetch('/api/table-sort/' + tableName, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ sort_order: ids, sort_key: key, sort_dir: dir })
+                            }).catch(function(e) { console.error(e); });
+                        }
+                    }
+
+                    thead.querySelectorAll('th[data-sort]').forEach(function(th) {
+                        th.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            var key = this.dataset.sort;
+                            var newDir = (currentSortKey === key && currentSortDir === 'asc') ? 'desc' : 'asc';
+                            applyModalSort(key, newDir, true);
+                        });
+                    });
+
+                    if (currentSortKey) {
+                        applyModalSort(currentSortKey, currentSortDir, false);
+                    }
+                }
+
             }).catch(function(err){
                 bodyEl.innerHTML = '<p style="color:red;">Ошибка загрузки данных системы: ' + esc(err.message) + '</p>';
             });

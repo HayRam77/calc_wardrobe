@@ -3,7 +3,19 @@ window.BlockTemplateModal = {
     _cb: null, 
     _preselectedId: null,
 
-    open: function(callback, preselectedId) {
+    open: function(a, b) {
+        var callback = null;
+        var preselectedId = null;
+        if (typeof a === 'function') {
+            callback = a;
+            preselectedId = b;
+        } else if (typeof b === 'function') {
+            callback = b;
+            preselectedId = a;
+        } else {
+            preselectedId = a;
+        }
+
         this._cb = callback; 
         this._preselectedId = preselectedId || null; 
         var self = this;
@@ -12,7 +24,7 @@ window.BlockTemplateModal = {
         var m = document.createElement('div'); 
         m.className = 'modal';
         m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:6000;';
-        m.innerHTML = '<div class="modal-content" style="max-width:95vw;max-height:90vh;overflow-y:auto;"><span class="modal-close">&times;</span><h3 id="blockModalTitle">Добавить компонент шкафа</h3><form id="blockTemplateForm"><input type="hidden" id="blockTemplateId"></form></div>';
+        m.innerHTML = '<div class="modal-content" style="max-width:95vw;max-height:90vh;overflow-y:auto;background:#fff;padding:20px;border-radius:8px;"><span class="modal-close" style="cursor:pointer;float:right;font-size:24px;font-weight:bold;">&times;</span><h3 id="blockModalTitle" style="margin-top:0;">Добавить компонент шкафа</h3><form id="blockTemplateForm"><input type="hidden" id="blockTemplateId"></form></div>';
         document.body.appendChild(m);
 
         var closeModal = function() { m.remove(); };
@@ -22,19 +34,19 @@ window.BlockTemplateModal = {
         var f = m.querySelector('#blockTemplateForm');
 
         fetch('/api/manufacturers').then(function(r){ return r.json(); }).then(function(manufacturers){
-            var h = '<div class="form-group"><label for="existingBlockSelect">Существующий компонент</label><select id="existingBlockSelect" class="form-control" style="width:100%;"><option value="">-- выберите или создайте новый --</option></select></div>';
-            h += '<div class="form-row" style="display:flex;gap:10px;"><div class="form-group" style="flex:1;"><label for="blockType">Тип</label><div id="blockTypeContainer"></div></div>';
-            h += '<div class="form-group" style="flex:1;"><label for="blockManufacturer">Производитель</label><select id="blockManufacturer" class="form-control"><option value="">-- Производитель --</option>';
+            var h = '<div class="form-group" style="margin-bottom:10px;"><label for="existingBlockSelect">Существующий компонент</label><select id="existingBlockSelect" class="form-control" style="width:100%;"><option value="">-- выберите или создайте новый --</option></select></div>';
+            h += '<div class="form-row" style="display:flex;gap:10px;margin-bottom:10px;"><div class="form-group" style="flex:1;"><label for="blockType">Тип</label><div id="blockTypeContainer"></div></div>';
+            h += '<div class="form-group" style="flex:1;"><label for="blockManufacturer">Производитель</label><select id="blockManufacturer" class="form-control" style="width:100%;"><option value="">-- Производитель --</option>';
             manufacturers.forEach(function(man){ h += '<option value="'+man.id+'">'+man.name+'</option>'; });
             h += '</select></div></div>';
-            h += '<div class="form-row" style="display:flex;gap:10px;"><div class="form-group" style="flex:1;"><label for="blockName">Название *</label><input type="text" id="blockName" class="form-control" required></div><div class="form-group" style="flex:1;"><label for="blockArticle">Артикул</label><input type="text" id="blockArticle" class="form-control"></div></div>';
-            h += '<div class="form-row" style="display:flex;gap:10px;"><div class="form-group" style="flex:1;"><label for="blockPrice">Цена, руб.</label><input type="number" id="blockPrice" class="form-control" step="0.01"></div><div class="form-group" style="flex:1;"><label for="blockWeight">Вес, гр.</label><input type="number" id="blockWeight" class="form-control" step="0.01"></div></div>';
-            h += '<div class="form-row" style="display:flex;gap:10px;"><div class="form-group" style="flex:1;"><label for="blockPower">Мощность, Вт</label><input type="number" id="blockPower" class="form-control" step="0.01"></div><div class="form-group" style="flex:1;"><label for="blockLn">LN</label><input type="text" id="blockLn" class="form-control"></div></div>';
-            h += '<div class="form-row" style="display:flex;gap:10px;"><div class="form-group" style="flex:1;"><label for="blockTm">TM</label><input type="text" id="blockTm" class="form-control"></div></div>';
-            h += '<div class="form-group"><label for="blockUrl">Ссылка</label><input type="url" id="blockUrl" class="form-control"></div>';
-            h += '<div class="form-group"><label for="blockDescription">Описание</label><textarea id="blockDescription" class="form-control" rows="2"></textarea></div>';
-            h += '<h4>Параметры</h4><div id="blockParamsContainer"></div><button type="button" id="addBlockParamBtn" class="btn btn-sm btn-secondary" style="margin-bottom:15px;">+ Добавить параметр</button>';
-            h += '<div class="form-group"><label>Материалы компонента шкафа</label><div id="blockMaterialsList" style="margin-bottom:5px;"></div><button type="button" class="btn btn-sm btn-primary" id="addBlockMaterialBtn">+ Добавить материал</button></div>';
+            h += '<div class="form-row" style="display:flex;gap:10px;margin-bottom:10px;"><div class="form-group" style="flex:1;"><label for="blockName">Название *</label><input type="text" id="blockName" class="form-control" style="width:100%;" required></div><div class="form-group" style="flex:1;"><label for="blockArticle">Артикул</label><input type="text" id="blockArticle" class="form-control" style="width:100%;"></div></div>';
+            h += '<div class="form-row" style="display:flex;gap:10px;margin-bottom:10px;"><div class="form-group" style="flex:1;"><label for="blockPrice">Цена, руб.</label><input type="number" id="blockPrice" class="form-control" style="width:100%;" step="0.01"></div><div class="form-group" style="flex:1;"><label for="blockWeight">Вес, гр.</label><input type="number" id="blockWeight" class="form-control" style="width:100%;" step="0.01"></div></div>';
+            h += '<div class="form-row" style="display:flex;gap:10px;margin-bottom:10px;"><div class="form-group" style="flex:1;"><label for="blockPower">Мощность, Вт</label><input type="number" id="blockPower" class="form-control" style="width:100%;" step="0.01"></div><div class="form-group" style="flex:1;"><label for="blockLn">LN</label><input type="text" id="blockLn" class="form-control" style="width:100%;"></div></div>';
+            h += '<div class="form-row" style="display:flex;gap:10px;margin-bottom:10px;"><div class="form-group" style="flex:1;"><label for="blockTm">TM</label><input type="text" id="blockTm" class="form-control" style="width:100%;"></div></div>';
+            h += '<div class="form-group" style="margin-bottom:10px;"><label for="blockUrl">Ссылка</label><input type="url" id="blockUrl" class="form-control" style="width:100%;"></div>';
+            h += '<div class="form-group" style="margin-bottom:10px;"><label for="blockDescription">Описание</label><textarea id="blockDescription" class="form-control" style="width:100%;" rows="2"></textarea></div>';
+            h += '<h4 style="margin:15px 0 5px;">Параметры</h4><div id="blockParamsContainer"></div><button type="button" id="addBlockParamBtn" class="btn btn-sm btn-secondary" style="margin-bottom:15px;">+ Добавить параметр</button>';
+            h += '<div class="form-group" style="margin-bottom:10px;"><label style="font-weight:bold;">Материалы компонента шкафа</label><div id="blockMaterialsList" style="margin-bottom:5px;"></div><button type="button" class="btn btn-sm btn-primary" id="addBlockMaterialBtn">+ Добавить материал</button></div>';
             h += '<div style="margin-top:15px;display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary cancel-block-btn">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';
             f.innerHTML = h;
 
@@ -166,12 +178,12 @@ window.BlockTemplateModal = {
             .then(function(r) { return r.json(); })
             .then(function(materials) {
                 if (!materials.length) {
-                    ml.innerHTML = '<p>Нет материалов</p>';
+                    ml.innerHTML = '<p style="color:#888;">Нет материалов</p>';
                     return;
                 }
-                var html = '<table class="data-table"><tr><th>Название</th><th>Кол-во</th><th></th></tr>';
+                var html = '<table class="data-table" style="width:100%;font-size:13px;"><tr><th>Название</th><th>Кол-во</th><th></th></tr>';
                 materials.forEach(function(mat) {
-                    html += '<tr><td>' + (mat.name || '') + '</td><td><input type="number" value="' + mat.quantity + '" class="mat-qty-input" data-mat-id="' + mat.material_id + '" style="width:60px;"></td><td><button class="btn btn-sm btn-delete del-mat-btn" type="button" data-mat-id="' + mat.material_id + '">🗑️</button></td></tr>';
+                    html += '<tr><td>' + (mat.name || '') + '</td><td><input type="number" value="' + mat.quantity + '" class="mat-qty-input form-control" data-mat-id="' + mat.material_id + '" style="width:60px;"></td><td><button class="btn btn-sm btn-delete del-mat-btn" type="button" data-mat-id="' + mat.material_id + '">🗑️</button></td></tr>';
                 });
                 html += '</table>';
                 ml.innerHTML = html;
@@ -210,24 +222,50 @@ window.BlockTemplateModal = {
         var btn = modalEl.querySelector('#addBlockMaterialBtn');
         if (btn) {
             btn.onclick = function() {
-                if (typeof MaterialModal !== 'undefined') {
-                    MaterialModal.open(function(materialId) {
-                        if (materialId) {
-                            var qty = prompt('Количество:', '1');
-                            if (qty && !isNaN(qty) && parseInt(qty) > 0) {
-                                fetch('/api/block-templates/' + blockId + '/materials', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ material_id: materialId, quantity: parseInt(qty) })
-                                }).then(function() { self._loadMaterials(modalEl, blockId); });
-                            }
-                        }
-                    });
-                } else {
-                    alert('Модальное окно материалов не загружено');
+                if (!blockId || parseInt(blockId) === 0) {
+                    alert('Сначала сохраните создаваемый компонент шкафа');
+                    return;
                 }
+                self._ensureMaterialModal(function() {
+                    if (typeof MaterialModal !== 'undefined') {
+                        var selectFn = MaterialModal.select || MaterialModal.open;
+                        selectFn.call(MaterialModal, function(materialId) {
+                            if (materialId) {
+                                var qty = prompt('Количество:', '1');
+                                if (qty && !isNaN(qty) && parseInt(qty) > 0) {
+                                    fetch('/api/block-templates/' + blockId + '/materials', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ material_id: materialId, quantity: parseInt(qty) })
+                                    }).then(function() { self._loadMaterials(modalEl, blockId); });
+                                }
+                            }
+                        });
+                    } else {
+                        alert('Модальное окно материалов не загружено');
+                    }
+                });
             };
         }
+    },
+
+    _ensureMaterialModal: function(cb) {
+        if (typeof MaterialModal !== 'undefined') return cb();
+        fetch('/components/material-modal.html')
+            .then(function(r){ return r.text(); })
+            .then(function(html){
+                var div = document.createElement('div');
+                div.innerHTML = html;
+                Array.from(div.querySelectorAll('script')).forEach(function(s){
+                    var newScript = document.createElement('script');
+                    newScript.textContent = s.textContent;
+                    document.body.appendChild(newScript);
+                });
+                cb();
+            }).catch(function(err){
+                console.error(err);
+                alert('Ошибка загрузки компонентов материалов');
+            });
     },
 
     _renderParams: function(modalEl, params) {

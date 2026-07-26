@@ -70,6 +70,89 @@ router.get('/export', auth, async (req, res) => {
   }
 });
 
+// POST /api/block-templates/import — Импорт из Excel
+router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    let imported = 0;
+    for (const row of data) {
+      try {
+        await pool.query(
+          `INSERT INTO block_templates (name, article, price, weight_grams, power_watts, ln, tm, url, description)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [row['Название'], row['Артикул'] || null, row['Цена'] || null, row['Вес'] || null, 
+           row['Мощность'] || null, row['LN'] || null, row['TM'] || null, row['Ссылка'] || null, row['Описание'] || null]
+        );
+        imported++;
+      } catch (e) { console.error(e); }
+    }
+    res.json({ message: 'Импортировано ' + imported + ' записей' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Ошибка импорта' });
+  }
+});
+
+// ========== МАТЕРИАЛЫ КОМПОНЕНТА ШКАФА ==========
+
+// GET /api/block-templates/:id/materials — Получить список материалов компонента
+router.get('/:id/materials', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT btm.*, m.name, m.article, m.unit, m.price,
+              COALESCE(m.ln, '') AS ln, COALESCE(m.tm, '') AS tm
+       FROM block_template_materials btm
+       JOIN materials m ON btm.material_id = m.id
+       WHERE btm.block_template_id = $1
+       ORDER BY m.name`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Ошибка получения материалов компонента шкафа:', err);
+    res.status(500).json({ message: 'Ошибка получения материалов' });
+  }
+});
+
+// POST /api/block-templates/:id/materials — Привязать материал к компоненту
+router.post('/:id/materials', auth, isAdmin, async (req, res) => {
+  try {
+    const { material_id, quantity } = req.body;
+    const blockTemplateId = req.params.id;
+    const qty = quantity || 1;
+
+    const result = await pool.query(
+      `INSERT INTO block_template_materials (block_template_id, material_id, quantity)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (block_template_id, material_id) 
+       DO UPDATE SET quantity = EXCLUDED.quantity 
+       RETURNING *`,
+      [blockTemplateId, material_id, qty]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Ошибка привязки материала к компоненту шкафа:', err);
+    res.status(500).json({ message: 'Ошибка привязки материала' });
+  }
+});
+
+// DELETE /api/block-templates/:id/materials/:materialId — Отвязать материал
+router.delete('/:id/materials/:materialId', auth, isAdmin, async (req, res) => {
+  try {
+    await pool.query(
+      `DELETE FROM block_template_materials 
+       WHERE block_template_id = $1 AND (material_id = $2 OR id = $2)`,
+      [req.params.id, req.params.materialId]
+    );
+    res.json({ message: 'Материал отвязан от компонента' });
+  } catch (err) {
+    console.error('Ошибка отвязки материала:', err);
+    res.status(500).json({ message: 'Ошибка отвязки материала' });
+  }
+});
+
 // GET /api/block-templates/:id — Один компонент
 router.get('/:id', auth, async (req, res) => {
   try {
@@ -211,30 +294,6 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Ошибка удаления' });
-  }
-});
-
-// POST /api/block-templates/import — Импорт из Excel
-router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
-  try {
-    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
-    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    let imported = 0;
-    for (const row of data) {
-      try {
-        await pool.query(
-          `INSERT INTO block_templates (name, article, price, weight_grams, power_watts, ln, tm, url, description)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [row['Название'], row['Артикул'] || null, row['Цена'] || null, row['Вес'] || null, 
-           row['Мощность'] || null, row['LN'] || null, row['TM'] || null, row['Ссылка'] || null, row['Описание'] || null]
-        );
-        imported++;
-      } catch (e) { console.error(e); }
-    }
-    res.json({ message: 'Импортировано ' + imported + ' записей' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Ошибка импорта' });
   }
 });
 

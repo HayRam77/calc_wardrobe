@@ -7,7 +7,7 @@ const XLSX = require('xlsx');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
-// GET /api/systems — Список систем с агрегированными компонентами
+// GET /api/systems — Список систем с компонентами
 router.get('/', auth, async (req, res) => {
   try {
     const query = `
@@ -79,7 +79,7 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка импорта' }); }
 });
 
-// POST /reorder & PUT /sort-order — Изменение порядка строк
+// POST /reorder & PUT /sort-order
 router.post('/reorder', auth, isAdmin, async (req, res) => {
   try {
     const rawList = req.body.items || req.body.ids;
@@ -218,7 +218,7 @@ router.delete('/link/:id', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// POST /api/systems/:sourceId/copy-to/:targetId — Копирование компонентов
+// POST /api/systems/:sourceId/copy-to/:targetId — Копирование компонентов в существующую систему
 router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -256,6 +256,64 @@ router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
     await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ message: 'Ошибка копирования' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/systems/:id/duplicate — Дублировать систему полностью (создание новой системы-дубликата)
+router.post('/:id/duplicate', auth, isAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const sourceId = req.params.id;
+
+    const sysRes = await client.query('SELECT * FROM systems WHERE id = $1', [sourceId]);
+    if (sysRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Система не найдена' });
+    }
+    const sourceSys = sysRes.rows[0];
+
+    let newName = sourceSys.name + ' (копия)';
+    let counter = 1;
+    while (true) {
+      const check = await client.query('SELECT id FROM systems WHERE name = $1', [newName]);
+      if (check.rows.length === 0) break;
+      counter++;
+      newName = sourceSys.name + ' (копия ' + counter + ')';
+    }
+
+    const newSysRes = await client.query(
+      `INSERT INTO systems (name, page, installation, description, room, position)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [newName, sourceSys.page || null, sourceSys.installation || null, sourceSys.description || null, sourceSys.room || null, (sourceSys.position || 0) + 1]
+    );
+    const newSys = newSysRes.rows[0];
+
+    await client.query(
+      `INSERT INTO cabinet_systems (cabinet_id, system_id)
+       SELECT cabinet_id, $1 FROM cabinet_systems WHERE system_id = $2`,
+      [newSys.id, sourceId]
+    );
+
+    const compResult = await client.query(
+      `INSERT INTO system_components_link (system_id, component_id, quantity, position)
+       SELECT $1, component_id, quantity, position
+       FROM system_components_link WHERE system_id = $2`,
+      [newSys.id, sourceId]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json({
+      message: 'Создана копия системы «' + newName + '» (компонентов: ' + compResult.rowCount + ')',
+      system: newSys
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Ошибка дублирования системы:', err);
+    res.status(500).json({ message: 'Ошибка дублирования системы' });
   } finally {
     client.release();
   }

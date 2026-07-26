@@ -31,7 +31,7 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
 
 router.get('/', auth, async (req, res) => { 
   try { 
-        const sort = ['id','name','description'].includes(req.query.sort) ? req.query.sort : 'name';
+    const sort = ['id','name','description'].includes(req.query.sort) ? req.query.sort : 'name';
     const order = req.query.order === 'desc' ? 'DESC' : 'ASC';
     const r = await pool.query(
       'SELECT sct.*, ' +
@@ -42,22 +42,20 @@ router.get('/', auth, async (req, res) => {
     res.json(r.rows); 
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } 
 });
+
 router.get('/:id', auth, async (req, res) => { try { const r = await pool.query('SELECT * FROM system_component_types WHERE id = $1', [req.params.id]); if (r.rows.length === 0) return res.status(404).json({ message: 'Не найден' }); res.json(r.rows[0]); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
 router.post('/', auth, isAdmin, async (req, res) => { try { const r = await pool.query('INSERT INTO system_component_types (name, description) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET description=$2 RETURNING *', [req.body.name, req.body.description || null]); res.status(201).json(r.rows[0]); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
 router.put('/:id', auth, isAdmin, async (req, res) => { try { const r = await pool.query('UPDATE system_component_types SET name=$1, description=$2 WHERE id=$3 RETURNING *', [req.body.name, req.body.description || null, req.params.id]); res.json(r.rows[0]); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
 router.delete('/:id', auth, isAdmin, async (req, res) => { try { await pool.query('DELETE FROM system_component_types WHERE id = $1', [req.params.id]); res.json({ message: 'Удалён' }); } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); } });
-
 
 // ========== МАТЕРИАЛЫ ТИПА ==========
 router.get('/:id/materials', auth, async (req, res) => {
     try {
         const result = await pool.query(
             `SELECT scm.*, m.name, m.article, m.unit, m.price,
-                    COALESCE(ln.value, '') AS ln, COALESCE(tm.value, '') AS tm
+                    COALESCE(m.ln, '') AS ln, COALESCE(m.tm, '') AS tm
              FROM system_component_type_materials scm
              JOIN materials m ON scm.material_id = m.id
-             LEFT JOIN ln_values ln ON ln.entity_type = 'material' AND ln.entity_id = m.id
-             LEFT JOIN tm_values tm ON tm.entity_type = 'material' AND tm.entity_id = m.id
              WHERE scm.type_id = $1 ORDER BY m.name`,
             [req.params.id]
         );
@@ -87,7 +85,7 @@ router.post('/:id/materials', auth, isAdmin, async (req, res) => {
              SELECT sc.id, $2, $3
              FROM system_components sc
              WHERE sc.type_id = $1
-             `,
+             ON CONFLICT DO NOTHING`,
             [typeId, material_id, qty]
         );
 
@@ -104,23 +102,21 @@ router.post('/:id/materials', auth, isAdmin, async (req, res) => {
 
 router.delete('/:typeId/materials/:materialId', auth, isAdmin, async (req, res) => {
     try {
-        await pool.query('DELETE FROM system_component_type_materials WHERE type_id=$1 AND material_id=$2',
+        await pool.query('DELETE FROM system_component_type_materials WHERE type_id=$1 AND (material_id=$2 OR id=$2)',
             [req.params.typeId, req.params.materialId]);
         res.json({ message: 'Материал удалён из типа' });
     } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-
 // ========== КОМПОНЕНТЫ ШКАФА ТИПА ==========
 router.get('/:id/blocks', auth, async (req, res) => {
     try {
         const result = await pool.query(
-            `SELECT sbl.*, bt.name, bt.article,
-                    COALESCE(ln.value, '') AS ln, COALESCE(tm.value, '') AS tm
+            `SELECT sbl.*, bt.name, bt.article, ct.name AS type_name,
+                    COALESCE(bt.ln, '') AS ln, COALESCE(bt.tm, '') AS tm
              FROM system_component_type_blocks sbl
              JOIN block_templates bt ON sbl.block_template_id = bt.id
-             LEFT JOIN ln_values ln ON ln.entity_type = 'block_template' AND ln.entity_id = bt.id
-             LEFT JOIN tm_values tm ON tm.entity_type = 'block_template' AND tm.entity_id = bt.id
+             LEFT JOIN component_types ct ON bt.type_id = ct.id
              WHERE sbl.type_id = $1 ORDER BY bt.name`,
             [req.params.id]
         );
@@ -150,7 +146,7 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
              SELECT sc.id, $2, $3
              FROM system_components sc
              WHERE sc.type_id = $1
-             `,
+             ON CONFLICT DO NOTHING`,
             [typeId, block_template_id, qty]
         );
 
@@ -167,12 +163,11 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
 
 router.delete('/:typeId/blocks/:blockId', auth, isAdmin, async (req, res) => {
     try {
-        await pool.query('DELETE FROM system_component_type_blocks WHERE type_id=$1 AND block_template_id=$2',
+        await pool.query('DELETE FROM system_component_type_blocks WHERE type_id=$1 AND (block_template_id=$2 OR id=$2)',
             [req.params.typeId, req.params.blockId]);
         res.json({ message: 'Компонент шкафа удалён из типа' });
     } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
-
 
 // ========== КОПИРОВАНИЕ СОСТАВА ТИПА В ДРУГОЙ ТИП ==========
 router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
@@ -182,7 +177,6 @@ router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
         const sourceId = req.params.sourceId;
         const targetId = req.params.targetId;
 
-        // Проверка существования типов
         const src = await client.query('SELECT id FROM system_component_types WHERE id = $1', [sourceId]);
         const tgt = await client.query('SELECT id FROM system_component_types WHERE id = $1', [targetId]);
         if (src.rows.length === 0) {
@@ -194,18 +188,15 @@ router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
             return res.status(404).json({ message: 'Целевой тип не найден' });
         }
 
-        // Удаляем старые материалы и блоки целевого типа
         await client.query('DELETE FROM system_component_type_materials WHERE type_id = $1', [targetId]);
         await client.query('DELETE FROM system_component_type_blocks WHERE type_id = $1', [targetId]);
 
-        // Копируем материалы
         const matResult = await client.query(
             `INSERT INTO system_component_type_materials (type_id, material_id, quantity)
              SELECT $1, material_id, quantity FROM system_component_type_materials WHERE type_id = $2`,
             [targetId, sourceId]
         );
 
-        // Копируем блоки
         const blkResult = await client.query(
             `INSERT INTO system_component_type_blocks (type_id, block_template_id, quantity)
              SELECT $1, block_template_id, quantity FROM system_component_type_blocks WHERE type_id = $2`,
@@ -264,5 +255,3 @@ router.put('/sort-order', auth, isAdmin, async (req, res) => {
 });
 
 module.exports = router;
-
-

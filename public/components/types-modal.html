@@ -1,0 +1,225 @@
+<script>
+window.TypeModal = {
+    _cb: null,
+
+    open: function(typeId, callback) {
+        this._cb = callback;
+        var self = this;
+        var isEdit = !!typeId;
+
+        var m = document.createElement('div');
+        m.className = 'modal';
+        m.style.cssText = 'display:flex; justify-content:center; align-items:center; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3000;';
+        m.innerHTML = '<div class="modal-content" style="max-width:850px;width:95vw;max-height:90vh;overflow-y:auto;padding:20px;background:#fff;border-radius:8px;"><span class="modal-close" style="cursor:pointer;float:right;font-size:24px;font-weight:bold;">&times;</span><h3 style="margin-top:0;">'+(isEdit ? 'Редактировать тип компонента систем' : 'Добавить тип компонента систем')+'</h3><form id="typeForm"></form></div>';
+        document.body.appendChild(m);
+
+        var closeModal = function() { m.remove(); };
+        m.querySelector('.modal-close').addEventListener('click', closeModal);
+        m.addEventListener('click', function(e){ if(e.target === m) closeModal(); });
+
+        if (isEdit) {
+            fetch('/api/system-component-types/' + typeId + '?_=' + Date.now())
+                .then(function(r){ return r.json(); })
+                .then(function(typeData){
+                    self._buildForm(m, typeData, callback);
+                })
+                .catch(function(err){
+                    console.error('Ошибка загрузки типа:', err);
+                    alert('Ошибка загрузки данных типа.');
+                    closeModal();
+                });
+        } else {
+            self._buildForm(m, null, callback);
+        }
+    },
+
+    _buildForm: function(m, typeData, callback) {
+        var self = this;
+        var isEdit = !!typeData;
+        var currentTypeId = typeData ? typeData.id : null;
+
+        var h = '';
+        h += '<div class="form-group" style="margin-bottom:12px;"><label for="typeName" style="font-weight:bold;display:block;margin-bottom:4px;">Название типа: <span style="color:red;">*</span></label><input type="text" id="typeName" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;" value="'+self._esc(typeData ? typeData.name : '')+'" required></div>';
+        h += '<div class="form-group" style="margin-bottom:12px;"><label for="typeDescription" style="font-weight:bold;display:block;margin-bottom:4px;">Описание:</label><textarea id="typeDescription" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;" rows="3">'+self._esc(typeData ? typeData.description || '' : '')+'</textarea></div>';
+
+        // Компоненты шкафа типа
+        h += '<div class="form-group" style="margin-top:15px;border-top:1px solid #eee;padding-top:10px;"><label style="font-weight:bold;display:block;margin-bottom:5px;">Компоненты шкафа типа (наследуются всеми компонентами этого типа):</label><div id="typeLinkedBlocks"><p style="color:#888;">'+(isEdit ? 'Загрузка...' : 'Сначала сохраните создаваемый тип')+'</p></div><button type="button" id="addTypeBlockBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить компонент шкафа</button></div>';
+
+        // Материалы типа
+        h += '<div class="form-group" style="margin-top:15px;border-top:1px solid #eee;padding-top:10px;"><label style="font-weight:bold;display:block;margin-bottom:5px;">Материалы типа (наследуются всеми компонентами этого типа):</label><div id="typeLinkedMaterials"><p style="color:#888;">'+(isEdit ? 'Загрузка...' : 'Сначала сохраните создаваемый тип')+'</p></div><button type="button" id="addTypeMaterialBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить материал</button></div>';
+
+        h += '<div class="form-actions" style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary cancel-type-btn">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';
+
+        m.querySelector('#typeForm').innerHTML = h;
+
+        m.querySelector('.cancel-type-btn').onclick = function() { m.remove(); };
+
+        // Функция обновления привязанных блоков типа
+        function refreshTypeBlocks() {
+            var bc = m.querySelector('#typeLinkedBlocks');
+            if (!currentTypeId) return;
+            fetch('/api/system-component-types/' + currentTypeId + '/blocks?_=' + Date.now())
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    if (!data || !data.length) {
+                        bc.innerHTML = '<p style="color:#888;">Нет связанных компонентов шкафа</p>';
+                    } else {
+                        var html = '<table class="data-table" style="width:100%;font-size:13px;border-collapse:collapse;"><thead><tr style="background:#f5f5f5;"><th>Тип</th><th>Название</th><th>Артикул</th><th>LN</th><th>TM</th><th>Кол-во</th><th></th></tr></thead><tbody>';
+                        data.forEach(function(l){
+                            html += '<tr>' +
+                                '<td>'+self._esc(l.type_name || '')+'</td>' +
+                                '<td>'+self._esc(l.name)+'</td>' +
+                                '<td>'+self._esc(l.article || '')+'</td>' +
+                                '<td>'+self._esc(l.ln || '')+'</td>' +
+                                '<td>'+self._esc(l.tm || '')+'</td>' +
+                                '<td>'+l.quantity+'</td>' +
+                                '<td>' +
+                                    '<button type="button" class="btn btn-sm btn-edit edit-block-btn" data-template-id="'+l.block_template_id+'">✏️</button> ' +
+                                    '<button type="button" class="btn btn-sm btn-delete del-block-btn" data-link-id="'+(l.id || l.block_template_id)+'">×</button>' +
+                                '</td>' +
+                            '</tr>';
+                        });
+                        html += '</tbody></table>';
+                        bc.innerHTML = html;
+
+                        bc.querySelectorAll('.edit-block-btn').forEach(function(btn){
+                            btn.onclick = function(){
+                                if (typeof BlockTemplateModal !== 'undefined') {
+                                    BlockTemplateModal.open(function(){ refreshTypeBlocks(); }, parseInt(btn.dataset.templateId));
+                                }
+                            };
+                        });
+                        bc.querySelectorAll('.del-block-btn').forEach(function(btn){
+                            btn.onclick = function(){
+                                fetch('/api/system-component-types/' + currentTypeId + '/blocks/' + btn.dataset.linkId, { method: 'DELETE' })
+                                    .then(function(){ refreshTypeBlocks(); });
+                            };
+                        });
+                    }
+                })
+                .catch(function(err){ console.error('Ошибка загрузки блоков типа:', err); });
+        }
+
+        // Функция обновления привязанных материалов типа
+        function refreshTypeMaterials() {
+            var mc = m.querySelector('#typeLinkedMaterials');
+            if (!currentTypeId) return;
+            fetch('/api/system-component-types/' + currentTypeId + '/materials?_=' + Date.now())
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    if (!data || !data.length) {
+                        mc.innerHTML = '<p style="color:#888;">Нет материалов</p>';
+                    } else {
+                        var html = '<table class="data-table" style="width:100%;font-size:13px;border-collapse:collapse;"><thead><tr style="background:#f5f5f5;"><th>Артикул</th><th>Название</th><th>Ед.изм.</th><th>LN</th><th>TM</th><th>Кол-во</th><th></th></tr></thead><tbody>';
+                        data.forEach(function(item){
+                            html += '<tr>' +
+                                '<td>'+self._esc(item.article || '')+'</td>' +
+                                '<td>'+self._esc(item.name)+'</td>' +
+                                '<td>'+self._esc(item.unit || '')+'</td>' +
+                                '<td>'+self._esc(item.ln || '')+'</td>' +
+                                '<td>'+self._esc(item.tm || '')+'</td>' +
+                                '<td>'+item.quantity+'</td>' +
+                                '<td>' +
+                                    '<button type="button" class="btn btn-sm btn-edit edit-mat-btn" data-mat-id="'+item.material_id+'">✏️</button> ' +
+                                    '<button type="button" class="btn btn-sm btn-delete del-mat-btn" data-mat-id="'+item.material_id+'">×</button>' +
+                                '</td>' +
+                            '</tr>';
+                        });
+                        html += '</tbody></table>';
+                        mc.innerHTML = html;
+
+                        mc.querySelectorAll('.edit-mat-btn').forEach(function(btn){
+                            btn.onclick = function(){
+                                if (typeof MaterialModal !== 'undefined') {
+                                    MaterialModal.open(function(){ refreshTypeMaterials(); }, parseInt(btn.dataset.matId));
+                                }
+                            };
+                        });
+                        mc.querySelectorAll('.del-mat-btn').forEach(function(btn){
+                            btn.onclick = function(){
+                                fetch('/api/system-component-types/' + currentTypeId + '/materials/' + btn.dataset.matId, { method: 'DELETE' })
+                                    .then(function(){ refreshTypeMaterials(); });
+                            };
+                        });
+                    }
+                })
+                .catch(function(err){ console.error('Ошибка загрузки материалов типа:', err); });
+        }
+
+        if (isEdit) {
+            refreshTypeBlocks();
+            refreshTypeMaterials();
+        }
+
+        m.querySelector('#addTypeBlockBtn').addEventListener('click', function(){
+            if (!currentTypeId) { alert('Сначала сохраните основной заголовок типа'); return; }
+            if (typeof BlockTemplateModal !== 'undefined') {
+                BlockTemplateModal.open(function(blockId){
+                    if (blockId) {
+                        var qty = prompt('Количество:', '1');
+                        if (qty && !isNaN(qty) && parseInt(qty) > 0) {
+                            fetch('/api/system-component-types/' + currentTypeId + '/blocks', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ block_template_id: blockId, quantity: parseInt(qty) })
+                            }).then(function(){ refreshTypeBlocks(); });
+                        }
+                    }
+                });
+            } else {
+                alert('Модальное окно выбора компонентов недоступно');
+            }
+        });
+
+        m.querySelector('#addTypeMaterialBtn').addEventListener('click', function(){
+            if (!currentTypeId) { alert('Сначала сохраните основной заголовок типа'); return; }
+            if (typeof MaterialModal !== 'undefined') {
+                MaterialModal.select(function(materialId){
+                    if (materialId) {
+                        var qty = prompt('Количество:', '1');
+                        if (qty && !isNaN(qty) && parseInt(qty) > 0) {
+                            fetch('/api/system-component-types/' + currentTypeId + '/materials', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ material_id: materialId, quantity: parseInt(qty) })
+                            }).then(function(){ refreshTypeMaterials(); });
+                        }
+                    }
+                });
+            } else {
+                alert('Модальное окно выбора материалов недоступно');
+            }
+        });
+
+        // Сохранение
+        m.querySelector('#typeForm').addEventListener('submit', function(e){
+            e.preventDefault();
+            var name = m.querySelector('#typeName').value.trim();
+            var description = m.querySelector('#typeDescription').value.trim();
+            if (!name) { alert('Введите название типа'); return; }
+
+            var body = { name: name, description: description || null };
+            var url = isEdit ? '/api/system-component-types/' + currentTypeId : '/api/system-component-types';
+
+            fetch(url, {
+                method: isEdit ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            })
+            .then(function(r){
+                if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+                return r.json();
+            })
+            .then(function(data){
+                m.remove();
+                if (callback) callback(data.id || data);
+            })
+            .catch(function(err){ alert(err.message); });
+        });
+    },
+
+    _esc: function(s) {
+        var d = document.createElement('div');
+        d.textContent = s || '';
+        return d.innerHTML;
+    }
+};
+</script>

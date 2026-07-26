@@ -17,33 +17,95 @@
  var user = JSON.parse(localStorage.getItem("user") || "null");
  var isAdmin = user && user.role === "admin";
  applyPermissions();
+
  function applyPermissions(){
   ["addTypeBtn","exportTypesBtn","importTypesBtn"].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = isAdmin ? "" : "none"; });
   var col = document.getElementById("typesActionsCol");
   if(col) col.style.display = isAdmin ? "" : "none";
  }
+
  function esc(s){ var d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
- function updateStatusLine(ids) {
-   var sl = document.getElementById("sortStatusLine");
-   if (!sl) {
-     sl = document.createElement("div"); sl.id = "sortStatusLine";
-     sl.style.cssText = "margin-top:8px;font-size:12px;color:#555;";
-     var btnDiv = document.querySelector("#tab-types > div:first-child");
-     if (btnDiv) btnDiv.parentNode.insertBefore(sl, btnDiv.nextSibling);
-   }
-   sl.textContent = ids.length + ": " + ids.join(" - ");
+
+ function ensureTypeModal(cb) {
+  if (typeof TypeModal !== 'undefined') return cb();
+  fetch('/components/types-modal.html')
+    .then(function(r){ return r.text(); })
+    .then(function(html){
+      var div = document.createElement('div');
+      div.innerHTML = html;
+      Array.from(div.querySelectorAll('script')).forEach(function(s){
+        var newScript = document.createElement('script');
+        newScript.textContent = s.textContent;
+        document.body.appendChild(newScript);
+      });
+      cb();
+    }).catch(function(err){
+      console.error(err);
+      alert('Ошибка загрузки компонента модального окна типов');
+    });
  }
+
+ var typeTooltipCache = {};
+ var typeTooltipEl = null;
+ function createTypeTooltipEl() {
+  if (typeTooltipEl) return typeTooltipEl;
+  typeTooltipEl = document.createElement('div');
+  typeTooltipEl.id = 'typeTooltip';
+  typeTooltipEl.style.cssText = 'display:none; position:fixed; background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:9999; max-width:500px; font-size:12px;';
+  document.body.appendChild(typeTooltipEl);
+  return typeTooltipEl;
+ }
+
+ function showTypeTooltip(e, typeId) {
+  if (!typeId) return;
+  var el = createTypeTooltipEl();
+  if (typeTooltipCache[typeId]) { el.innerHTML = typeTooltipCache[typeId]; el.style.display = 'block'; moveTypeTooltip(e); return; }
+  el.innerHTML = 'Загрузка...'; el.style.display = 'block'; moveTypeTooltip(e);
+  Promise.all([
+    fetch('/api/system-component-types/' + typeId + '/blocks').then(function(r){ return r.json(); }),
+    fetch('/api/system-component-types/' + typeId + '/materials').then(function(r){ return r.json(); })
+  ]).then(function(results) {
+    var blocks = results[0] || [], materials = results[1] || [];
+    var html = '<div style="font-weight:bold;margin-bottom:5px;">Компоненты шкафа типа:</div>';
+    if (blocks.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Тип</th><th>Название</th><th>LN</th><th>TM</th><th>Кол-во</th></tr>';
+      blocks.forEach(function(b){ html += '<tr><td>'+esc(b.type_name || '')+'</td><td>'+esc(b.name)+'</td><td>'+esc(b.ln || '')+'</td><td>'+esc(b.tm || '')+'</td><td>'+b.quantity+'</td></tr>'; });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет компонентов</p>'; }
+    html += '<div style="font-weight:bold;margin:10px 0 5px;">Материалы типа:</div>';
+    if (materials.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Ед.</th><th>LN</th><th>TM</th><th>Кол-во</th></tr>';
+      materials.forEach(function(m){ html += '<tr><td>'+esc(m.name)+'</td><td>'+esc(m.unit || '')+'</td><td>'+esc(m.ln || '')+'</td><td>'+esc(m.tm || '')+'</td><td>'+m.quantity+'</td></tr>'; });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет материалов</p>'; }
+    typeTooltipCache[typeId] = html; el.innerHTML = html; moveTypeTooltip(e);
+  }).catch(function(err) { el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; });
+ }
+
+ function moveTypeTooltip(e) {
+  if (!typeTooltipEl || typeTooltipEl.style.display === 'none') return;
+  var x = e.clientX + 15, y = e.clientY + 15;
+  if (x + typeTooltipEl.offsetWidth > window.innerWidth) x = e.clientX - typeTooltipEl.offsetWidth - 15;
+  if (y + typeTooltipEl.offsetHeight > window.innerHeight) y = e.clientY - typeTooltipEl.offsetHeight - 15;
+  typeTooltipEl.style.left = x + 'px'; typeTooltipEl.style.top = y + 'px';
+ }
+
+ function hideTypeTooltip() { if (typeTooltipEl) typeTooltipEl.style.display = 'none'; }
+
  function loadTypes(){
    var tbody = document.getElementById("typesBody");
    if(!tbody) return;
    fetch("/api/system-component-types?_="+Date.now())
    .then(function(r){ return r.json(); })
    .then(function(data){
-     if(!data.length){ tbody.innerHTML = "<tr><td colspan=5>No types</td></tr>"; return; }
+     if(!data.length){ tbody.innerHTML = "<tr><td colspan=5>Типов нет</td></tr>"; return; }
      var html = "";
      for (var i = 0; i < data.length; i++) {
        var item = data[i];
-       html += "<tr draggable=\"false\" data-id=\""+item.id+"\"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+esc(item.name)+"</td><td>"+esc(item.description||"")+"</td>";
+       var hasLinks = item.has_blocks || item.has_materials;
+       var nameHtml = hasLinks ? '<span class="type-name-link" style="cursor:pointer;text-decoration:underline;"><strong>' + esc(item.name) + '</strong></span>' : esc(item.name);
+
+       html += "<tr draggable=\"false\" data-id=\""+item.id+"\""+(hasLinks ? ' data-has-links="1"' : '')+"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+nameHtml+"</td><td>"+esc(item.description||"")+"</td>";
        if(isAdmin) html += "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editType("+item.id+")\">\u270F\uFE0F</button> <button class=\"btn btn-sm btn-delete\" onclick=\"deleteType("+item.id+")\">\uD83D\uDDD1\uFE0F</button></td>";
        html += "</tr>";
      }
@@ -51,9 +113,18 @@
      initDragAndSort();
      initSortableHeaders();
      loadSortFromDB();
-     updateStatusLine(data.map(function(x){return x.id;}));
-   }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=5>Error</td></tr>"; });
+
+     tbody.querySelectorAll('.type-name-link').forEach(function(el) {
+       var tr = el.closest('tr');
+       var typeId = parseInt(tr.dataset.id);
+       el.addEventListener('mouseenter', function(e) { if (tr && tr.dataset.hasLinks) showTypeTooltip(e, typeId); });
+       el.addEventListener('mouseleave', hideTypeTooltip);
+       el.addEventListener('mousemove', moveTypeTooltip);
+     });
+
+   }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=5>Ошибка загрузки</td></tr>"; });
  }
+
  function initDragAndSort(){
    var tbody = document.getElementById("typesBody");
    var table = tbody.closest("table");
@@ -89,12 +160,12 @@
      var ids = [];
      tbody.querySelectorAll("tr[data-id]").forEach(function(tr) { var id = parseInt(tr.dataset.id); if (id) ids.push(id); });
      localStorage.setItem("types_order", JSON.stringify(ids));
-     updateStatusLine(ids);
      fetch("/api/table-sort/system-component-types", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids}) }).catch(function(e){console.error(e);});
      fetch("/api/system-component-types/reorder", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ids: ids}) }).catch(function(e){console.error(e);});
      dragInfo = null;
    });
  }
+
  function initSortableHeaders(){
    var tbody = document.getElementById("typesBody");
    var thead = document.querySelector("#tab-types thead tr");
@@ -118,11 +189,11 @@
        });
        rows.forEach(function(row) { tbody.appendChild(row); });
        var ids = rows.map(function(r) { return parseInt(r.dataset.id); }).filter(Boolean);
-       updateStatusLine(ids);
        fetch("/api/table-sort/system-component-types", { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({sort_order: ids, sort_key: k, sort_dir: s.dir}) }).catch(function(e){console.error(e);});
      };
    });
  }
+
  function loadSortFromDB(){
    var tbody = document.getElementById("typesBody");
    fetch("/api/table-sort/system-component-types").then(function(r){ return r.json(); }).then(function(saved){
@@ -131,31 +202,39 @@
          var row = tbody.querySelector("tr[data-id=\""+id+"\"]");
          if (row) tbody.appendChild(row);
        });
-       updateStatusLine(saved.sort_order);
      }
    });
  }
+
  document.getElementById("addTypeBtn").addEventListener("click", function(){
-   var name = prompt("Name:"); if (!name || !name.trim()) return;
-   fetch("/api/system-component-types", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name: name.trim()}) }).then(loadTypes);
+   ensureTypeModal(function(){
+     TypeModal.open(null, function(){ loadTypes(); });
+   });
  });
+
  window.editType = function(id){
-   var name = prompt("New name:"); if (!name || !name.trim()) return;
-   fetch("/api/system-component-types/"+id, { method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify({name: name.trim()}) }).then(loadTypes);
+   ensureTypeModal(function(){
+     TypeModal.open(id, function(){ loadTypes(); });
+   });
  };
+
  window.deleteType = function(id){
-   if(!confirm("Delete?")) return;
+   if(!confirm("Удалить тип?")) return;
    fetch("/api/system-component-types/"+id, { method:"DELETE" }).then(loadTypes);
  };
+
  document.getElementById("exportTypesBtn").addEventListener("click", async function(){
    var r = await fetch("/api/system-component-types/export"); var b = await r.blob();
    var a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "types.xlsx"; a.click();
  });
+
  document.getElementById("importTypesBtn").addEventListener("click", function(){ document.getElementById("importTypesFile").click(); });
  document.getElementById("importTypesFile").addEventListener("change", async function(){
    var fd = new FormData(); fd.append("file", this.files[0]);
    await fetch("/api/system-component-types/import", { method:"POST", body:fd }); loadTypes(); this.value="";
  });
+
+ applyPermissions();
  loadTypes();
 })();
 </script>

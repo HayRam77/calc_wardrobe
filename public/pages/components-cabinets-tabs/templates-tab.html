@@ -7,7 +7,7 @@
   </div>
   <div class="table-container">
     <table class="data-table">
-      <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="type_name" style="position:relative;"><span id="typeFilterIcon" style="cursor:pointer;font-size:14px;" title="Фильтр по типу">\u2699</span> Тип<div id="typeDropdown" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:1000;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="name" style="position:relative;"><span id="nameFilterIcon" style="cursor:pointer;font-size:14px;" title="Фильтр по названию">\u2699</span> Название<div id="nameDropdown" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:1000;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="manufacturer_name" style="position:relative;"><span id="manFilterIcon" style="cursor:pointer;font-size:14px;" title="Фильтр по производителю">\u2699</span> Производитель<div id="manDropdown" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:1000;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="article">Артикул</th><th data-sort="price">Цена</th><th data-sort="weight_grams">Вес</th><th data-sort="power_watts">Q</th><th data-sort="ln">LN</th><th>TM</th><th>Ссылка</th><th id="templatesActionsCol" style="display:none;">Действия</th></tr></thead>
+      <thead><tr><th style="width:1%"></th><th data-sort="id">ID</th><th data-sort="type_name" style="position:relative;"><span id="typeFilterIcon" style="cursor:pointer;font-size:14px;" title="Фильтр по типу">⚙</span> Тип<div id="typeDropdown" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:1000;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="name" style="position:relative;"><span id="nameFilterIcon" style="cursor:pointer;font-size:14px;" title="Фильтр по названию">⚙</span> Название<div id="nameDropdown" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:1000;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="manufacturer_name" style="position:relative;"><span id="manFilterIcon" style="cursor:pointer;font-size:14px;" title="Фильтр по производителю">⚙</span> Производитель<div id="manDropdown" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;z-index:1000;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.2);"></div></th><th data-sort="article">Артикул</th><th data-sort="price">Цена</th><th data-sort="weight_grams">Вес</th><th data-sort="power_watts">Q</th><th data-sort="ln">LN</th><th>TM</th><th>Ссылка</th><th id="templatesActionsCol" style="display:none;">Действия</th></tr></thead>
       <tbody id="templatesBody"><tr><td colspan="13" class="loading">Загрузка...</td></tr></tbody>
     </table>
   </div>
@@ -25,6 +25,25 @@
  }
 
  function esc(s){ var d = document.createElement("div"); d.textContent = s || ""; return d.innerHTML; }
+
+ function ensureBlockTemplateModal(cb) {
+   if (typeof BlockTemplateModal !== "undefined") return cb();
+   fetch('/components/block-template-modal.html')
+     .then(function(r){ return r.text(); })
+     .then(function(html){
+       var div = document.createElement('div');
+       div.innerHTML = html;
+       Array.from(div.querySelectorAll('script')).forEach(function(s){
+         var newScript = document.createElement('script');
+         newScript.textContent = s.textContent;
+         document.body.appendChild(newScript);
+       });
+       cb();
+     }).catch(function(err){
+       console.error(err);
+       alert('Ошибка загрузки компонента модального окна');
+     });
+ }
 
  function loadTemplates(){
    var tbody = document.getElementById("templatesBody");
@@ -176,9 +195,20 @@
    });
  }
 
- window.editTemplate = function(id){ if(typeof BlockTemplateModal !== "undefined"){ BlockTemplateModal.open(function(){ loadTemplates(); }, id); } };
+ window.editTemplate = function(id){
+   ensureBlockTemplateModal(function(){
+     BlockTemplateModal.open(id, function(){ loadTemplates(); });
+   });
+ };
+
  window.deleteTemplate = function(id){ if(!confirm("Удалить?")) return; fetch("/api/block-templates/"+id, { method:"DELETE" }).then(loadTemplates); };
- document.getElementById("addTemplateBtn").addEventListener("click", function(){ if(typeof BlockTemplateModal !== "undefined"){ BlockTemplateModal.open(function(){ loadTemplates(); }); } });
+
+ document.getElementById("addTemplateBtn").addEventListener("click", function(){
+   ensureBlockTemplateModal(function(){
+     BlockTemplateModal.open(null, function(){ loadTemplates(); });
+   });
+ });
+
  document.getElementById("exportTemplatesBtn").addEventListener("click", async function(){ var r = await fetch("/api/block-templates/export"); var b = await r.blob(); var a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "block_templates.xlsx"; a.click(); });
  document.getElementById("importTemplatesBtn").addEventListener("click", function(){ document.getElementById("importTemplatesFile").click(); });
  document.getElementById("importTemplatesFile").addEventListener("change", async function(){ var fd = new FormData(); fd.append("file", this.files[0]); await fetch("/api/block-templates/import", { method:"POST", body:fd }); loadTemplates(); this.value=""; });
