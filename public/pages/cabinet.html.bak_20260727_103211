@@ -115,26 +115,6 @@
         return d.innerHTML;
     }
 
-    function ensureSystemCompModal(cb) {
-        if (typeof SystemCompModal !== 'undefined') return cb();
-        fetch('/components/system-comp-modal.html')
-            .then(function(r){ return r.text(); })
-            .then(function(html){
-                var div = document.createElement('div');
-                div.innerHTML = html;
-                Array.from(div.querySelectorAll('script')).forEach(function(s){
-                    var newScript = document.createElement('script');
-                    newScript.textContent = s.textContent;
-                    document.body.appendChild(newScript);
-                });
-                cb();
-            })
-            .catch(function(err){
-                console.error(err);
-                alert('Ошибка загрузки компонентов систем');
-            });
-    }
-
     function setupDragAndDrop(tbody, tableName, onComplete) {
         var dragInfo = null;
 
@@ -566,70 +546,6 @@
             .then(function(){ refreshAllData(); });
     };
 
-    function attachCompToSys(sysId, refreshFn) {
-        var m = document.createElement('div');
-        m.className = 'modal';
-        m.style.cssText = 'display:flex;justify-content:center;align-items:center;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:4000;';
-        m.innerHTML = '<div class="modal-content" style="max-width:500px;width:90vw;padding:20px;background:#fff;border-radius:8px;position:relative;"><span class="modal-close" style="position:absolute;top:10px;right:15px;font-size:20px;cursor:pointer;">&times;</span><h3 style="margin-top:0;">Привязать компонент</h3><div class="form-group" style="margin-bottom:12px;"><label style="font-weight:bold;display:block;margin-bottom:4px;">Компонент системы *</label><select id="attSel" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;"><option value="">-- загрузка... --</option></select></div><div class="form-group" style="margin-bottom:15px;"><label style="font-weight:bold;display:block;margin-bottom:4px;">Количество:</label><input type="number" id="attQty" class="form-control" value="1" min="1" style="width:100px;padding:8px;box-sizing:border-box;"></div><div style="display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary cancel-att-btn">Отмена</button><button id="attOk" type="button" class="btn btn-primary">Привязать</button></div></div>';
-        document.body.appendChild(m);
-
-        var closeAttModal = function() { m.remove(); };
-        m.querySelector('.modal-close').onclick = closeAttModal;
-        m.querySelector('.cancel-att-btn').onclick = closeAttModal;
-        m.addEventListener('click', function(e){ if (e.target === m) closeAttModal(); });
-
-        fetch('/api/system-components')
-            .then(function(r){ return r.json(); })
-            .then(function(comps){
-                var sel = m.querySelector('#attSel');
-                sel.innerHTML = '<option value="">-- выберите компонент --</option>';
-                comps.forEach(function(c){
-                    sel.innerHTML += '<option value="' + c.id + '">' + esc(c.name) + (c.type_name ? ' (' + esc(c.type_name) + ')' : '') + '</option>';
-                });
-            });
-
-        m.querySelector('#attOk').onclick = function(){
-            var compId = m.querySelector('#attSel').value;
-            var qty = parseInt(m.querySelector('#attQty').value) || 1;
-            if (!compId) { alert('Выберите компонент'); return; }
-            fetch('/api/systems/' + sysId + '/components', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ component_id: parseInt(compId), quantity: qty })
-            })
-            .then(function(r){
-                if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-                m.remove();
-                if (refreshFn) refreshFn();
-            })
-            .catch(function(e){ alert(e.message); });
-        };
-    }
-
-    function addCompToSys(sysId, refreshFn) {
-        ensureSystemCompModal(function() {
-            if (typeof SystemCompModal !== 'undefined') {
-                SystemCompModal.open(null, function(compId) {
-                    if (compId) {
-                        var qty = prompt('Количество:', '1');
-                        if (qty && !isNaN(qty) && parseInt(qty) > 0) {
-                            fetch('/api/systems/' + sysId + '/components', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ component_id: compId, quantity: parseInt(qty) })
-                            })
-                            .then(function(r){
-                                if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-                                if (refreshFn) refreshFn();
-                            })
-                            .catch(function(e){ alert(e.message); });
-                        }
-                    }
-                }, false, null);
-            }
-        });
-    }
-
     // МОДАЛЬНОЕ ОКНО ПРОСМОТРА И РЕДАКТИРОВАНИЯ КОМПОНЕНТОВ СИСТЕМЫ
     window.openSystemModal = function(sysId) {
         var modal = document.createElement('div'); 
@@ -813,14 +729,12 @@
     };
 
     window.editSysCompInModal = function(compId) {
-        ensureSystemCompModal(function() {
-            if (typeof SystemCompModal !== 'undefined') {
-                SystemCompModal.open(compId, function(){
-                    if (window._currentSysLoadFn) window._currentSysLoadFn();
-                    refreshAllData();
-                });
-            }
-        });
+        if (typeof SystemCompModal !== 'undefined') {
+            SystemCompModal.open(compId, function(){
+                if (window._currentSysLoadFn) window._currentSysLoadFn();
+                refreshAllData();
+            });
+        }
     };
 
     // ===== 2. КОМПОНЕНТЫ СИСТЕМ =====
@@ -994,25 +908,86 @@
     };
 
     window.attachExistingComponent = function(systemId) {
-        attachCompToSys(systemId, function() {
-            refreshAllData();
-        });
+        var modal = document.getElementById('attachComponentModal');
+        var select = document.getElementById('attachComponentSelect');
+        var form = document.getElementById('attachComponentForm');
+        var errorDiv = document.getElementById('attachComponentError');
+        var title = document.getElementById('attachComponentModalTitle');
+        select.innerHTML = '<option value="">-- выберите компонент --</option>';
+        document.getElementById('attachComponentQuantity').value = '1';
+        errorDiv.style.display = 'none';
+        title.textContent = 'Привязать компонент к системе';
+        fetch('/api/system-components')
+            .then(function(r){ return r.json(); })
+            .then(function(components){
+                if (!components || !components.length) {
+                    select.innerHTML = '<option value="">-- нет доступных компонентов --</option>';
+                    alert('Нет доступных компонентов. Создайте компонент на странице "Компоненты систем".');
+                    return;
+                }
+                components.forEach(function(comp){
+                    var text = comp.name;
+                    if (comp.type_name) text += ' (' + comp.type_name + ')';
+                    if (comp.article) text += ' Арт: ' + comp.article;
+                    if (comp.manufacturer_name) text += ' [' + comp.manufacturer_name + ']';
+                    select.innerHTML += '<option value="' + comp.id + '">' + esc(text) + '</option>';
+                });
+                modal.style.display = 'flex';
+            })
+            .catch(function(err){
+                errorDiv.textContent = 'Ошибка загрузки компонентов';
+                errorDiv.style.display = 'flex';
+            });
+
+        form.onsubmit = function(e) {
+            e.preventDefault();
+            var componentId = select.value;
+            var quantity = parseInt(document.getElementById('attachComponentQuantity').value);
+            if (!componentId) { errorDiv.textContent = 'Выберите компонент'; errorDiv.style.display = 'flex'; return; }
+            if (!quantity || quantity < 1) { errorDiv.textContent = 'Введите корректное количество'; errorDiv.style.display = 'flex'; return; }
+            errorDiv.style.display = 'none';
+            fetch('/api/systems/' + systemId + '/components', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ component_id: parseInt(componentId), quantity: quantity })
+            })
+            .then(function(r){
+                if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+                modal.style.display = 'none';
+                refreshAllData();
+                alert('✅ Компонент успешно привязан к системе!');
+            })
+            .catch(function(e){ errorDiv.textContent = 'Ошибка привязки: ' + e.message; errorDiv.style.display = 'flex'; });
+        };
     };
 
     window.addNewComponentToSystem = function(systemId) {
-        addCompToSys(systemId, function() {
-            refreshAllData();
-        });
+        if (typeof SystemCompModal !== 'undefined') {
+            SystemCompModal.open(null, function(compId) {
+                if (compId) {
+                    var quantity = prompt('Количество:', '1');
+                    if (quantity && !isNaN(quantity) && parseInt(quantity) > 0) {
+                        fetch('/api/systems/' + systemId + '/components', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ component_id: compId, quantity: parseInt(quantity) })
+                        })
+                        .then(function(r){
+                            if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+                            refreshAllData();
+                            alert('✅ Компонент успешно добавлен в систему!');
+                        })
+                        .catch(function(e){ alert('Ошибка: ' + e.message); });
+                    }
+                }
+            }, false, null);
+        } else { alert('Модальное окно компонентов систем не загружено'); }
     };
 
     window.editSysComp = function(compId) {
-        ensureSystemCompModal(function() {
-            if (typeof SystemCompModal !== 'undefined') {
-                SystemCompModal.open(compId, function() {
-                    refreshAllData();
-                });
-            }
-        });
+        if (typeof SystemCompModal !== 'undefined') {
+            SystemCompModal.open(compId, function() {
+                refreshAllData();
+            });
+        } else { alert('Модальное окно компонентов систем не загружено'); }
     };
 
     window.unlinkSysComp = function(linkId) {
