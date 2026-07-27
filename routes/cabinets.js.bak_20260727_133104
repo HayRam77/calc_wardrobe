@@ -219,8 +219,8 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
     const template_id = parseInt(req.body.template_id);
     const quantity = parseInt(req.body.quantity) || 1;
     const result = await pool.query(
-      `INSERT INTO project_blocks (cabinet_id, template_id, quantity, position)
-       VALUES ($1, $2, $3, (SELECT COALESCE(MAX(position), -1) + 1 FROM project_blocks WHERE cabinet_id = $1))
+      `INSERT INTO project_blocks (cabinet_id, template_id, quantity)
+       VALUES ($1, $2, $3)
        ON CONFLICT (cabinet_id, template_id) DO UPDATE SET quantity = project_blocks.quantity + EXCLUDED.quantity
        RETURNING *`,
       [req.params.id, template_id, quantity]
@@ -229,7 +229,7 @@ router.post('/:id/blocks', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
-// GET /api/cabinets/:id/systems — Получить системы шкафа
+// GET /api/cabinets/:id/systems — Получить системы шкафа (с полями page, installation, room)
 router.get('/:id/systems', auth, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -326,8 +326,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         '' as component_name,
         FALSE as is_system,
         '' as chain_system_component,
-        '' as chain_type,
-        COALESCE(pb.position, 9999) as pos
+        '' as chain_type
       FROM project_blocks pb
       JOIN block_templates bt ON pb.template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
@@ -348,8 +347,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         COALESCE(sc.name, '') as component_name,
         TRUE as is_system,
         COALESCE(sc.name, '') as chain_system_component,
-        COALESCE(sct.name, '') as chain_type,
-        COALESCE(sbl.position, 9999) as pos
+        COALESCE(sct.name, '') as chain_type
       FROM system_block_links sbl
       JOIN block_templates bt ON sbl.block_template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
@@ -374,8 +372,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         COALESCE(sc.name, '') as component_name,
         TRUE as is_system,
         COALESCE(sc.name, '') as chain_system_component,
-        COALESCE(sct.name, '') as chain_type,
-        9999 as pos
+        COALESCE(sct.name, '') as chain_type
       FROM system_component_type_blocks sctb
       JOIN block_templates bt ON sctb.block_template_id = bt.id
       LEFT JOIN component_types ct ON bt.type_id = ct.id
@@ -385,7 +382,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       JOIN cabinet_systems cs ON cs.system_id = s.id AND cs.cabinet_id = $1
       LEFT JOIN system_component_types sct ON sc.type_id = sct.id
 
-      ORDER BY is_system, pos, id
+      ORDER BY block_name
     `, [cabinetId]);
 
     if (result.rows.length === 0) {
@@ -393,7 +390,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
     }
 
     let html = '<div class="table-container"><table class="data-table" id="cabinetBlocksTable"><thead><tr>' +
-      '<th class="drag-handle" style="width:1%"></th>' +
+      '<th></th>' +
       '<th data-sort="system_name" style="position:relative;">Система<span class="filter-icon" data-col="system_name" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по системе">⚙</span></th>' +
       '<th data-sort="component_name" style="position:relative;">Компонент системы<span class="filter-icon" data-col="component_name" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по компоненту системы">⚙</span></th>' +
       '<th data-sort="block_type" style="position:relative;">Тип комп. шкафа<span class="filter-icon" data-col="block_type" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по типу">⚙</span></th>' +
@@ -410,7 +407,6 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       const componentName = block.component_name || '-';
       const blockId = block.id;
       html += '<tr data-id="' + blockId + '">' +
-        '<td class="drag-handle" style="cursor:grab;">⠿</td>' +
         '<td>' + esc(systemName) + '</td>' +
         '<td class="component-name-cell" data-chain-comp="' + esc(block.chain_system_component || '') + '" data-chain-type="' + esc(block.chain_type || '') + '" style="cursor:pointer;">' + esc(componentName) + '</td>' +
         '<td>' + esc(block.block_type || '') + '</td>' +

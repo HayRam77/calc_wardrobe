@@ -1045,7 +1045,7 @@
                         setupDragAndDrop(tbody, 'cabinet_blocks');
                     }
 
-                    // Подключение фильтров и сохранение порядка для "Компоненты шкафа"
+                    // Подключение фильтров и сортировки для "Компоненты шкафа"
                     initCabinetBlocksFiltersAndSort(table);
                 }
             })
@@ -1062,42 +1062,6 @@
             .catch(function(){ return {}; })
             .then(function(saved) {
                 var filterData = saved.filter_data || {};
-
-                if (saved.sort_order && saved.sort_order.length) {
-                    var orderMap = {};
-                    saved.sort_order.forEach(function(id, idx) { orderMap[id] = idx; });
-                    var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
-                    
-                    var maxPos = saved.sort_order.length;
-                    var hasNewItems = false;
-                    var updatedSortOrder = saved.sort_order.slice();
-
-                    rows.forEach(function(r) {
-                        var rId = r.dataset.id;
-                        if (rId && !orderMap.hasOwnProperty(rId)) {
-                            orderMap[rId] = maxPos++;
-                            updatedSortOrder.push(rId);
-                            hasNewItems = true;
-                        }
-                    });
-
-                    rows.sort(function(a, b) {
-                        var idA = a.dataset.id;
-                        var idB = b.dataset.id;
-                        var ia = orderMap.hasOwnProperty(idA) ? orderMap[idA] : 999999;
-                        var ib = orderMap.hasOwnProperty(idB) ? orderMap[idB] : 999999;
-                        return ia - ib;
-                    });
-                    rows.forEach(function(row) { tbody.appendChild(row); });
-
-                    if (hasNewItems) {
-                        fetch('/api/table-sort/cabinet_blocks', {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ sort_order: updatedSortOrder, filter_data: filterData })
-                        }).catch(function(e){ console.error(e); });
-                    }
-                }
 
                 Object.keys(filterData).forEach(function(col) {
                     var selectedValues = filterData[col] || [];
