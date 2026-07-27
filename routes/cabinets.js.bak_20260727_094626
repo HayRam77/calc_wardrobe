@@ -375,7 +375,7 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
         COALESCE(sct.name, '') as chain_type
       FROM system_component_type_blocks sctb
       JOIN block_templates bt ON sctb.block_template_id = bt.id
-      LEFT JOIN component_types ct ON bt.type_id = ct.id
+      LEFT JOIN component_types ct ON sctb.block_template_id = ct.id
       JOIN system_components sc ON sc.type_id = sctb.type_id
       JOIN system_components_link scl ON scl.component_id = sc.id
       JOIN systems s ON scl.system_id = s.id
@@ -389,24 +389,14 @@ router.get('/:id/blocks/html', auth, async (req, res) => {
       return res.send('<p>Нет компонентов</p>');
     }
 
-    let html = '<div class="table-container"><table class="data-table" id="cabinetBlocksTable"><thead><tr>' +
-      '<th></th>' +
-      '<th data-sort="system_name" style="position:relative;">Система<span class="filter-icon" data-col="system_name" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по системе">⚙</span></th>' +
-      '<th data-sort="component_name" style="position:relative;">Компонент системы<span class="filter-icon" data-col="component_name" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по компоненту системы">⚙</span></th>' +
-      '<th data-sort="block_type" style="position:relative;">Тип комп. шкафа<span class="filter-icon" data-col="block_type" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по типу">⚙</span></th>' +
-      '<th data-sort="block_name" style="position:relative;">Название<span class="filter-icon" data-col="block_name" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по названию">⚙</span></th>' +
-      '<th data-sort="ln">LN</th>' +
-      '<th data-sort="tm">TM</th>' +
-      '<th data-sort="quantity">Кол-во</th>' +
-      '<th>Действия</th>' +
-      '</tr></thead><tbody>';
+    let html = '<div class="table-container"><table class="data-table"><thead><tr><th>Система</th><th>Компонент системы</th><th>Тип комп. шкафа</th><th>Название</th><th>LN</th><th>TM</th><th>Кол-во</th><th>Действия</th></tr></thead><tbody>';
 
     for (const block of result.rows) {
       const isSystem = block.is_system === true;
       const systemName = block.system_name || '-';
       const componentName = block.component_name || '-';
       const blockId = block.id;
-      html += '<tr data-id="' + blockId + '">' +
+      html += '<tr>' +
         '<td>' + esc(systemName) + '</td>' +
         '<td class="component-name-cell" data-chain-comp="' + esc(block.chain_system_component || '') + '" data-chain-type="' + esc(block.chain_type || '') + '" style="cursor:pointer;">' + esc(componentName) + '</td>' +
         '<td>' + esc(block.block_type || '') + '</td>' +

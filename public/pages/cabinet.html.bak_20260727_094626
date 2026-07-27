@@ -1006,130 +1006,10 @@
                         });
                         setupDragAndDrop(tbody, 'cabinet_blocks');
                     }
-
-                    // Подключение фильтров и сортировки для "Компоненты шкафа"
-                    initCabinetBlocksFiltersAndSort(table);
                 }
             })
             .catch(function(e){ console.error('Ошибка загрузки блоков:', e); });
     };
-
-    function initCabinetBlocksFiltersAndSort(table) {
-        var thead = table.querySelector('thead');
-        var tbody = table.querySelector('tbody');
-        if (!thead || !tbody) return;
-
-        fetch('/api/table-sort/cabinet_blocks')
-            .then(function(r){ return r.json(); })
-            .catch(function(){ return {}; })
-            .then(function(saved) {
-                var filterData = saved.filter_data || {};
-
-                Object.keys(filterData).forEach(function(col) {
-                    var selectedValues = filterData[col] || [];
-                    if (selectedValues.length > 0) {
-                        tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
-                            var colIdx = Array.from(thead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === col; });
-                            var cellValue = (tr.cells[colIdx]?.textContent || '').trim() || '-';
-                            if (selectedValues.indexOf(cellValue) < 0) {
-                                tr.style.display = 'none';
-                            }
-                        });
-                        var icon = thead.querySelector('.filter-icon[data-col="' + col + '"]');
-                        if (icon) icon.textContent = '⚙️';
-                    }
-                });
-
-                thead.querySelectorAll('.filter-icon').forEach(function(icon) {
-                    icon.addEventListener('click', function(e) {
-                        e.stopPropagation();
-                        var col = icon.dataset.col;
-                        var colIdx = Array.from(thead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === col; });
-                        var values = {};
-                        tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
-                            var v = (tr.cells[colIdx]?.textContent || '').trim() || '-';
-                            values[v] = 1;
-                        });
-
-                        var selectedValues = filterData[col] || [];
-
-                        var modal = document.createElement('div');
-                        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;';
-                        modal.innerHTML = '<div style="background:#fff;border-radius:8px;padding:20px;max-width:400px;max-height:80vh;overflow-y:auto;"><h3 style="margin-top:0;">Фильтр</h3><div id="fc_cab_blk_' + col + '"></div><div style="margin-top:15px;display:flex;gap:10px;"><button class="btn-sel-all" style="padding:6px 12px;background:#e0e0e0;border:none;border-radius:4px;cursor:pointer;">Выбрать все</button><button class="btn-desel-all" style="padding:6px 12px;background:#e0e0e0;border:none;border-radius:4px;cursor:pointer;">Снять все</button><button class="btn-close-f" style="padding:8px 16px;background:#1a5f7a;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-left:auto;">Закрыть</button></div></div>';
-                        document.body.appendChild(modal);
-
-                        var content = modal.querySelector('#fc_cab_blk_' + col);
-                        content.innerHTML = Object.keys(values).sort().map(function(v) {
-                            var ch = selectedValues.indexOf(v) >= 0 ? ' checked' : '';
-                            return '<label style="display:block;font-size:13px;cursor:pointer;white-space:nowrap;"><input type="checkbox" class="f-cb" value="' + v.replace(/"/g, '&quot;') + '"' + ch + '> ' + esc(v) + '</label>';
-                        }).join('');
-
-                        modal.querySelector('.btn-close-f').addEventListener('click', function() {
-                            var newSelected = [];
-                            content.querySelectorAll('.f-cb:checked').forEach(function(cb) { newSelected.push(cb.value); });
-                            filterData[col] = newSelected;
-                            icon.textContent = newSelected.length > 0 ? '⚙️' : '⚙';
-
-                            tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
-                                var cellValue = (tr.cells[colIdx]?.textContent || '').trim() || '-';
-                                if (newSelected.length > 0 && newSelected.indexOf(cellValue) < 0) {
-                                    tr.style.display = 'none';
-                                } else {
-                                    tr.style.display = '';
-                                }
-                            });
-
-                            fetch('/api/table-sort/cabinet_blocks', {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ filter_data: filterData })
-                            }).catch(function(err) { console.error(err); });
-
-                            modal.remove();
-                        });
-
-                        modal.querySelector('.btn-sel-all').onclick = function() { content.querySelectorAll('.f-cb').forEach(function(cb) { cb.checked = true; }); };
-                        modal.querySelector('.btn-desel-all').onclick = function() { content.querySelectorAll('.f-cb').forEach(function(cb) { cb.checked = false; }); };
-                        modal.onclick = function(ev) { if (ev.target === modal) modal.remove(); };
-                    });
-                });
-
-                thead.addEventListener('click', function(e) {
-                    var th = e.target.closest('th[data-sort]');
-                    if (!th || e.target.closest('.filter-icon')) return;
-                    e.stopPropagation();
-
-                    var key = th.dataset.sort;
-                    var currentDir = th.dataset.sortDir || 'asc';
-                    var newDir = (currentDir === 'asc') ? 'desc' : 'asc';
-
-                    thead.querySelectorAll('th[data-sort]').forEach(function(t) { t.dataset.sortDir = ''; });
-                    th.dataset.sortDir = newDir;
-
-                    var colIdx = Array.from(thead.querySelectorAll('th')).indexOf(th);
-                    var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
-                    rows.sort(function(a, b) {
-                        var va = (a.cells[colIdx]?.textContent || '').trim();
-                        var vb = (b.cells[colIdx]?.textContent || '').trim();
-                        var na = parseFloat(va);
-                        var nb = parseFloat(vb);
-                        if (!isNaN(na) && !isNaN(nb) && va == na.toString() && vb == nb.toString()) {
-                            return newDir === 'asc' ? na - nb : nb - na;
-                        }
-                        return newDir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
-                    });
-                    rows.forEach(function(row) { tbody.appendChild(row); });
-
-                    var ids = rows.map(function(r) { return r.dataset.id; });
-
-                    fetch('/api/table-sort/cabinet_blocks', {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ sort_order: ids, sort_key: key, sort_dir: newDir })
-                    }).catch(function(e) { console.error(e); });
-                });
-            });
-    }
 
     window.updateBlockQtyInCabinet = function(blockId, qty) {
         if (!qty || isNaN(qty) || parseInt(qty) < 0) { alert('Количество должно быть положительным числом или 0'); return; }
@@ -1171,161 +1051,37 @@
     window.loadCabinetMaterials = function() {
         var container = document.getElementById('cabinetMaterials');
         if (!container) return;
-        Promise.all([
-            fetch('/api/materials/cabinet/' + cabinetId + '/items').then(function(r){ return r.json(); }),
-            fetch('/api/table-sort/cabinet_materials').then(function(r){ return r.json(); }).catch(function(){ return {}; })
-        ]).then(function(results){
-            var items = results[0];
-            var saved = results[1] || {};
-
-            if (!items || !items.length) { container.innerHTML = '<p>Нет материалов</p>'; return; }
-
-            var filterData = saved.filter_data || {};
-
-            var html = '<div class="table-container"><table class="data-table" id="cabinetMaterialsTable"><thead><tr>' +
-                '<th style="width:1%"></th>' +
-                '<th data-sort="system_name" style="position:relative;">Система<span class="filter-icon" data-col="system_name" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по системе">⚙</span></th>' +
-                '<th data-sort="component_name" style="position:relative;">Компонент системы<span class="filter-icon" data-col="component_name" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по компоненту системы">⚙</span></th>' +
-                '<th data-sort="name" style="position:relative;">Название<span class="filter-icon" data-col="name" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по названию">⚙</span></th>' +
-                '<th data-sort="unit">Ед.</th>' +
-                '<th data-sort="quantity">Кол-во</th>' +
-                '<th data-sort="ln">LN</th>' +
-                '<th data-sort="tm">TM</th>' +
-                '<th>Действия</th>' +
-                '</tr></thead><tbody>';
-
-            items.forEach(function(item){
-                var linkId = item.link_id || item.id;
-                html += '<tr data-id="' + linkId + '"><td class="drag-handle" style="cursor:grab;">⠿</td>' +
-                    '<td>' + esc(item.system_name || '-') + '</td>' +
-                    '<td>' + esc(item.component_name || '-') + '</td>' +
-                    '<td class="material-name-cell" data-material-id="' + item.material_id + '" data-chain-block="' + esc(item.chain_block_template || '-') + '" data-chain-comp="' + esc(item.chain_system_component || '-') + '" data-chain-type="' + esc(item.chain_type || '') + '" style="cursor:pointer;">' + esc(item.name || '') + '</td>' +
-                    '<td>' + esc(item.unit || '') + '</td>' +
-                    '<td>' + (item.is_component_material ? item.quantity : '<input type="number" value="' + item.quantity + '" style="width:60px;" onchange="updateMaterialQtyInCabinet(' + linkId + ', this.value)">') + '</td>' +
-                    '<td>' + esc(item.ln || '') + '</td>' +
-                    '<td>' + esc(item.tm || '') + '</td>' +
-                    '<td>' +
-                        (item.is_component_material ?
-                            '<span style="font-size:10px;color:#888;">системный</span>' :
-                            '<button class="btn btn-sm btn-edit" onclick="editCabinetMaterialLink(' + linkId + ', ' + item.material_id + ')">✏️</button> ' +
-                            '<button class="btn btn-sm btn-delete" onclick="delCabinetMaterialLink(' + linkId + ')">🗑️</button>') +
-                    '</td>' +
-                '</tr>';
-            });
-            html += '</tbody></table></div>';
-            container.innerHTML = html;
-
-            var table = container.querySelector('#cabinetMaterialsTable');
-            var thead = table.querySelector('thead');
-            var tbody = container.querySelector('tbody');
-
-            if (tbody) setupDragAndDrop(tbody, 'cabinet_materials');
-
-            Object.keys(filterData).forEach(function(col) {
-                var selectedValues = filterData[col] || [];
-                if (selectedValues.length > 0) {
-                    tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
-                        var colIdx = Array.from(thead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === col; });
-                        var cellValue = (tr.cells[colIdx]?.textContent || '').trim() || '-';
-                        if (selectedValues.indexOf(cellValue) < 0) {
-                            tr.style.display = 'none';
-                        }
-                    });
-                    var icon = thead.querySelector('.filter-icon[data-col="' + col + '"]');
-                    if (icon) icon.textContent = '⚙️';
-                }
-            });
-
-            thead.querySelectorAll('.filter-icon').forEach(function(icon) {
-                icon.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    var col = icon.dataset.col;
-                    var colIdx = Array.from(thead.querySelectorAll('th')).findIndex(function(th) { return th.dataset.sort === col; });
-                    var values = {};
-                    tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
-                        var v = (tr.cells[colIdx]?.textContent || '').trim() || '-';
-                        values[v] = 1;
-                    });
-
-                    var selectedValues = filterData[col] || [];
-
-                    var modal = document.createElement('div');
-                    modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;justify-content:center;align-items:center;';
-                    modal.innerHTML = '<div style="background:#fff;border-radius:8px;padding:20px;max-width:400px;max-height:80vh;overflow-y:auto;"><h3 style="margin-top:0;">Фильтр</h3><div id="fc_cab_mat_' + col + '"></div><div style="margin-top:15px;display:flex;gap:10px;"><button class="btn-sel-all" style="padding:6px 12px;background:#e0e0e0;border:none;border-radius:4px;cursor:pointer;">Выбрать все</button><button class="btn-desel-all" style="padding:6px 12px;background:#e0e0e0;border:none;border-radius:4px;cursor:pointer;">Снять все</button><button class="btn-close-f" style="padding:8px 16px;background:#1a5f7a;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-left:auto;">Закрыть</button></div></div>';
-                    document.body.appendChild(modal);
-
-                    var content = modal.querySelector('#fc_cab_mat_' + col);
-                    content.innerHTML = Object.keys(values).sort().map(function(v) {
-                        var ch = selectedValues.indexOf(v) >= 0 ? ' checked' : '';
-                        return '<label style="display:block;font-size:13px;cursor:pointer;white-space:nowrap;"><input type="checkbox" class="f-cb" value="' + v.replace(/"/g, '&quot;') + '"' + ch + '> ' + esc(v) + '</label>';
-                    }).join('');
-
-                    modal.querySelector('.btn-close-f').addEventListener('click', function() {
-                        var newSelected = [];
-                        content.querySelectorAll('.f-cb:checked').forEach(function(cb) { newSelected.push(cb.value); });
-                        filterData[col] = newSelected;
-                        icon.textContent = newSelected.length > 0 ? '⚙️' : '⚙';
-
-                        tbody.querySelectorAll('tr[data-id]').forEach(function(tr) {
-                            var cellValue = (tr.cells[colIdx]?.textContent || '').trim() || '-';
-                            if (newSelected.length > 0 && newSelected.indexOf(cellValue) < 0) {
-                                tr.style.display = 'none';
-                            } else {
-                                tr.style.display = '';
-                            }
-                        });
-
-                        fetch('/api/table-sort/cabinet_materials', {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ filter_data: filterData })
-                        }).catch(function(err) { console.error(err); });
-
-                        modal.remove();
-                    });
-
-                    modal.querySelector('.btn-sel-all').onclick = function() { content.querySelectorAll('.f-cb').forEach(function(cb) { cb.checked = true; }); };
-                    modal.querySelector('.btn-desel-all').onclick = function() { content.querySelectorAll('.f-cb').forEach(function(cb) { cb.checked = false; }); };
-                    modal.onclick = function(ev) { if (ev.target === modal) modal.remove(); };
+        fetch('/api/materials/cabinet/' + cabinetId + '/items')
+            .then(function(r){ return r.json(); })
+            .then(function(items){
+                if (!items.length) { container.innerHTML = '<p>Нет материалов</p>'; return; }
+                var html = '<div class="table-container"><table class="data-table"><thead><tr><th style="width:1%"></th><th>Система</th><th>Компонент системы</th><th>Название</th><th>Ед.</th><th>Цена</th><th>Кол-во</th><th>LN</th><th>TM</th><th>Действия</th></tr></thead><tbody>';
+                items.forEach(function(item){
+                    var linkId = item.link_id || item.id;
+                    html += '<tr data-id="' + linkId + '"><td class="drag-handle" style="cursor:grab;">⠿</td>' +
+                        '<td>' + esc(item.system_name || '-') + '</td>' +
+                        '<td>' + esc(item.component_name || '-') + '</td>' +
+                        '<td class="material-name-cell" data-material-id="' + item.material_id + '" data-chain-block="' + esc(item.chain_block_template || '-') + '" data-chain-comp="' + esc(item.chain_system_component || '-') + '" data-chain-type="' + esc(item.chain_type || '') + '" style="cursor:pointer;">' + esc(item.name || '') + '</td>' +
+                        '<td>' + esc(item.unit || '') + '</td>' +
+                        '<td>' + (item.price !== null ? parseFloat(item.price).toFixed(2) : '') + '</td>' +
+                        '<td>' + (item.is_component_material ? item.quantity : '<input type="number" value="' + item.quantity + '" style="width:60px;" onchange="updateMaterialQtyInCabinet(' + linkId + ', this.value)">') + '</td>' +
+                        '<td>' + esc(item.ln || '') + '</td>' +
+                        '<td>' + esc(item.tm || '') + '</td>' +
+                        '<td>' +
+                            (item.is_component_material ?
+                                '<span style="font-size:10px;color:#888;">системный</span>' :
+                                '<button class="btn btn-sm btn-edit" onclick="editCabinetMaterialLink(' + linkId + ', ' + item.material_id + ')">✏️</button> ' +
+                                '<button class="btn btn-sm btn-delete" onclick="delCabinetMaterialLink(' + linkId + ')">🗑️</button>') +
+                        '</td>' +
+                    '</tr>';
                 });
-            });
+                html += '</tbody></table></div>';
+                container.innerHTML = html;
 
-            thead.addEventListener('click', function(e) {
-                var th = e.target.closest('th[data-sort]');
-                if (!th || e.target.closest('.filter-icon')) return;
-                e.stopPropagation();
-
-                var key = th.dataset.sort;
-                var currentDir = th.dataset.sortDir || 'asc';
-                var newDir = (currentDir === 'asc') ? 'desc' : 'asc';
-
-                thead.querySelectorAll('th[data-sort]').forEach(function(t) { t.dataset.sortDir = ''; });
-                th.dataset.sortDir = newDir;
-
-                var colIdx = Array.from(thead.querySelectorAll('th')).indexOf(th);
-                var rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
-                rows.sort(function(a, b) {
-                    var va = (a.cells[colIdx]?.textContent || '').trim();
-                    var vb = (b.cells[colIdx]?.textContent || '').trim();
-                    var na = parseFloat(va);
-                    var nb = parseFloat(vb);
-                    if (!isNaN(na) && !isNaN(nb) && va == na.toString() && vb == nb.toString()) {
-                        return newDir === 'asc' ? na - nb : nb - na;
-                    }
-                    return newDir === 'asc' ? va.localeCompare(vb, 'ru') : vb.localeCompare(va, 'ru');
-                });
-                rows.forEach(function(row) { tbody.appendChild(row); });
-
-                var ids = rows.map(function(r) { return r.dataset.id; });
-
-                fetch('/api/table-sort/cabinet_materials', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sort_order: ids, sort_key: key, sort_dir: newDir })
-                }).catch(function(e) { console.error(e); });
-            });
-
-        }).catch(function(e){ console.error(e); container.innerHTML = '<p style="color:red;">Ошибка загрузки материалов</p>'; });
+                var tbody = container.querySelector('tbody');
+                if (tbody) setupDragAndDrop(tbody, 'cabinet_materials');
+            })
+            .catch(function(e){ console.error(e); container.innerHTML = '<p style="color:red;">Ошибка загрузки материалов</p>'; });
     };
 
     window.openAddMaterialToCabinet = function() {
