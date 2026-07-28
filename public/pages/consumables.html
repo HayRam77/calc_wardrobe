@@ -3,16 +3,35 @@
 .sorted-desc::after { content: ' ▼'; font-size: 10px; }
 th[data-sort] { cursor: pointer; user-select: none; }
 th[data-sort]:hover { background-color: #e0e0e0; }
+.mg-item-row:hover { background-color: #f1f5f9; }
+.binding-tag { display: inline-flex; align-items: center; gap: 4px; background: #e2e8f0; border-radius: 4px; padding: 2px 6px; font-size: 12px; margin: 2px; }
+.binding-tag button { border: none; background: transparent; cursor: pointer; color: #ef4444; font-weight: bold; }
 </style>
 
 <div class="page-content">
-    <div style="margin-bottom:10px;">
-        <button id="addConsumableBtn" class="btn btn-primary" style="display:none;">Добавить материал</button>
-        <button id="exportBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
-        <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls">
-        <button id="importBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
+    <div class="tabs" style="margin-bottom:15px;">
+        <button class="tab-btn active" data-tab="materials">Материалы</button>
+        <button class="tab-btn" data-tab="groups">Группы материалов</button>
     </div>
-    <div id="materialsTable" style="margin-top:15px;"></div>
+
+    <!-- Вкладка 1: Материалы -->
+    <div id="tab-materials" class="tab-content active">
+        <div style="margin-bottom:10px;">
+            <button id="addConsumableBtn" class="btn btn-primary" style="display:none;">Добавить материал</button>
+            <button id="exportBtn" class="btn btn-secondary" style="display:none;">Экспорт Excel</button>
+            <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls">
+            <button id="importBtn" class="btn btn-secondary" style="display:none;">Импорт Excel</button>
+        </div>
+        <div id="materialsTable" style="margin-top:15px;"></div>
+    </div>
+
+    <!-- Вкладка 2: Группы материалов -->
+    <div id="tab-groups" class="tab-content" style="display:none;">
+        <div style="margin-bottom:10px;">
+            <button id="addGroupBtn" class="btn btn-primary" style="display:none;">+ Создать группу</button>
+        </div>
+        <div id="materialGroupsTable" style="margin-top:15px;">Загрузка...</div>
+    </div>
 </div>
 
 <script>
@@ -20,11 +39,25 @@ th[data-sort]:hover { background-color: #e0e0e0; }
     var user = JSON.parse(localStorage.getItem('user') || 'null');
     var isAdmin = user && user.role === 'admin';
     var allManufacturers = [];
+    var allMaterialsList = [];
+
+    // Переключение вкладок
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.tab-content').forEach(function(c) { c.style.display = 'none'; c.classList.remove('active'); });
+            btn.classList.add('active');
+            var target = document.getElementById('tab-' + btn.dataset.tab);
+            if (target) { target.style.display = 'block'; target.classList.add('active'); }
+            if (btn.dataset.tab === 'groups') loadMaterialGroups();
+        });
+    });
 
     if (isAdmin) {
         document.getElementById('addConsumableBtn').style.display = '';
         document.getElementById('exportBtn').style.display = '';
         document.getElementById('importBtn').style.display = '';
+        document.getElementById('addGroupBtn').style.display = '';
     }
 
     function esc(s) {
@@ -40,7 +73,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
         return num.toFixed(2);
     }
 
-    function setupDragAndDrop(tbody) {
+    function setupDragAndDrop(tbody, onCompleteApi) {
         var dragInfo = null;
         function onMouseMove(e) {
             if (!dragInfo) return;
@@ -67,7 +100,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                 var id = parseInt(tr.dataset.id);
                 if (id) items.push({ id: id, position: idx });
             });
-            fetch('/api/materials/sort-order', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e) { console.error(e); });
+            fetch(onCompleteApi, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).catch(function(e) { console.error(e); });
             dragInfo = null;
         }
 
@@ -87,14 +120,8 @@ th[data-sort]:hover { background-color: #e0e0e0; }
     function loadManufacturers() {
         return fetch('/api/manufacturers')
             .then(function(r) { return r.json(); })
-            .then(function(data) {
-                allManufacturers = data;
-                return data;
-            })
-            .catch(function(e) {
-                console.error('Ошибка загрузки производителей:', e);
-                return [];
-            });
+            .then(function(data) { allManufacturers = data; return data; })
+            .catch(function(e) { console.error('Ошибка загрузки производителей:', e); return []; });
     }
 
     function getManufacturerName(id) {
@@ -102,15 +129,16 @@ th[data-sort]:hover { background-color: #e0e0e0; }
         return found ? found.name : '';
     }
 
+    // ===== 1. ВКЛАДКА МАТЕРИАЛЫ =====
     async function loadMaterials() {
         var container = document.getElementById('materialsTable');
         try {
-            if (!allManufacturers.length) {
-                await loadManufacturers();
-            }
+            if (!allManufacturers.length) await loadManufacturers();
 
             var res = await fetch('/api/materials');
             var data = await res.json();
+            allMaterialsList = data;
+
             if (!data.length) {
                 container.innerHTML = '<p>Нет материалов. Добавьте первый материал!</p>';
                 return;
@@ -124,10 +152,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             data.forEach(function(item) {
                 var price = formatPrice(item.price);
                 var manufacturerName = getManufacturerName(item.manufacturer_id);
-                var linkHtml = '';
-                if (item.manufacturer_url) {
-                    linkHtml = '<a href="' + esc(item.manufacturer_url) + '" target="_blank">🔧</a>';
-                }
+                var linkHtml = item.manufacturer_url ? '<a href="' + esc(item.manufacturer_url) + '" target="_blank">🔧</a>' : '';
                 html += '<tr data-id="' + item.id + '">' +
                     '<td class="drag-handle" style="cursor:grab;">⠿</td>' +
                     '<td>' + item.id + '</td>' +
@@ -155,7 +180,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             var table = container.querySelector('table');
             if (table) {
                 var tbody = table.querySelector('tbody');
-                setupDragAndDrop(tbody);
+                setupDragAndDrop(tbody, '/api/materials/sort-order');
 
                 var headers = table.querySelectorAll('thead th[data-sort]');
                 var sortState = JSON.parse(localStorage.getItem('consumables_sort') || '{}');
@@ -190,31 +215,21 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                 headers.forEach(function(th) {
                     th.addEventListener('click', function() {
                         var key = this.dataset.sort;
-                        if (sortKey === key) {
-                            sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-                        } else {
-                            sortKey = key;
-                            sortDir = 'asc';
-                        }
+                        if (sortKey === key) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+                        else { sortKey = key; sortDir = 'asc'; }
                         localStorage.setItem('consumables_sort', JSON.stringify({key: sortKey, dir: sortDir}));
                         applySort(sortKey, sortDir);
                     });
                 });
 
-                if (sortKey) {
-                    applySort(sortKey, sortDir);
-                }
+                if (sortKey) applySort(sortKey, sortDir);
             }
 
             container.querySelectorAll('.btn-edit').forEach(function(btn) {
                 btn.addEventListener('click', function() {
                     if (typeof MaterialModal !== 'undefined') {
-                        MaterialModal.open(function(id) {
-                            if (id) loadMaterials();
-                        }, this.dataset.id);
-                    } else {
-                        alert('Модальное окно не загружено. Обновите страницу.');
-                    }
+                        MaterialModal.open(function(id) { if (id) loadMaterials(); }, this.dataset.id);
+                    } else { alert('Модальное окно не загружено'); }
                 });
             });
 
@@ -234,15 +249,342 @@ th[data-sort]:hover { background-color: #e0e0e0; }
         }
     }
 
-    document.getElementById('addConsumableBtn').addEventListener('click', function() {
-        if (typeof MaterialModal !== 'undefined') {
-            MaterialModal.open(function(id) {
-                if (id) loadMaterials();
-            }, null, allManufacturers);
-        } else {
-            alert('Модальное окно не загружено. Подождите...');
+    // ===== 2. ВКЛАДКА ГРУППЫ МАТЕРИАЛОВ =====
+    window.loadMaterialGroups = async function() {
+        var container = document.getElementById('materialGroupsTable');
+        container.innerHTML = 'Загрузка...';
+        try {
+            var res = await fetch('/api/material-groups');
+            var groups = await res.json();
+
+            if (!groups.length) {
+                container.innerHTML = '<p>Нет групп материалов. Нажмите «+ Создать группу».</p>';
+                return;
+            }
+
+            var html = '<div class="table-container"><table class="data-table"><thead><tr>' +
+                '<th style="width:1%"></th><th style="width:50px;">ID</th><th>Название группы</th><th>Описание</th><th>Состав группы</th><th>Привязан к объектам</th>';
+            if (isAdmin) html += '<th>Действия</th>';
+            html += '</tr></thead><tbody>';
+
+            groups.forEach(function(g) {
+                var itemsHtml = '';
+                if (g.items && g.items.length) {
+                    itemsHtml += '<table class="data-table" style="font-size:12px;margin:5px 0;">';
+                    itemsHtml += '<thead><tr><th>Материал</th><th>Артикул</th><th>Кол-во</th><th>Ед.</th>' + (isAdmin ? '<th></th>' : '') + '</tr></thead><tbody>';
+                    g.items.forEach(function(it) {
+                        itemsHtml += '<tr class="mg-item-row"><td>' + esc(it.name) + '</td><td>' + esc(it.article || '-') + '</td>' +
+                            '<td>' + (isAdmin ? '<input type="number" value="' + it.quantity + '" style="width:60px;padding:2px;" step="any" min="0" onchange="updateGroupItemQty(' + g.id + ',' + it.item_id + ',this.value)">' : it.quantity) + '</td>' +
+                            '<td>' + esc(it.unit || '') + '</td>';
+                        if (isAdmin) {
+                            itemsHtml += '<td><button class="btn btn-sm btn-delete" style="padding:1px 5px;font-size:10px;" onclick="removeMaterialFromGroup(' + g.id + ',' + it.item_id + ')" title="Удалить из группы">✕</button></td>';
+                        }
+                        itemsHtml += '</tr>';
+                    });
+                    itemsHtml += '</tbody></table>';
+                } else {
+                    itemsHtml = '<em style="color:#888;">(состав пуст)</em>';
+                }
+
+                var bindingsHtml = '';
+                var b = g.bindings || {};
+                
+                if (b.block_templates && b.block_templates.length) {
+                    b.block_templates.forEach(function(x) {
+                        bindingsHtml += '<span class="binding-tag">📦 Тип шкафа: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'block_template\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
+                    });
+                }
+                if (b.system_component_types && b.system_component_types.length) {
+                    b.system_component_types.forEach(function(x) {
+                        bindingsHtml += '<span class="binding-tag">⚙️ Тип систем: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'system_component_type\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
+                    });
+                }
+                if (b.system_components && b.system_components.length) {
+                    b.system_components.forEach(function(x) {
+                        bindingsHtml += '<span class="binding-tag">🧩 Компонент систем: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'system_component\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
+                    });
+                }
+                if (b.cabinets && b.cabinets.length) {
+                    b.cabinets.forEach(function(x) {
+                        bindingsHtml += '<span class="binding-tag">🗄️ Шкаф: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'cabinet\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
+                    });
+                }
+                if (!bindingsHtml) bindingsHtml = '<em style="color:#888;">(нет привязок)</em>';
+
+                html += '<tr data-id="' + g.id + '">' +
+                    '<td class="drag-handle" style="cursor:grab;">⠿</td>' +
+                    '<td>' + g.id + '</td>' +
+                    '<td><strong>' + esc(g.name) + '</strong></td>' +
+                    '<td>' + esc(g.description || '') + '</td>' +
+                    '<td>' + itemsHtml + '</td>' +
+                    '<td>' + bindingsHtml + '</td>';
+
+                if (isAdmin) {
+                    html += '<td>' +
+                        '<button class="btn btn-sm btn-primary" onclick="openAddMaterialToGroupModal(' + g.id + ')" title="Добавить материал из справочника к группе">+ Материал</button> ' +
+                        '<button class="btn btn-sm btn-secondary" onclick="openBindGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\')" title="Привязать группу к объекту">🔗 Привязать</button> ' +
+                        '<button class="btn btn-sm btn-secondary" onclick="clearGroup(' + g.id + ')" title="Очистить группу от всех материалов">🧹 Очистить</button> ' +
+                        '<button class="btn btn-sm btn-edit" onclick="openEditGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\',\'' + esc(g.description || '').replace(/'/g, "\\'") + '\')">✏️</button> ' +
+                        '<button class="btn btn-sm btn-delete" onclick="deleteGroup(' + g.id + ')">🗑️</button>' +
+                    '</td>';
+                }
+
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+
+            var table = container.querySelector('table');
+            if (table && isAdmin) {
+                var tbody = table.querySelector('tbody');
+                setupDragAndDrop(tbody, '/api/material-groups/sort-order');
+            }
+
+        } catch (e) {
+            console.error('Ошибка загрузки групп:', e);
+            container.innerHTML = '<p style="color:red;">Ошибка загрузки групп материалов</p>';
         }
+    };
+
+    // МОДАЛЬНОЕ ОКНО СОЗДАНИЯ / РЕДАКТИРОВАНИЯ ГРУППЫ МАТЕРИАЛОВ
+    function showGroupFormModal(groupId, curName, curDesc) {
+        var isEdit = !!groupId;
+        var modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.cssText = 'display:flex;justify-content:center;align-items:center;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;';
+        modal.innerHTML = '<div style="background:#fff;border-radius:8px;padding:20px;max-width:500px;width:90vw;">' +
+            '<h3 style="margin-top:0;">' + (isEdit ? 'Редактировать группу' : 'Создать группу материалов') + '</h3>' +
+            '<form id="mgForm">' +
+            '<div class="form-group" style="margin-bottom:12px;">' +
+            '<label style="font-weight:bold;display:block;margin-bottom:4px;">Название группы *</label>' +
+            '<input type="text" id="mgName" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;" value="' + esc(curName || '') + '" required placeholder="Введите название группы">' +
+            '</div>' +
+            '<div class="form-group" style="margin-bottom:15px;">' +
+            '<label style="font-weight:bold;display:block;margin-bottom:4px;">Описание группы</label>' +
+            '<textarea id="mgDesc" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;" rows="3" placeholder="Краткое описание группы (необязательно)">' + esc(curDesc || '') + '</textarea>' +
+            '</div>' +
+            '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+            '<button type="button" class="btn btn-secondary btn-cancel">Отмена</button>' +
+            '<button type="submit" class="btn btn-primary">Сохранить</button>' +
+            '</div>' +
+            '</form>' +
+            '</div>';
+        document.body.appendChild(modal);
+
+        var close = function() { modal.remove(); };
+        modal.querySelector('.btn-cancel').onclick = close;
+        modal.onclick = function(e) { if (e.target === modal) close(); };
+
+        modal.querySelector('#mgForm').onsubmit = function(e) {
+            e.preventDefault();
+            var name = modal.querySelector('#mgName').value.trim();
+            var desc = modal.querySelector('#mgDesc').value.trim();
+            if (!name) return;
+
+            var url = isEdit ? '/api/material-groups/' + groupId : '/api/material-groups';
+            var method = isEdit ? 'PUT' : 'POST';
+
+            fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, description: desc })
+            })
+            .then(function(r) {
+                if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); });
+                close();
+                loadMaterialGroups();
+            })
+            .catch(function(err) { alert('Ошибка сохранения: ' + err.message); });
+        };
+    }
+
+    document.getElementById('addGroupBtn').addEventListener('click', function() {
+        showGroupFormModal(null, '', '');
     });
+
+    window.openEditGroupModal = function(id, curName, curDesc) {
+        showGroupFormModal(id, curName, curDesc);
+    };
+
+    window.deleteGroup = function(id) {
+        if (!confirm('Удалить группу материалов? Наследуемые привязки к объектам будут удалены.')) return;
+        fetch('/api/material-groups/' + id, { method: 'DELETE' })
+            .then(function() { loadMaterialGroups(); })
+            .catch(function(e) { alert(e.message); });
+    };
+
+    window.clearGroup = function(id) {
+        if (!confirm('Очистить состав группы? Все материалы будут удалены из этой группы.')) return;
+        fetch('/api/material-groups/' + id + '/clear', { method: 'DELETE' })
+            .then(function() { loadMaterialGroups(); })
+            .catch(function(e) { alert(e.message); });
+    };
+
+    window.removeMaterialFromGroup = function(groupId, itemId) {
+        if (!confirm('Удалить материал из группы?')) return;
+        fetch('/api/material-groups/' + groupId + '/items/' + itemId, { method: 'DELETE' })
+            .then(function() { loadMaterialGroups(); })
+            .catch(function(e) { alert(e.message); });
+    };
+
+    window.updateGroupItemQty = function(groupId, itemId, qty) {
+        var num = parseFloat(qty);
+        if (isNaN(num) || num <= 0) { alert('Количество должно быть положительным числом'); return; }
+        fetch('/api/material-groups/' + groupId + '/items/' + itemId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quantity: num })
+        }).catch(function(e) { alert(e.message); });
+    };
+
+    // МОДАЛЬНОЕ ОКНО ВЫБОРА СУЩЕСТВУЮЩЕГО МАТЕРИАЛА ДЛЯ ДОБАВЛЕНИЯ В ГРУППУ
+    window.openAddMaterialToGroupModal = function(groupId) {
+        function renderAddMaterialModal(materials) {
+            var modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.style.cssText = 'display:flex;justify-content:center;align-items:center;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;';
+            
+            var optionsHtml = '<option value="">-- выберите материал --</option>';
+            materials.forEach(function(m) {
+                optionsHtml += '<option value="' + m.id + '">' + (m.article ? '[' + esc(m.article) + '] ' : '') + esc(m.name) + (m.unit ? ' (' + esc(m.unit) + ')' : '') + '</option>';
+            });
+
+            modal.innerHTML = '<div style="background:#fff;border-radius:8px;padding:20px;max-width:550px;width:90vw;">' +
+                '<h3 style="margin-top:0;">Добавить материал в группу</h3>' +
+                '<form id="addMatToGroupForm">' +
+                '<div class="form-group" style="margin-bottom:12px;">' +
+                '<label style="font-weight:bold;display:block;margin-bottom:4px;">Выберите материал из справочника *</label>' +
+                '<select id="groupMatSelect" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;" required>' + optionsHtml + '</select>' +
+                '</div>' +
+                '<div class="form-group" style="margin-bottom:15px;">' +
+                '<label style="font-weight:bold;display:block;margin-bottom:4px;">Количество *</label>' +
+                '<input type="number" id="groupMatQty" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;" value="1" min="0.01" step="any" required>' +
+                '</div>' +
+                '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+                '<button type="button" class="btn btn-secondary btn-cancel">Отмена</button>' +
+                '<button type="submit" class="btn btn-primary">Добавить в группу</button>' +
+                '</div>' +
+                '</form>' +
+                '</div>';
+            document.body.appendChild(modal);
+
+            var close = function() { modal.remove(); };
+            modal.querySelector('.btn-cancel').onclick = close;
+            modal.onclick = function(e) { if (e.target === modal) close(); };
+
+            modal.querySelector('#addMatToGroupForm').onsubmit = function(e) {
+                e.preventDefault();
+                var matId = modal.querySelector('#groupMatSelect').value;
+                var qty = parseFloat(modal.querySelector('#groupMatQty').value);
+                if (!matId || isNaN(qty) || qty <= 0) { alert('Выберите материал и укажите положительное количество'); return; }
+
+                fetch('/api/material-groups/' + groupId + '/items', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ material_id: parseInt(matId), quantity: qty })
+                })
+                .then(function(r) {
+                    if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); });
+                    close();
+                    loadMaterialGroups();
+                })
+                .catch(function(err) { alert('Ошибка: ' + err.message); });
+            };
+        }
+
+        if (allMaterialsList && allMaterialsList.length) {
+            renderAddMaterialModal(allMaterialsList);
+        } else {
+            fetch('/api/materials')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    allMaterialsList = data;
+                    renderAddMaterialModal(data);
+                })
+                .catch(function(e) { alert('Ошибка загрузки списка материалов: ' + e.message); });
+        }
+    };
+
+    // МОДАЛЬНОЕ ОКНО ПРИВЯЗКИ ГРУППЫ К ОБЪЕКТУ
+    window.openBindGroupModal = function(groupId, groupName) {
+        var m = document.createElement('div');
+        m.className = 'modal';
+        m.style.cssText = 'display:flex;justify-content:center;align-items:center;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;';
+        m.innerHTML = '<div style="background:#fff;border-radius:8px;padding:20px;max-width:500px;width:90vw;">' +
+            '<h3 style="margin-top:0;">Привязать группу «' + esc(groupName) + '»</h3>' +
+            '<div class="form-group" style="margin-bottom:12px;"><label style="font-weight:bold;display:block;margin-bottom:4px;">Выберите тип объекта:</label>' +
+            '<select id="bindTypeSel" class="form-control" style="width:100%;padding:8px;">' +
+            '<option value="block_template">Тип компонента шкафа</option>' +
+            '<option value="system_component_type">Тип компонента системы</option>' +
+            '<option value="system_component">Компонент системы</option>' +
+            '<option value="cabinet">Шкаф напрямую</option>' +
+            '</select></div>' +
+            '<div class="form-group" style="margin-bottom:15px;"><label style="font-weight:bold;display:block;margin-bottom:4px;">Выберите конкретный объект:</label>' +
+            '<select id="bindTargetSel" class="form-control" style="width:100%;padding:8px;"><option value="">-- загрузка... --</option></select></div>' +
+            '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+            '<button type="button" class="btn btn-secondary btn-cancel">Отмена</button>' +
+            '<button type="button" class="btn btn-primary btn-save">Привязать</button>' +
+            '</div></div>';
+        document.body.appendChild(m);
+
+        var closeM = function() { m.remove(); };
+        m.querySelector('.btn-cancel').onclick = closeM;
+        m.onclick = function(e) { if (e.target === m) closeM(); };
+
+        var targetsData = null;
+
+        fetch('/api/material-groups/targets')
+            .then(function(r) { return r.json(); })
+            .then(function(td) {
+                targetsData = td;
+                updateTargetSelect();
+            });
+
+        function updateTargetSelect() {
+            if (!targetsData) return;
+            var type = m.querySelector('#bindTypeSel').value;
+            var sel = m.querySelector('#bindTargetSel');
+            var list = [];
+            if (type === 'block_template') list = targetsData.block_templates || [];
+            else if (type === 'system_component_type') list = targetsData.system_component_types || [];
+            else if (type === 'system_component') list = targetsData.system_components || [];
+            else if (type === 'cabinet') list = targetsData.cabinets || [];
+
+            sel.innerHTML = '<option value="">-- выберите объект --</option>';
+            list.forEach(function(x) {
+                sel.innerHTML += '<option value="' + x.id + '">' + esc(x.name) + '</option>';
+            });
+        }
+
+        m.querySelector('#bindTypeSel').addEventListener('change', updateTargetSelect);
+
+        m.querySelector('.btn-save').onclick = function() {
+            var targetType = m.querySelector('#bindTypeSel').value;
+            var targetId = m.querySelector('#bindTargetSel').value;
+            if (!targetId) { alert('Выберите объект для привязки'); return; }
+
+            fetch('/api/material-groups/' + groupId + '/bind', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target_type: targetType, target_id: parseInt(targetId) })
+            }).then(function(r) {
+                if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); });
+                closeM();
+                loadMaterialGroups();
+            }).catch(function(e) { alert('Ошибка: ' + e.message); });
+        };
+    };
+
+    window.unbindGroup = function(groupId, targetType, linkId) {
+        if (!confirm('Отвязать группу от этого объекта?')) return;
+        fetch('/api/material-groups/' + groupId + '/bind', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target_type: targetType, link_id: linkId })
+        }).then(function() { loadMaterialGroups(); })
+        .catch(function(e) { alert(e.message); });
+    };
 
     document.getElementById('exportBtn').addEventListener('click', async function() {
         var r = await fetch('/api/materials/export');

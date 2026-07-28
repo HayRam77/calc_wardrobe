@@ -19,6 +19,7 @@ const systemParametersRouter = require('./routes/systemParameters');
 const systemParameterTypesRouter = require('./routes/systemParameterTypes');
 const systemModulesRouter = require('./routes/systemModules');
 const systemsRouter = require('./routes/systems');
+const materialGroupsRouter = require('./routes/materialGroups');
 const materialsRouter = require('./routes/materials');
 const tableSortRouter = require('./routes/table-sort');
 
@@ -50,6 +51,7 @@ app.use('/api/system-parameters', systemParametersRouter);
 app.use('/api/system-parameter-types', systemParameterTypesRouter);
 app.use('/api/system-modules', systemModulesRouter);
 app.use('/api/systems', systemsRouter);
+app.use('/api/material-groups', materialGroupsRouter);
 app.use('/api/materials', materialsRouter);
 app.use('/api/table-sort', tableSortRouter);
 
