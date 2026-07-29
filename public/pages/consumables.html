@@ -4,8 +4,8 @@
 th[data-sort] { cursor: pointer; user-select: none; }
 th[data-sort]:hover { background-color: #e0e0e0; }
 .mg-item-row:hover { background-color: #f1f5f9; }
-.binding-tag { display: inline-flex; align-items: center; gap: 4px; background: #e2e8f0; border-radius: 4px; padding: 2px 6px; font-size: 12px; margin: 2px; }
-.binding-tag button { border: none; background: transparent; cursor: pointer; color: #ef4444; font-weight: bold; }
+.binding-tag { display: inline-flex; align-items: center; justify-content: space-between; gap: 6px; background: #e2e8f0; border-radius: 4px; padding: 3px 8px; font-size: 12px; margin: 2px 0; width: fit-content; max-width: 100%; box-sizing: border-box; }
+.binding-tag button { border: none; background: transparent; cursor: pointer; color: #ef4444; font-weight: bold; padding: 0 2px; }
 </style>
 
 <div class="page-content">
@@ -316,35 +316,36 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                     itemsHtml = '<em style="color:#888;">(состав пуст)</em>';
                 }
 
-                var bindingsHtml = '';
+                var bindingsTagsHtml = '';
                 var b = g.bindings || {};
                 
                 if (b.block_templates && b.block_templates.length) {
                     b.block_templates.forEach(function(x) {
-                        bindingsHtml += '<span class="binding-tag">📦 Компонент шкафа: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'block_template\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
+                        bindingsTagsHtml += '<span class="binding-tag">📦 Компонент шкафа: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'block_template\',' + x.link_id + ')">✕</button>' : '') + '</span>';
                     });
                 }
                 if (b.component_types && b.component_types.length) {
                     b.component_types.forEach(function(x) {
-                        bindingsHtml += '<span class="binding-tag">🏷️ Тип компонента шкафа: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'component_type\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
+                        bindingsTagsHtml += '<span class="binding-tag">🏷️ Тип компонента шкафа: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'component_type\',' + x.link_id + ')">✕</button>' : '') + '</span>';
                     });
                 }
                 if (b.system_component_types && b.system_component_types.length) {
                     b.system_component_types.forEach(function(x) {
-                        bindingsHtml += '<span class="binding-tag">⚙️ Тип систем: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'system_component_type\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
+                        bindingsTagsHtml += '<span class="binding-tag">⚙️ Тип систем: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'system_component_type\',' + x.link_id + ')">✕</button>' : '') + '</span>';
                     });
                 }
                 if (b.system_components && b.system_components.length) {
                     b.system_components.forEach(function(x) {
-                        bindingsHtml += '<span class="binding-tag">🧩 Компонент систем: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'system_component\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
+                        bindingsTagsHtml += '<span class="binding-tag">🧩 Компонент систем: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'system_component\',' + x.link_id + ')">✕</button>' : '') + '</span>';
                     });
                 }
                 if (b.cabinets && b.cabinets.length) {
                     b.cabinets.forEach(function(x) {
-                        bindingsHtml += '<span class="binding-tag">🗄️ Шкаф: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'cabinet\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
+                        bindingsTagsHtml += '<span class="binding-tag">🗄️ Шкаф: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'cabinet\',' + x.link_id + ')">✕</button>' : '') + '</span>';
                     });
                 }
-                if (!bindingsHtml) bindingsHtml = '<em style="color:#888;">(нет привязок)</em>';
+                
+                var bindingsHtml = bindingsTagsHtml ? '<div style="display:flex; flex-direction:column; gap:3px;">' + bindingsTagsHtml + '</div>' : '<em style="color:#888;">(нет привязок)</em>';
 
                 html += '<tr data-id="' + g.id + '">' +
                     '<td class="drag-handle" style="cursor:grab;">⠿</td>' +
@@ -355,13 +356,15 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                     '<td>' + bindingsHtml + '</td>';
 
                 if (isAdmin) {
-                    html += '<td>' +
-                        '<button class="btn btn-sm btn-primary" onclick="openAddMaterialToGroupModal(' + g.id + ')" title="Добавить материал из справочника к группе">+ Материал</button> ' +
-                        '<button class="btn btn-sm btn-secondary" onclick="openBindGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\')" title="Привязать группу к объекту">🔗 Привязать</button> ' +
-                        '<button class="btn btn-sm btn-secondary" onclick="clearGroup(' + g.id + ')" title="Очистить группу от всех материалов">🧹 Очистить</button> ' +
-                        '<button class="btn btn-sm btn-edit" onclick="openEditGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\',\'' + esc(g.description || '').replace(/'/g, "\\'") + '\')">✏️</button> ' +
-                        '<button class="btn btn-sm btn-delete" onclick="deleteGroup(' + g.id + ')">🗑️</button>' +
-                    '</td>';
+                    html += '<td><div style="display:flex; flex-direction:column; gap:4px; align-items:stretch;">' +
+                        '<button class="btn btn-sm btn-primary" onclick="openAddMaterialToGroupModal(' + g.id + ')" title="Добавить материал из справочника к группе">+ Материал</button>' +
+                        '<button class="btn btn-sm btn-secondary" onclick="openBindGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\')" title="Привязать группу к объекту">🔗 Привязать</button>' +
+                        '<button class="btn btn-sm btn-secondary" onclick="clearGroup(' + g.id + ')" title="Очистить группу от всех материалов">🧹 Очистить</button>' +
+                        '<div style="display:flex; gap:4px;">' +
+                            '<button class="btn btn-sm btn-edit" style="flex:1;" onclick="openEditGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\',\'' + esc(g.description || '').replace(/'/g, "\\'") + '\')">✏️</button>' +
+                            '<button class="btn btn-sm btn-delete" style="flex:1;" onclick="deleteGroup(' + g.id + ')">🗑️</button>' +
+                        '</div>' +
+                    '</div></td>';
                 }
 
                 html += '</tr>';
