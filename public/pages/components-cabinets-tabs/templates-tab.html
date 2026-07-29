@@ -45,6 +45,81 @@
      });
  }
 
+ var templateTooltipCache = {};
+ var templateTooltipEl = null;
+
+ function createTemplateTooltipEl() {
+  if (templateTooltipEl) return templateTooltipEl;
+  templateTooltipEl = document.createElement('div');
+  templateTooltipEl.id = 'templateTooltip';
+  templateTooltipEl.style.cssText = 'display:none; position:fixed; background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:9999; max-width:500px; font-size:12px;';
+  document.body.appendChild(templateTooltipEl);
+  return templateTooltipEl;
+ }
+
+ function showTemplateTooltip(e, templateId) {
+  if (!templateId) return;
+  var el = createTemplateTooltipEl();
+  if (templateTooltipCache[templateId]) {
+    el.innerHTML = templateTooltipCache[templateId];
+    el.style.display = 'block';
+    moveTemplateTooltip(e);
+    return;
+  }
+  el.innerHTML = 'Загрузка...';
+  el.style.display = 'block';
+  moveTemplateTooltip(e);
+
+  Promise.all([
+    fetch('/api/block-templates/' + templateId + '/materials').then(function(r){ return r.json(); }),
+    fetch('/api/block-templates/' + templateId + '/material-groups').then(function(r){ return r.json(); })
+  ]).then(function(results) {
+    var materials = results[0] || [], groups = results[1] || [];
+    var html = '';
+
+    html += '<div style="font-weight:bold;margin-bottom:5px;">Материалы компонента:</div>';
+    if (materials.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Ед.</th><th>Кол-во</th></tr>';
+      materials.forEach(function(m){
+        html += '<tr><td>'+esc(m.name || '')+'</td><td>'+esc(m.unit || '')+'</td><td>'+(m.quantity || 1)+'</td></tr>';
+      });
+      html += '</table>';
+    } else {
+      html += '<p style="color:#888;">Нет материалов</p>';
+    }
+
+    html += '<div style="font-weight:bold;margin:10px 0 5px;">Группы материалов компонента:</div>';
+    if (groups.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Группа</th></tr>';
+      groups.forEach(function(g){
+        html += '<tr><td>📦 '+esc(g.group_name || g.name)+'</td></tr>';
+      });
+      html += '</table>';
+    } else {
+      html += '<p style="color:#888;">Нет групп материалов</p>';
+    }
+
+    templateTooltipCache[templateId] = html;
+    el.innerHTML = html;
+    moveTemplateTooltip(e);
+  }).catch(function(err) {
+    el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
+  });
+ }
+
+ function moveTemplateTooltip(e) {
+  if (!templateTooltipEl || templateTooltipEl.style.display === 'none') return;
+  var x = e.clientX + 15, y = e.clientY + 15;
+  if (x + templateTooltipEl.offsetWidth > window.innerWidth) x = e.clientX - templateTooltipEl.offsetWidth - 15;
+  if (y + templateTooltipEl.offsetHeight > window.innerHeight) y = e.clientY - templateTooltipEl.offsetHeight - 15;
+  templateTooltipEl.style.left = x + 'px';
+  templateTooltipEl.style.top = y + 'px';
+ }
+
+ function hideTemplateTooltip() {
+  if (templateTooltipEl) templateTooltipEl.style.display = 'none';
+ }
+
  function loadTemplates(){
    var tbody = document.getElementById("templatesBody");
    if(!tbody) return;
@@ -55,8 +130,9 @@
      var html = "";
      for (var i = 0; i < data.length; i++) {
        var item = data[i];
-       var nameHtml = item.has_bindings ? '<strong>' + esc(item.name) + '</strong>' : esc(item.name);
-       html += "<tr draggable=\"false\" data-id=\""+item.id+"\"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+esc(item.type_name||"")+"</td><td>"+nameHtml+"</td><td>"+esc(item.manufacturer_name||"")+"</td><td>"+esc(item.article||"")+"</td><td>"+(item.price||"")+"</td><td>"+(item.weight_grams||"")+"</td><td>"+(item.power_watts||"")+"</td><td>"+esc(item.ln||"")+"</td><td>"+(item.tm||"")+"</td><td>"+(item.url?"<a href=\""+esc(item.url)+"\" target=_blank>\uD83D\uDD17</a>":"")+"</td>";
+       var hasLinks = item.has_bindings === true;
+       var nameHtml = hasLinks ? '<span class="template-name-link" style="cursor:pointer;text-decoration:underline;"><strong>' + esc(item.name) + '</strong></span>' : esc(item.name);
+       html += "<tr draggable=\"false\" data-id=\""+item.id+"\""+(hasLinks ? ' data-has-links="1"' : '')+"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+esc(item.type_name||"")+"</td><td>"+nameHtml+"</td><td>"+esc(item.manufacturer_name||"")+"</td><td>"+esc(item.article||"")+"</td><td>"+(item.price||"")+"</td><td>"+(item.weight_grams||"")+"</td><td>"+(item.power_watts||"")+"</td><td>"+esc(item.ln||"")+"</td><td>"+(item.tm||"")+"</td><td>"+(item.url?"<a href=\""+esc(item.url)+"\" target=_blank>\uD83D\uDD17</a>":"")+"</td>";
        if(isAdmin) html += "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editTemplate("+item.id+")\">\u270F\uFE0F</button> <button class=\"btn btn-sm btn-delete\" onclick=\"deleteTemplate("+item.id+")\">\uD83D\uDDD1\uFE0F</button></td>";
        html += "</tr>";
      }
@@ -65,6 +141,15 @@
      initSort();
      initFilters();
      loadSortFromDB();
+
+     tbody.querySelectorAll('.template-name-link').forEach(function(el) {
+       var tr = el.closest('tr');
+       var templateId = parseInt(tr.dataset.id);
+       el.addEventListener('mouseenter', function(e) { if (tr && tr.dataset.hasLinks) showTemplateTooltip(e, templateId); });
+       el.addEventListener('mouseleave', hideTemplateTooltip);
+       el.addEventListener('mousemove', moveTemplateTooltip);
+     });
+
    }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=13>Ошибка загрузки</td></tr>"; });
  }
 

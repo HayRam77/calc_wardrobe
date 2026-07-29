@@ -52,6 +52,81 @@
    });
  }
 
+ var cabTypeTooltipCache = {};
+ var cabTypeTooltipEl = null;
+
+ function createCabTypeTooltipEl() {
+  if (cabTypeTooltipEl) return cabTypeTooltipEl;
+  cabTypeTooltipEl = document.createElement('div');
+  cabTypeTooltipEl.id = 'cabTypeTooltip';
+  cabTypeTooltipEl.style.cssText = 'display:none; position:fixed; background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:9999; max-width:500px; font-size:12px;';
+  document.body.appendChild(cabTypeTooltipEl);
+  return cabTypeTooltipEl;
+ }
+
+ function showCabTypeTooltip(e, typeId) {
+  if (!typeId) return;
+  var el = createCabTypeTooltipEl();
+  if (cabTypeTooltipCache[typeId]) {
+    el.innerHTML = cabTypeTooltipCache[typeId];
+    el.style.display = 'block';
+    moveCabTypeTooltip(e);
+    return;
+  }
+  el.innerHTML = 'Загрузка...';
+  el.style.display = 'block';
+  moveCabTypeTooltip(e);
+
+  Promise.all([
+    fetch('/api/component-types/' + typeId + '/materials').then(function(r){ return r.json(); }),
+    fetch('/api/component-types/' + typeId + '/material-groups').then(function(r){ return r.json(); })
+  ]).then(function(results) {
+    var materials = results[0] || [], groups = results[1] || [];
+    var html = '';
+
+    html += '<div style="font-weight:bold;margin-bottom:5px;">Материалы типа компонента шкафа:</div>';
+    if (materials.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Название</th><th>Ед.</th><th>LN</th><th>TM</th><th>Кол-во</th></tr>';
+      materials.forEach(function(m){
+        html += '<tr><td>'+esc(m.name || '')+'</td><td>'+esc(m.unit || '')+'</td><td>'+esc(m.ln || '')+'</td><td>'+esc(m.tm || '')+'</td><td>'+(m.quantity || 1)+'</td></tr>';
+      });
+      html += '</table>';
+    } else {
+      html += '<p style="color:#888;">Нет материалов</p>';
+    }
+
+    html += '<div style="font-weight:bold;margin:10px 0 5px;">Группы материалов типа компонента шкафа:</div>';
+    if (groups.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Группа</th></tr>';
+      groups.forEach(function(g){
+        html += '<tr><td>📦 '+esc(g.group_name || g.name)+'</td></tr>';
+      });
+      html += '</table>';
+    } else {
+      html += '<p style="color:#888;">Нет групп материалов</p>';
+    }
+
+    cabTypeTooltipCache[typeId] = html;
+    el.innerHTML = html;
+    moveCabTypeTooltip(e);
+  }).catch(function(err) {
+    el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>';
+  });
+ }
+
+ function moveCabTypeTooltip(e) {
+  if (!cabTypeTooltipEl || cabTypeTooltipEl.style.display === 'none') return;
+  var x = e.clientX + 15, y = e.clientY + 15;
+  if (x + cabTypeTooltipEl.offsetWidth > window.innerWidth) x = e.clientX - cabTypeTooltipEl.offsetWidth - 15;
+  if (y + cabTypeTooltipEl.offsetHeight > window.innerHeight) y = e.clientY - cabTypeTooltipEl.offsetHeight - 15;
+  cabTypeTooltipEl.style.left = x + 'px';
+  cabTypeTooltipEl.style.top = y + 'px';
+ }
+
+ function hideCabTypeTooltip() {
+  if (cabTypeTooltipEl) cabTypeTooltipEl.style.display = 'none';
+ }
+
  function setupDragAndDrop(tbody) {
    var dragInfo = null;
    function onMouseMove(e) {
@@ -107,8 +182,9 @@
      var html = "";
      for (var i = 0; i < data.length; i++) {
        var item = data[i];
-       var nameHtml = item.has_bindings ? "<strong>" + esc(item.name) + "</strong>" : esc(item.name);
-       html += "<tr draggable=\"false\" data-id=\""+item.id+"\"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+nameHtml+"</td><td>"+esc(item.category||"")+"</td><td>"+esc(item.description||"")+"</td>";
+       var hasLinks = item.has_bindings === true;
+       var nameHtml = hasLinks ? '<span class="cab-type-name-link" style="cursor:pointer;text-decoration:underline;"><strong>' + esc(item.name) + '</strong></span>' : esc(item.name);
+       html += "<tr draggable=\"false\" data-id=\""+item.id+"\""+(hasLinks ? ' data-has-links="1"' : '')+"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+nameHtml+"</td><td>"+esc(item.category||"")+"</td><td>"+esc(item.description||"")+"</td>";
        if(isAdmin) html += "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editType("+item.id+")\">\u270F\uFE0F</button> <button class=\"btn btn-sm btn-delete\" onclick=\"deleteType("+item.id+")\">\uD83D\uDDD1\uFE0F</button></td>";
        html += "</tr>";
      }
@@ -116,6 +192,15 @@
      setupDragAndDrop(tbody);
      initSortableHeaders();
      loadSortFromDB();
+
+     tbody.querySelectorAll('.cab-type-name-link').forEach(function(el) {
+       var tr = el.closest('tr');
+       var typeId = parseInt(tr.dataset.id);
+       el.addEventListener('mouseenter', function(e) { if (tr && tr.dataset.hasLinks) showCabTypeTooltip(e, typeId); });
+       el.addEventListener('mouseleave', hideCabTypeTooltip);
+       el.addEventListener('mousemove', moveCabTypeTooltip);
+     });
+
    }).catch(function(err){ console.error(err); tbody.innerHTML = "<tr><td colspan=6>Ошибка загрузки</td></tr>"; });
  }
 
