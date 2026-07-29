@@ -1,729 +1,134 @@
 # 🗺️ КАРТА ПРОЕКТА calc_wardrobe
+обязан максимально бережно относиться к существующему работающему коду и вносить только необходимые дополнения, не затрагивая и не ломая исходный функционал
+При создании полного кода файла проверяй полный функционал прописанный в представленом файле для изминения и соответственно вноси его в код
 
-## ИНСТРУКЦИЯ ДЛЯ НОВОГО ЧАТА
-1. Прочитай этот файл полностью перед началом работы
-2. При любом изменении функционала — обнови соответствующий раздел
-3. Формат: кратко, по делу, только ключевые функции и роуты
-4. В конце сессии — закоммить changes.md (если создан)
+## 📋 ИНСТРУКЦИЯ И ПРАВИЛА ДЛЯ НОВОГО ЧАТА
+1. **Чтение карты:** Прочитай этот файл полностью перед началом работы.
+2. **Передача кода без сжатия:** Любые изменения записывать **полным несжатым кодом файла** от первой до последней строки (без вырезок `// остальной код без изменений...`).
+3. **Синтаксическая проверка:** Перед перезапуском сервера всегда выполнять `node -c /путь/к/файлу.js`.
+4. **Архитектурные стандарты SPA:**
+   - Запрещен `location.reload()` в модальных окнах — перерисовка таблиц выполняется динамически (реактивно) без сброса SPA-роутера.
+   - Порядок Drag-and-Drop и клик-сортировок всегда сохраняются и читаются из БД (`user_table_sort`) через `/api/table-sort/:tableName`.
+   - В публичном интерфейсе отключены отладочные информационные строки с массивами ID.
+5. **Процедура фиксации результатов:**
+   - Выполняется **СТРОГО И ТОЛЬКО ПО ПРЯМОЙ КОМАНДЕ ПОЛЬЗОВАТЕЛЯ: «Фиксируй»**.
+   - Вычисляются динамические серверные переменные: `NOW_FILE=$(date +%Y%m%d_%H%M%S)`, `NOW_DATE=$(date +%d.%m.%Y)`.
+   - Создаются бэкапы БД и файлов, обновляется `PROJECT_MAP.md`, делается Git commit и push.
+   - **ОБЯЗАТЕЛЬНОЕ КОНТРОЛЬНОЕ СЛОВО:** В конце успешной фиксации ИИ ОБЯЗАН написать слово: **«зафиксировал»**.
 
-## СЕРВЕР
-- VPS: calc (root)
-- Путь: /opt/calc_wardrobe
-- БД: PostgreSQL bd_calc, hrroot / CalcWardrobe2026!, localhost
-- Git: ветка calc2.0
-- PM2: процесс calc-wardrobe
-- Порт: 3001, прокси nginx -> calc.h-r-h.ru:443
-- SPA: страницы-фрагменты, CSS в head не работает -> стили через JS
+---
 
-## УЧЁТНЫЕ ДАННЫЕ
+## 🖥️ СЕРВЕР И УЧЁТНЫЕ ДАННЫЕ
+- **VPS:** calc (root)
+- **Путь:** `/opt/calc_wardrobe`
+- **БД:** PostgreSQL `bd_calc`, пользователь `hrroot` / пароль `CalcWardrobe2026!`, `localhost`
+- **Git:** ветка `calc2.0`
+- **PM2:** процесс `calc-wardrobe`
+- **Порт:** 3001, прокси nginx -> `calc.h-r-h.ru:443`
+- **SPA:** страницы-фрагменты, стили подключаются через JS
+
 | Система | Логин | Пароль |
 |---------|-------|--------|
 | Приложение (админ) | admin | 121212 |
-| Приложение (пользователь) | test | (уточнить) |
 | PostgreSQL | hrroot | CalcWardrobe2026! |
 | VPS | root | (стандартный) |
 
-## КОМАНДЫ
+---
+
+## 🛠️ КОМАНДЫ ОБСЛУЖИВАНИЯ
 ```bash
-pm2 flush calc-wardrobe          # очистить логи
-pm2 restart calc-wardrobe        # перезапуск
-pm2 logs calc-wardrobe --lines 10 --nostream  # логи
-node -c routes/файл.js           # проверка синтаксиса JS
-git checkout -- файл             # откатить файл
-psql -U hrroot -h localhost -d bd_calc -c "SQL"
-TOKEN=$(curl -s -X POST http://localhost:3001/api/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"121212"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" 2>/dev/null)
-curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:3001/api/..."
+set +H                                          # Отключение спецсимволов истории в Bash
+pm2 flush calc-wardrobe                         # Очистить логи PM2
+pm2 restart calc-wardrobe                       # Перезапуск приложения
+pm2 logs calc-wardrobe --lines 15 --nostream    # Просмотр логов
+node -c /opt/calc_wardrobe/routes/файл.js       # Проверка синтаксиса JS
+git checkout -- файл                            # Откатить изменения файла из Git
+psql -U hrroot -h localhost -d bd_calc -c "SQL"  # Запрос к БД
 
-Когда даю задания просьба выдавай все, что нужно изменить выведи по-порядку в виде команды для терминала. 
-Команды сделай для замены полного кода нужных страниц в жатом виде.
-Просьба экономь ресурс чата лишнее не выводи только конкретные изменения.
-Перед изменением содержимого файла делай бэкап файла.
-Работаем по этапам, первый этап проверка изменений, второй этап проверка изменений и так далее пока все изминений не внесем.
-Не спеши с фиксацией буду писать "Фиксируй" после проверки.
-
-СТРУКТУРА
-server.js — Главный сервер
-Подключает роутеры, CORS, SPA.
-
-config/db.js — Пул соединений pool
+СТРУКТУРА ПРОЕКТА
+Бэкенд (Node.js / Express)
+server.js — Главный сервер (подключает CORS, парсеры 50MB, роутеры /api/*, SPA fallback index.html)
+config/db.js — Пул соединений PostgreSQL (pg.Pool)
 middleware/
-auth.js — Проверка JWT токена
-
-isAdmin.js — Проверка роли admin
-
+auth.js — Валидация JWT токена
+isAdmin.js — Проверка прав администратора
 ownerCheck.js — Проверка владельца проекта
-
-validation.js — Валидация запросов
-
-errorHandler.js — Обработчик ошибок
-
+validation.js — Валидация запросов (express-validator)
+errorHandler.js — Глобальный обработчик ошибок
 routes/ (/api/...)
-auth.js — POST /login, /register
-
-admin.js — GET /users, /projects, /cabinets, /db/export; POST /db/import, /db/optimize; PUT /users/:id; DELETE /users/:id
-
+auth.js — Авторизация (POST /login, /register)
+admin.js — Управление пользователями, дамп БД, оптимизация
 projects.js — CRUD проектов
-
-cabinets.js — CRUD шкафов; GET /:id/blocks/html (компоненты с цепочками связей), /:id/systems; POST /:id/blocks; GET/POST /export, /import
-
-blockTemplates.js (ОСНОВНОЙ) — CRUD компонентов шкафа; GET /export (с параметрами); POST /import (SELECT+INSERT/UPDATE, без ON CONFLICT); GET /:id/materials; POST/DELETE /:id/materials; GET /:id (возвращает parameters)
-
-block-templates.js — Дубликат (не используется)
-
-systems.js — CRUD систем; GET/POST /export, /import; POST /:id/components; копирование систем
-
-systemComponents.js — CRUD системных компонентов; GET/POST /export, /import; /:id/blocks, /:id/materials
-
-systemComponentTypes.js — CRUD типов системных компонентов
-
-systemModules.js — CRUD модулей; импорт через WHERE NOT EXISTS
-
-systemParameters.js — CRUD параметров
-
-systemParameterTypes.js — CRUD типов параметров
-
-component-types.js — CRUD типов компонентов шкафа; экспорт/импорт
-
-componentTypes.js — Дубликат (не используется)
-
-parameters.js — CRUD параметров
-
-materials.js — CRUD материалов; GET /cabinet/:id/items (цепочки: chain_block_template, chain_system_component, chain_type); GET /cabinet/:id/html (калькуляция: LNquantity, TMquantity, 3 UNION); POST/PUT/DELETE /cabinet/:id
-
+cabinets.js — CRUD шкафов, привязка систем, компонентов и групп материалов
+blockTemplates.js — CRUD компонентов шкафа (шаблонов блоков), привязка материалов и групп материалов
+systems.js — CRUD систем автоматизации, копирование систем
+systemComponents.js — CRUD системных компонентов, привязанные блоки, материалы и группы материалов
+systemComponentTypes.js — CRUD типов системных компонентов, привязанные материалы и группы материалов
+systemModules.js — CRUD модулей систем
+systemParameters.js / systemParameterTypes.js — Справочники параметров
+componentTypes.js — CRUD типов компонентов шкафа
+parameters.js — CRUD общих параметров
+materialGroups.js — CRUD групп материалов, привязка/отвязка к 4 типам объектов (/bind)
+materials.js — CRUD материалов, 8-UNION SQL калькуляция с учётом наследования из Групп материалов
 manufacturers.js — CRUD производителей
-
-consumables.js — CRUD расходных материалов
-
+table-sort.js — Сохранение и загрузка сортировки/фильтров таблиц (user_table_sort)
+Фронтенд (SPA / Vanilla JS)
+public/index.html — Главный каркас SPA приложения
 public/pages/
-cabinet.html — Вкладки: Конфигурация (Системы, Компоненты шкафа, Материалы), Калькуляция, Расценки. Tooltip цепочек: showChainTooltip() для материалов, attachBlockChainTooltips() для компонентов. CSS tooltip в JS (chainTooltipStyles). Калькуляция LNquantity, TMquantity. Модалки: blockModal (добавить компонент), attachComponentModal. Экспорт PDF.
-
-components-cabinets.html — Вкладки: Компоненты шкафов (loadTemplates), Типы, Параметры. Экспорт/импорт для каждой вкладки.
-
-components-systems.html — Контейнер для вкладок системных компонентов
-
-components-systems-tabs/components-tab.html — Системные компоненты, экспорт/импорт
-
-components-systems-tabs/types-tab.html — Типы системных компонентов, экспорт/импорт
-
-components-systems-tabs/modules-tab.html — Модули, экспорт/импорт
-
-components-systems-tabs/params-tab.html — Параметры, экспорт/импорт
-
-components-systems-tabs/param-types-tab.html — Типы параметров, экспорт/импорт
-
-cabinets-list.html — Список шкафов, экспорт/импорт Excel
-
-manufacturers.html — Производители, экспорт/импорт
-
-consumables.html — Расходные материалы, экспорт/импорт
-
-automation.html — Автоматизация (системы), экспорт/импорт
-
-admin.html — Админка: экспорт/импорт дампа БД, оптимизация
-
-admin-users.html — Управление пользователями
-
-home.html — Главная, список проектов
-
-login.html — Форма входа
-
-project.html — Проект, список шкафов
-
+home.html — Список проектов
+project.html — Карточка проекта
+cabinet.html — Конфигуратор шкафа (системы, компоненты систем, компоненты шкафа, материалы, калькуляция, расценки, экспорт PDF)
+automation.html — Системы автоматизации
+consumables.html — Двухвкладочный интерфейс («Материалы» и «Группы материалов»)
+manufacturers.html — Справочник производителей
 public/components/
-block-template-modal.html — Модальное окно компонента шкафа. Поля: тип, производитель, название, артикул, цена, вес, мощность, LN, TM, ссылка, описание. ПАРАМЕТРЫ: _renderParams (из data.parameters), _addParamRow (select + значение + кнопка ✕ удаления). МАТЕРИАЛЫ: _loadMaterials (список с количеством), _initMaterialHandlers (добавление). Сохранение: сбор параметров из DOM, отправка в body.parameters.
-
-material-modal.html — Модальное окно выбора материала
-
-system-comp-modal.html — Модальное окно системного компонента (с параметрами, блоками, материалами)
-
-system-comp-form.html — Форма системного компонента
-
-system-comp-edit.html — Редактирование системного компонента
-
-cabinet/type-select.html — Выбор типа для шкафа
-
-system/component-select.html — Выбор системного компонента
-
-system/param-select.html — Выбор параметра
-
-system/type-select.html — Выбор типа
-
+block-template-modal.html — Модальное окно компонента шкафа (параметры, материалы, группы материалов)
+system-comp-modal.html — Модальное окно системных компонентов (блоки, материалы, группы материалов)
+types-modal.html — Модальное окно типов системных компонентов
+material-modal.html — Модальное окно выбора/создания материала
 public/js/
-app.js — Главное меню, рендеринг страниц, logout
-
-auth.js — Логин/логаут на фронте
-
-router.js — SPA-роутер, загрузка страниц-фрагментов
-
-store.js — Хранилище состояния
-
-modules/api.js — fetch-обёртка (apiFetch, apiFetchText, apiFetchBlob)
-
-modules/dom.js — escapeHtml, createTable, showError, showLoading
-
-modules/excel.js — exportExcel, importExcel
-
-modules/modal.js — createModal
-
-modules/tabs.js — initTabs, resetTabs
-
-КЛЮЧЕВЫЕ ОСОБЕННОСТИ
-Цепочки связей (tooltip)
-Материалы шкафа: GET /api/materials/cabinet/:id/items -> поля chain_block_template, chain_system_component, chain_type. В cabinet.html: showChainTooltip(), attachChainTooltips().
-
-Компоненты шкафа: GET /api/cabinets/:id/blocks/html -> поля chain_system_component, chain_type. В cabinet.html: attachBlockChainTooltips().
-
-CSS tooltip через JS (chainTooltipStyles): position:fixed, opacity:0 по умолчанию, opacity:1 с классом visible.
-
-Калькуляция шкафа
-GET /api/materials/cabinet/:id/html — SQL с 3 UNION (project_blocks, system_block_links, system_component_type_blocks). LN и TM умножаются на quantity. Итоги по компонентам и материалам + общий итог.
-
-Экспорт/Импорт Excel
-Роуты /export и /import должны быть перед /:id (исправлено в cabinets.js, block-templates.js, materials.js, systemModules.js, systemParameterTypes.js)
-
-Импорт blockTemplates: SELECT+INSERT/UPDATE вместо ON CONFLICT (в таблице нет уникального constraint, только индекс)
-
-Импорт systemModules: WHERE NOT EXISTS вместо ON CONFLICT DO NOTHING
-
-Все экспорты возвращают 200 (проверено для 12 роутов)
-
-Параметры компонентов шкафа
-block-template-modal.html: методы _renderParams (загрузка из data.parameters), _addParamRow (создание строки с select, input, кнопками ✕ удаления и ✓ сохранения нового параметра)
-
-blockTemplates.js: при сохранении (POST/PUT) — DELETE FROM component_param_values WHERE component_id = $1, затем INSERT новых параметров
-
-Дамп БД (админка)
-GET /api/admin/db/export — pg_dump --data-only --inserts --on-conflict-do-nothing
-
-POST /api/admin/db/import — psql -f filePath
-## ПРАВИЛА ОБНОВЛЕНИЯ ФАЙЛА
-1. **После каждого изменения функционала** — обнови соответствующий раздел
-2. **Не ломай существующее**: перед правкой сделай git checkout -- файл, протестируй изменения
-3. **Порядок действий**:
-   - Прочитай раздел КЛЮЧЕВЫЕ ОСОБЕННОСТИ — пойми как работает связанный функционал
-   - Внеси изменение в код
-   - Проверь: node -c файл.js, pm2 restart calc-wardrobe, curl тест
-   - Обнови этот файл: добавь/измени описание затронутых функций
-   - git add && git commit -m "краткое описание" && git push
-4. **Если создаёшь новый файл** — добавь его в раздел СТРУКТУРА
-5. **Если добавляешь роут** — укажи его в разделе routes/
-6. **Если меняешь API** — обнови описание в routes/ и public/pages/ если затронут фронт
-7. **При исправлении бага** — добавь краткое описание проблемы и решения в КЛЮЧЕВЫЕ ОСОБЕННОСТИ
-8. **Держи команды актуальными**: если появились новые способы проверки — добавь в раздел КОМАНДЫ
-
-## БЭКАП И ОТКАТ (после каждого задания)
-
-### Создать бэкап
+app.js — Отрисовка навигации, роутинг
+router.js — SPA роутер
+🗄️ БАЗА ДАННЫХ (Ключевые таблицы)
+systems — Системы автоматизации (id, name, page, installation, room, description, position)
+cabinets — Шкафы (id, project_id, name, description, width, height, depth)
+cabinet_systems — Связь шкафов и систем (id, cabinet_id, system_id, description, position)
+project_blocks — Компоненты в шкафу (id, cabinet_id, template_id, quantity, position)
+block_templates — Компоненты шкафа (id, name, article, price, ln, tm, position)
+system_components — Системные компоненты (id, name, type_id, module_id, ln, tm, position)
+system_components_link — Связь систем и компонентов (id, system_id, component_id, quantity)
+materials — Справочник материалов (id, article, name, manufacturer_id, unit, price, ln, tm, position)
+material_groups — Группы материалов (id, name, description, position)
+material_group_items — Состав групп материалов (id, group_id, material_id, quantity, position)
+Таблицы привязок групп материалов:
+cabinet_material_groups (id, cabinet_id, group_id, quantity)
+block_template_material_groups (id, block_template_id, group_id, quantity)
+system_component_material_groups (id, component_id, group_id, quantity)
+system_component_type_material_groups (id, type_id, group_id, quantity)
+user_table_sort — Состояние Drag-and-Drop, сортировок и фильтров (user_id, table_name, sort_order, sort_key, sort_dir, filter_data)
+💾 БЭКАП И ОТКАТ
+Создать бэкап вручную
+code
+Bash
+NOW_FILE=$(date +%Y%m%d_%H%M%S)
 mkdir -p /opt/backups
-pg_dump -U hrroot -h localhost bd_calc > /opt/backups/bd_calc_$(date +%Y%m%d_%H%M%S).sql
-tar --exclude=node_modules --exclude=.git -czf /opt/backups/calc_wardrobe_$(date +%Y%m%d_%H%M%S).tar.gz -C /opt/calc_wardrobe .
-ls -la /opt/backups/
-
-### Откат БД
-ls -la /opt/backups/bd_calc_*
+pg_dump -U hrroot -h localhost bd_calc > /opt/backups/bd_calc_${NOW_FILE}.sql
+tar --exclude=node_modules --exclude=.git -czf /opt/backups/calc_wardrobe_${NOW_FILE}.tar.gz -C /opt/calc_wardrobe .
+Откат БД и файлов
+code
+Bash
+# Восстановление БД из файла
 psql -U hrroot -h localhost bd_calc < /opt/backups/bd_calc_ИМЯ_ФАЙЛА.sql
 
-### Откат файлов
-git checkout -- путь/к/файлу
-git log --oneline -5 && git revert ХЕШ
+# Восстановление файлов
 tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardrobe
-
-## ИЗМЕНЕНИЯ 18.07.2026
-
-### Системы автоматизации (automation.html)
-- Добавлен столбец "Шкаф" (cabinet_names из API)
-- Сортировка по клику на заголовки (ID, Название, Шкаф, Описание)
-- Сохранение сортировки в localStorage (systems_sort)
-
-### API systems.js
-- GET /api/systems — добавлен JOIN с cabinet_systems и cabinets, поле cabinet_names
-
-### cabinets.js
-- Восстановлен после ошибки (не хватало }); после router.post('/import'))
-- export/import перенесены перед /:id
-
-### Бэкапы после задачи (18.07.2026)
-- Дамп БД: bd_calc_20260718_151846.sql
-- Файлы: calc_wardrobe_20260718_151846.tar.gz
-- Время: 15:18
-
-### Изменения 18.07.2026 (15:45)
-- automation.html: фильтр по шкафам в заголовке столбца (иконка ⚙ + выпадающий список с галочками)
-- Бэкап: бд и файлы за 15:45
-
-### 18.07.2026 (16:00)
-- automation.html: столбцы переставлены (ID, Шкаф, Название, Описание), иконка фильтра только в Шкаф
-
-### 18.07.2026 (17:30) — Системы автоматизации
-- automation.html: ссылки на шкафы в новой вкладке, модалка системы с компонентами
-- Кнопки: Привязать компонент (выбор из списка), Добавить компонент, Удалить из системы
-- API systems.js: cabinet_ids в GET /api/systems, cabinet_ids в POST/PUT
-- API systems.js: GET /:id/cabinets
-
-### 19.07.2026 — drag-and-drop + сортировка
-- automation.html: drag+sort+filter ✅
-- components-cabinets.html: Компоненты (drag+клиентская сортировка) ✅
-- components-cabinets.html: Типы (drag через POST /reorder + клиентская сортировка) ✅
-- manufacturers.html: drag+sort ✅
-- consumables.html: drag+sort ✅
-- API componentTypes.js: POST /reorder
-- API blockTemplates.js: PUT /sort-order, ORDER BY position
-- API manufacturers.js: PUT /sort-order, ORDER BY position
-- API materials.js: PUT /sort-order, ORDER BY position
-- Добавлены колонки position в таблицы БД
-
-### 19.07.2026 (продолжение)
-- components-cabinets.html: Параметры (drag+sort) ✅
-- API parameters.js: POST /reorder, ORDER BY position
-
-## ИТОГИ 19.07.2026 — Drag-and-drop + сортировка
-
-### Реализовано на страницах:
-| Страница | Drag | Sort | Сохранение |
-|----------|------|------|------------|
-| automation.html (Системы автоматизации) | ✅ | ✅ | localStorage + API /systems/sort-order |
-| cabinet.html (Шкаф) | ✅ | ✅ | было ранее |
-| components-cabinets.html / Компоненты | ✅ | ✅ | localStorage + клиентская сортировка + API /block-templates/sort-order |
-| components-cabinets.html / Типы | ✅ | ✅ | localStorage + клиентская сортировка + API /component-types/reorder |
-| components-cabinets.html / Параметры | ✅ | ✅ | localStorage + клиентская сортировка + API /parameters/reorder |
-| manufacturers.html | ✅ | ✅ | localStorage + клиентская сортировка + API /manufacturers/sort-order |
-| consumables.html | ✅ | ✅ | клиентская сортировка + API /materials/sort-order |
-
-### Принцип работы:
-1. **Drag-and-drop**: перетаскивание строк за значок ⠿, позиции отправляются через API (PUT/POST /sort-order или /reorder)
-2. **Сортировка по клику**: клиентская (сортирует DOM-строки, не дёргает API), сохраняется в localStorage
-3. **При обновлении**: позиции загружаются из БД (ORDER BY position), затем применяется клиентская сортировка из localStorage
-
-### Добавленные API роуты:
-- PUT /api/systems/sort-order
-- PUT /api/block-templates/sort-order
-- POST /api/component-types/reorder
-- POST /api/parameters/reorder
-- PUT /api/manufacturers/sort-order
-- PUT /api/materials/sort-order
-
-### Добавленные колонки в БД:
-- systems.position
-- block_templates.position
-- component_types.position
-- parameters.position
-- manufacturers.position
-- materials.position
-
-### Особенности:
-- Клиентская сортировка не конфликтует с drag-and-drop
-- Сортировка по клику сохраняется в localStorage
-- После обновления страницы порядок из БД (position), затем применяется сохранённая сортировка
-- Для систем автоматизации дополнительно сохраняется фильтр по шкафам
-
-## Бэкап 20260722_200903
-- Откат к коммиту 6888555 (состояние на конец дня 19.07.2026)
-- Начало работ: drag-and-drop + фильтрация для всех таблиц
-- Дамп БД: bd_calc_20260722_200903.sql
-- Файлы: calc_wardrobe_20260722_200903.tar.gz
-
-## Изменения 20260722_211313
-- automation.html: полный рефакторинг drag-and-drop (mousedown/move/up) + сортировка + фильтр
-- Единый массив systems_order в localStorage для перетаскивания и сортировки по клику
-- Сохранение порядка при обновлении страницы
-- Дамп БД: bd_calc_20260722_211313.sql
-- Файлы: calc_wardrobe_20260722_211313.tar.gz
-
-## 20260723_013945 — Системы автоматизации: БД + drag-and-drop + фильтр
-### Реализовано:
-- **Таблица ** в БД (user_id, table_name, sort_order, sort_key, sort_dir, filter_data)
-- **API ** — GET/PUT для сохранения сортировки и фильтра
-- **** — роут
-- **** — функции , , 
-
-### Страница automation.html:
-- **Drag-and-drop:** mousedown/move/up, сохраняет порядок в БД и localStorage
-- **Сортировка по клику:** client-side sort, сохраняет sort_key, sort_dir, sort_order в БД
-- **Фильтр по шкафам:** сохраняется в БД + localStorage
-- **Статус-строка:** выводит массив ID из БД под таблицей
-- **Загрузка из БД:**  восстанавливает порядок, фильтр, сортировку
-
-### Требует доработки:
-- При активном фильтре в localStorage порядок таблицы может не совпадать со статус-строкой (нужно очистить localStorage)
-- Подключение db-sort.js в index.html (сейчас функции встроены в automation.html)
-- Перенос на другие страницы (components-tab, manufacturers, consumables)
-
-### Дамп БД: bd_calc_20260723_013945.sql
-### Файлы: calc_wardrobe_20260723_013945.tar.gz
-
-## 20260723_093543 — Фиксация: automation.html полностью готов
-### Страница "Системы автоматизации" (automation.html)
-
-**Реализованный функционал:**
-
-1. **Drag-and-drop (mousedown/move/up)**
-   - Захват строки за значок ⠿
-   - Перемещение строки вверх/вниз
-   - Отправка нового порядка на API /api/systems/sort-order (PUT)
-   - Сохранение порядка в БД (user_table_sort, table_name='systems')
-   - Обновление статус-строки
-
-2. **Сортировка по клику на заголовки**
-   - Клиентская сортировка (data.sort + renderSystems)
-   - Поддержка столбцов: ID, Шкаф, Название, Описание
-   - Сохранение sort_key и sort_dir в БД
-   - Сохранение sort_order в БД
-   - Обновление статус-строки
-   - Визуальный индикатор (▲/▼)
-
-3. **Фильтр по шкафам**
-   - Иконка ⚙ в заголовке столбца "Шкаф"
-   - Выпадающий список с чекбоксами
-   - Множественный выбор
-   - Сохранение filter_data в БД
-   - Сохранение в localStorage
-   - Бейдж с количеством выбранных
-
-4. **Сохранение в БД (user_table_sort)**
-   - sort_order: массив id (порядок строк)
-   - sort_key: ключ сортировки (id/name/cabinet_names/description)
-   - sort_dir: направление (asc/desc)
-   - filter_data: {cabinets: [...]}
-
-5. **Загрузка из БД**
-   - Promise.all([данные, настройки])
-   - Восстановление порядка строк
-   - Восстановление фильтра
-   - Восстановление сортировки по ключу
-
-6. **Статус-строка**
-   - Выводится под кнопками
-   - Формат: "N: id1 - id2 - id3 - ..."
-   - Обновляется при drag-and-drop, клике, загрузке
-
-**Файлы:**
-- /opt/calc_wardrobe/public/pages/automation.html
-- /opt/calc_wardrobe/routes/table-sort.js (API)
-- Таблица БД: user_table_sort
-
-**Дамп БД:** bd_calc_20260723_093543.sql
-**Файлы:** calc_wardrobe_20260723_093543.tar.gz
-
-## 20260723_095854 — components-tab: drag-and-drop + статус-строка + БД
-### Вкладка "Компоненты систем" (components-tab.html)
-- ✅ Столбец с иконками переноса ⠿
-- ✅ Drag-and-drop (mousedown/move/up)
-- ✅ Сохранение порядка в БД (user_table_sort, table_name='system-components')
-- ✅ Статус-строка под кнопками
-- ✅ Сортировка по клику работает
-- ❌ Фильтры — будут добавлены позже
-
-### Дамп БД: bd_calc_20260723_095854.sql
-### Файлы: calc_wardrobe_20260723_095854.tar.gz
-
-## 20260723_102843 — components-tab: полный функционал
-### Вкладка "Компоненты систем" (components-tab.html)
-- ✅ Столбец с иконками переноса ⠿
-- ✅ Drag-and-drop (mousedown/move/up) + сохранение в БД
-- ✅ Статус-строка под кнопками
-- ✅ Сортировка по клику
-- ✅ Фильтры (3 шт.): Модуль системы, Название, Тип
-- ✅ Модальные окна фильтров
-- ✅ Логика: галка = показать только выбранное
-- ✅ Сохранение filter_data в БД
-
-### Дамп БД: bd_calc_20260723_102843.sql
-### Файлы: calc_wardrobe_20260723_102843.tar.gz
-
-## 20260723_143410 — types-tab: drag-and-drop + сортировка + БД
-### Вкладка "Типы компонентов систем" (types-tab.html)
-- ✅ Столбец с иконками переноса ⠿
-- ✅ Drag-and-drop (mousedown/move/up) + сохранение в БД (user_table_sort, table_name='system-component-types')
-- ✅ Сортировка по клику (ID, Название, Описание) + сохранение sort_key/dir/order в БД
-- ✅ Статус-строка под кнопками с выводом массива порядка
-- ✅ Загрузка и восстановление порядка из БД
-- ✅ Кнопки: Добавить, Экспорт, Импорт
-- ✅ Без фильтров (фильтры только на первой вкладке)
-
-### Дамп БД: bd_calc_20260723_143410.sql
-### Файлы: calc_wardrobe_20260723_143410.tar.gz
-
-## 20260723_144418 — Все вкладки "Компоненты систем" готовы
-### Страница components-systems.html (5 вкладок):
-
-1. **components-tab.html** (Компоненты систем)
-   - drag-and-drop + сортировка + фильтры (3 шт: Модуль, Название, Тип) + статус-строка + БД
-
-2. **types-tab.html** (Типы компонентов систем)
-   - drag-and-drop + сортировка + статус-строка + БД (без фильтров)
-
-3. **params-tab.html** (Параметры компонентов систем)
-   - drag-and-drop + сортировка + статус-строка + БД (без фильтров)
-
-4. **modules-tab.html** (Модули системы)
-   - drag-and-drop + сортировка + статус-строка + БД (без фильтров)
-
-5. **param-types-tab.html** (Тип параметра компонента систем)
-   - drag-and-drop + сортировка + статус-строка + БД (без фильтров)
-
-### Общий функционал всех вкладок:
-- Drag-and-drop (mousedown/move/up)
-- Сохранение порядка в БД (user_table_sort)
-- Клиентская сортировка по клику на заголовки
-- Сохранение sort_key/sort_dir/sort_order в БД
-- Статус-строка под кнопками с выводом массива ID
-- Загрузка и восстановление порядка из БД
-
-### Дамп БД: bd_calc_20260723_144418.sql
-### Файлы: calc_wardrobe_20260723_144418.tar.gz
-
-## 20260723_$(date +%H%M%S) — cabinet.html: drag-and-drop + сортировка + статус-строка + БД для таблицы «Системы шкафа»
-
-### Реализовано:
-- **Таблица «Системы шкафа»** (cabinetSystems) — полный функционал:
-  - Drag-and-drop (mousedown/move/up) за значок ⠿
-  - Сохранение порядка в БД (user_table_sort, table_name='cabinet_systems')
-  - Сортировка по клику на заголовки: ID, Система, Описание
-  - Клиентская сортировка с сохранением sort_key/sort_dir/sort_order в БД
-  - Статус-строка с массивом ID между заголовком и таблицей
-  - Загрузка и восстановление порядка из БД
-  - Делегирование событий сортировки на thead
-
-### Исправлен баг:
-- **Проблема:** parseFloat выкусывал число из строк типа "6нП16", все значения становились равны 6, сортировка не работала.
-- **Решение:** числовая сортировка применяется только если ОБА значения — чистые числа (va == na.toString()). Иначе localeCompare.
-
-### Файлы:
-- /opt/calc_wardrobe/public/pages/cabinet.html (функция loadSystems)
-- API: /api/table-sort/cabinet_systems (GET/PUT)
-
-### Дамп БД: bd_calc_20260723_*.sql
-### Файлы: calc_wardrobe_20260723_*.tar.gz
-
-## 20260723_$(date +%H%M%S) — cabinet.html: синхронизация порядка «Компоненты систем» с «Системы шкафа»
-
-### Реализовано:
-- **Таблица «Компоненты систем»** теперь использует порядок из таблицы «Системы шкафа»:
-  - При загрузке: получает `sort_order` из `user_table_sort` (table_name='cabinet_systems') и сортирует системы соответственно
-  - При изменении порядка в «Системах шкафа» (drag-and-drop или сортировка по клику) — `loadSystemComponents()` вызывается автоматически, перестраивая блоки на лету
-
-### Файлы:
-- /opt/calc_wardrobe/public/pages/cabinet.html (loadSystemComponents, loadSystems)
-
-### Дамп БД: bd_calc_20260723_*.sql
-### Файлы: calc_wardrobe_20260723_*.tar.gz
-
-## 20260723_1828 — cabinet.html: сортировка + фильтры для таблиц «Компоненты систем»
-
-### Реализовано:
-- **Таблица «Компоненты систем»** (внутри каждой системы):
-  - Сортировка по клику: ID, Компонент, Тип, Модуль
-  - Фильтры: Компонент, Тип, Модуль (⚙ + модальное окно + чекбоксы + Выбрать все/Снять все)
-  - Статус-строка с link_id между заголовком и таблицей
-  - Сохранение в БД (table_name='system_components_' + systemId)
-- **Синхронизация** с «Системы шкафа» — перестроение на лету
-- **Столбец ID** шириной под 4 символа
-
-### Файлы:
-- /opt/calc_wardrobe/public/pages/cabinet.html
-
-### Дамп БД: bd_calc_20260723_1828*.sql
-### Файлы: calc_wardrobe_20260723_1828*.tar.gz
-
-## 20260723_1930 — cabinet.html: все 4 таблицы готовы (drag-and-drop + сортировка + фильтры + статус-строки + БД)
-
-### Реализовано полностью:
-1. **Системы шкафа** — drag-and-drop, сортировка (ID, Система, Описание), статус-строка, сохранение в БД (cabinet_systems)
-2. **Компоненты систем** — сортировка (ID, Компонент, Тип, Модуль), фильтры (Компонент, Тип, Модуль), статус-строка, сохранение в БД (system_components_ID)
-3. **Компоненты шкафа** — drag-and-drop, сортировка (ID, Система, Компонент систем, Тип, Название, LN, TM, Кол-во), фильтры (Система, Компонент систем, Тип, Название), статус-строка, БД (cabinet_blocks)
-4. **Материалы шкафа** — drag-and-drop, сортировка (ID, Система, Компонент систем, Название, Ед., Цена, Кол-во, LN, TM), фильтры (Система, Компонент систем, Название), статус-строка, БД (cabinet_materials)
-
-### Синхронизация:
-- Порядок систем в «Компоненты систем» синхронизирован с «Системы шкафа» на лету
-
-### Файлы:
-- /opt/calc_wardrobe/public/pages/cabinet.html
-
-### Дамп БД: bd_calc_20260723_1930*.sql
-### Файлы: calc_wardrobe_20260723_1930*.tar.gz
-
-## 24.07.2026 — Комплексная оптимизация БД, бэкенда, SPA-страниц и роутинга
-### Реализовано:
-- БД: Смена владельцев объектов на hrroot; консолидация полей LN/TM напрямую в таблицы сущностей; удаление устаревших EAV-таблиц (ln_values, tm_values) и 8 неиспользуемых таблиц (consumables, breakers и др.).
-- Бэкенд: Ликвидация N+1 запросов за счет SQL json_agg в systems.js и systemComponents.js; универсальная поддержка items и ids во всех роутах /reorder; увеличение лимита запросов до 50MB; настройка пула pg.Pool (config/db.js); обработчик 404 JSON для /api/*; поддержка dotenv.
-- Фронтенд: Полное удаление отладочных строк #sortStatusLine и .comp-status-line; устранение утечек памяти при Drag-and-Drop; сохранение и авто-восстановление сортировки по клику на заголовки из БД; удаление location.reload() из модальных окон для сохранения SPA-роутинга; единый глобальный дебоунс тултипов цепочек связей.
-- Файловая структура: Удалены файлы-дубликаты (block-templates.js, component-types.js).
-### Файлы:
-- server.js, config/db.js, routes/table-sort.js, routes/systems.js, routes/systemComponents.js, routes/blockTemplates.js, routes/materials.js, routes/cabinets.js, routes/projects.js, routes/systemComponentTypes.js, routes/systemModules.js, routes/systemParameters.js, routes/systemParameterTypes.js, routes/componentTypes.js, routes/parameters.js, routes/manufacturers.js
-- public/index.html, public/pages/cabinet.html, public/pages/automation.html, public/pages/manufacturers.html, public/pages/consumables.html, public/pages/cabinets-list.html, public/pages/home.html, public/pages/project.html, public/pages/admin.html
-- public/pages/components-systems.html, public/pages/components-cabinets.html, все дочерние вкладки
-- public/components/ (block-template-modal.html, material-modal.html, system-comp-modal.html, system-comp-edit.html, params-modal.html, param-types-modal.html, types-modal.html, modules-modal.html)
-
-## 24.07.2026 (Дополнение) — Финальная проверка Админки, Экспорта/Импорта и Оптимизации БД
-### Реализовано:
-- Исправлена функция Оптимизации БД в routes/admin.js (удалены запросы к отсутствующим ln_values/tm_values).
-- Добавлено удаление временных загружаемых SQL файлов из /tmp/ при импорте.
-- Безопасная передача PGPASSWORD через env процесс при роутах экспорта и импорта.
-- Все механизмы экспорта дампа БД, импорта и оптимизации проверены и успешно протестированы.
-### Файлы:
-- routes/admin.js, routes/manufacturers.js
-
-## 24.07.2026 — Полноценные правила взаимодействия для нового чата и исправление /api/systems/:id
-
-### 📋 ПРИНЦИПЫ ВЗАИМОДЕЙСТВИЯ (ИНСТРУКЦИЯ ДЛЯ НОВОГО ЧАТА):
-1. **Передача кода без сжатия и сокращений:**
-   - При внесении любых изменений записывать **полный несжатый код файла** от первой до последней строки.
-   - Категорически запрещено вырезать блоки комментариями вида `// остальной код без изменений...`.
-   - Запись файлов на сервере выполнять через `cat > /путь/к/файлу << 'EOF'` или встроенные Python-скрипты записи, чтобы избежать срезки строк и спецсимволов (`$`, `!`, `` ` ``) терминалом.
-2. **Обязательная синтаксическая проверка:**
-   - Перед каждым перезапуском выполнять `node -c /путь/к/файлу.js`.
-   - Перезапускать через `pm2 restart calc-wardrobe` и проверять логи `pm2 logs calc-wardrobe --lines 20 --nostream`.
-3. **Архитектурные стандарты SPA и БД:**
-   - Категорически запрещен `location.reload()` в модальных окнах — обновление таблиц выполняется реактивно без сброса SPA-роутера.
-   - Состояния перетаскивания (Drag-and-Drop) и клик-сортировки всегда сохраняются и восстанавливаются из БД (`user_table_sort`) через `/api/table-sort/:tableName`.
-   - В публичном интерфейсе выключены отладочные информационные строки с массивами ID (`#sortStatusLine`, `.comp-status-line`).
-4. **Обязательный алгоритм фиксации результатов в конце каждой сессии:**
-   - 1. Дамп БД в `/opt/backups/bd_calc_YYYYMMDD_HHMMSS.sql`.
-   - 2. Архив файлов проекта в `/opt/backups/calc_wardrobe_YYYYMMDD_HHMMSS.tar.gz`.
-   - 3. Внесение записи с отчетом в конец `PROJECT_MAP.md`.
-   - 4. `cd /opt/calc_wardrobe && git add -A && git commit -m "..." && git push origin calc2.0`.
-   - 5. `pm2 restart calc-wardrobe`.
-
-### Реализовано в этой сессии:
-- Исправлен роут `GET /api/systems/:id` в `routes/systems.js` (удалены обращения к удаленным таблицам `ln_values`/`tm_values`, данные читаются из полей `sc.ln` и `sc.tm`).
-- Проведена комплексная оптимизация всех SPA-страниц, модальных окон, таблиц и структуры PostgreSQL.
-
-### Файлы:
-- routes/systems.js, PROJECT_MAP.md
-
-## 24.07.2026 — Инструкция взаимодействия и обязательное контрольное слово «зафиксировал»
-
-### 📋 ПРИНЦИПЫ ВЗАИМОДЕЙСТВИЯ (ИНСТРУКЦИЯ ДЛЯ НОВОГО ЧАТА):
-1. **Передача кода без сжатия и сокращений:**
-   - При внесении любых изменений записывать **полный несжатый код файла** от первой до последней строки.
-   - Категорически запрещено вырезать блоки комментариями вида `// остальной код без изменений...`.
-   - Запись файлов на сервере выполнять через `cat > /путь/к/файлу << 'EOF'` или встроенные Python-скрипты записи, чтобы избежать срезки строк и спецсимволов (`$`, `!`, `` ` ``) терминалом.
-2. **Обязательная синтаксическая проверка:**
-   - Перед каждым перезапуском выполнять `node -c /путь/к/файлу.js`.
-   - Перезапускать через `pm2 restart calc-wardrobe` и проверять логи `pm2 logs calc-wardrobe --lines 20 --nostream`.
-3. **Архитектурные стандарты SPA и БД:**
-   - Категорически запрещен `location.reload()` в модальных окнах — перерисовка таблиц происходит динамически (реактивно) без сброса SPA-роутера.
-   - Состояния перетаскивания (Drag-and-Drop) и клик-сортировки всегда сохраняются и восстанавливаются из БД (`user_table_sort`) через `/api/table-sort/:tableName`.
-   - В интерфейсе выключены отладочные информационные строки с массивами ID (`#sortStatusLine`, `.comp-status-line`).
-4. **ОБЯЗАТЕЛЬНОЕ КОНТРОЛЬНОЕ СЛОВО:**
-   - **После выполнения каждого алгоритма фиксации ИИ ОБЯЗАН всегда писать в ответе слово: «зафиксировал».**
-5. **Обязательный алгоритм фиксации результатов в конце каждой сессии:**
-   - 1. Дамп БД в `/opt/backups/bd_calc_YYYYMMDD_HHMMSS.sql`.
-   - 2. Архив файлов проекта в `/opt/backups/calc_wardrobe_YYYYMMDD_HHMMSS.tar.gz`.
-   - 3. Внесение записи с отчетом в конец `PROJECT_MAP.md`.
-   - 4. `cd /opt/calc_wardrobe && git add -A && git commit -m "..." && git push origin calc2.0`.
-   - 5. `pm2 restart calc-wardrobe`.
-   - 6. Написать сообщение с контрольным словом: **«зафиксировал»**.
-
-
-## 25.07.2026 — Автоматическое вычисление серверной даты в фиксациях и бэкапах
-
-### 📋 ПРИНЦИПЫ ВЗАИМОДЕЙСТВИЯ (ИНСТРУКЦИЯ ДЛЯ НОВОГО ЧАТА):
-1. **Динамическое вычисление серверной даты в фиксациях:**
-   - **ИИ НЕ должен вводить дату вручную.** Текущая дата и время вычисляются непосредственно на сервере в момент фиксации:
-     `NOW_FILE=$(date +%Y%m%d_%H%M%S)`
-     `NOW_DATE=$(date +%d.%m.%Y)`
-   - Переменная `$NOW_DATE` подставляется в заголовки `PROJECT_MAP.md` и комментарии `git commit`.
-   - Переменная `$NOW_FILE` подставляется в имена файлов бэкапов `bd_calc_${NOW_FILE}.sql` и `calc_wardrobe_${NOW_FILE}.tar.gz`.
-2. **Триггер начала процедур фиксации:**
-   - **ИИ категорически НЕ должен запускать процедуру фиксации (создавать бэкапы, коммитить и пушить в Git) самостоятельно или заранее.**
-   - **Выполнение алгоритма фиксации происходит СТРОГО И ТОЛЬКО ПОСЛЕ ПРЯМОЙ КОМАНДЫ ПОЛЬЗОВАТЕЛЯ: «Фиксируй».**
-3. **Передача кода без сжатия и сокращений:**
-   - При внесении любых изменений записывать **полный несжатый код файла** от первой до последней строки.
-   - Запрещено вырезать блоки комментариями вида `// остальной код без изменений...`.
-   - Запись файлов на сервере выполнять через `cat > /путь/к/файлу << 'EOF'` или встроенные Python-скрипты записи, чтобы избежать срезки строк и спецсимволов (`$`, `!`, ` ` `) терминалом.
-4. **Обязательная синтаксическая проверка:**
-   - Перед каждым перезапуском выполнять `node -c /путь/к/файлу.js`.
-   - Перезапускать через `pm2 restart calc-wardrobe` и проверять логи `pm2 logs calc-wardrobe --lines 20 --nostream`.
-5. **Архитектурные стандарты SPA и БД:**
-   - Запрещен `location.reload()` в модальных окнах — перерисовка таблиц происходит динамически (реактивно) без сброса SPA-роутера.
-   - Порядок перетаскивания (Drag-and-Drop) и клик-сортировки всегда сохраняются и читаются из БД (`user_table_sort`) через `/api/table-sort/:tableName`.
-   - В интерфейсе выключены отладочные информационные строки с массивами ID (`#sortStatusLine`, `.comp-status-line`).
-6. **ОБЯЗАТЕЛЬНОЕ КОНТРОЛЬНОЕ СЛОВО:**
-   - **После каждого завершения алгоритма фиксации ИИ ОБЯЗАН всегда писать в ответе слово: «зафиксировал».**
-7. **Обязательный алгоритм фиксации результатов (выполняется только по команде «Фиксируй»):**
-   - 1. Вычисление динамических переменных: `NOW_FILE=$(date +%Y%m%d_%H%M%S)`, `NOW_DATE=$(date +%d.%m.%Y)`.
-   - 2. Дамп БД в `/opt/backups/bd_calc_${NOW_FILE}.sql`.
-   - 3. Архив файлов проекта в `/opt/backups/calc_wardrobe_${NOW_FILE}.tar.gz`.
-   - 4. Внесение записи с отчетом в конец `PROJECT_MAP.md` с подстановкой `${NOW_DATE}`.
-   - 5. `cd /opt/calc_wardrobe && git add -A && git commit -m "${NOW_DATE}: описание" && git push origin calc2.0`.
-   - 6. `pm2 restart calc-wardrobe`.
-   - 7. Сообщение в чат с ключевым словом: **«зафиксировал»**.
-
-### Реализовано в этой фиксации:
-- Внедрено динамическое вычисление серверной даты и времени (`date`) для именования бэкапов, заголовков в PROJECT_MAP и сообщений Git-коммитов.
-- Обновлена инструкция взаимодействия с ИИ для новых чатов.
-
-### Файлы:
-- PROJECT_MAP.md
-
-## 25.07.2026 — Добавление столбцов Страница и Установка, унифицированные фильтры и полная подготовка к новому чату
-
-### 📋 ПРИНЦИПЫ ВЗАИМОДЕЙСТВИЯ (ИНСТРУКЦИЯ ДЛЯ НОВОГО ЧАТА):
-1. **Динамическое вычисление серверной даты в фиксациях:**
-   - **ИИ НЕ должен вводить дату вручную.** Текущая дата и время вычисляются непосредственно на сервере в момент запуска фиксации:
-     `NOW_FILE=$(date +%Y%m%d_%H%M%S)`
-     `NOW_DATE=$(date +%d.%m.%Y)`
-   - Переменная `$NOW_DATE` подставляется в заголовки `PROJECT_MAP.md` и комментарии `git commit`.
-   - Переменная `$NOW_FILE` подставляется в имена файлов бэкапов `bd_calc_${NOW_FILE}.sql` и `calc_wardrobe_${NOW_FILE}.tar.gz`.
-2. **Триггер начала процедур фиксации:**
-   - **ИИ категорически НЕ должен запускать процедуру фиксации (создавать бэкапы, коммитить и пушить в Git) самостоятельно или заранее.**
-   - **Выполнение алгоритма фиксации происходит СТРОГО И ТОЛЬКО ПОСЛЕ ПРЯМОЙ КОМАНДЫ ПОЛЬЗОВАТЕЛЯ: «Фиксируй» или «Фиксируем».**
-3. **Передача кода без сжатия и сокращений:**
-   - При внесении любых изменений записывать **полный несжатый код файла** от первой до последней строки.
-   - Запрещено вырезать блоки комментариями вида `// остальной код без изменений...`.
-   - Запись файлов на сервере выполнять через `cat > /путь/к/файлу << 'EOF'` или встроенные Python-скрипты записи, чтобы избежать срезки строк и спецсимволов (`$`, `!`, ` ` `) терминалом.
-4. **Обязательная синтаксическая проверка:**
-   - Перед каждым перезапуском выполнять `node -c /путь/к/файлу.js`.
-   - Перезапускать через `pm2 restart calc-wardrobe` и проверять логи `pm2 logs calc-wardrobe --lines 20 --nostream`.
-5. **Архитектурные стандарты SPA и БД:**
-   - Запрещен `location.reload()` в модальных окнах — перерисовка таблиц происходит динамически (реактивно) без сброса SPA-роутера.
-   - Порядок перетаскивания (Drag-and-Drop) и клик-сортировки всегда сохраняются и читаются из БД (`user_table_sort`) через `/api/table-sort/:tableName`.
-   - В интерфейсе выключены отладочные информационные строки с массивами ID (`#sortStatusLine`, `.comp-status-line`).
-6. **ОБЯЗАТЕЛЬНОЕ КОНТРОЛЬНОЕ СЛОВО:**
-   - **После каждого завершения алгоритма фиксации ИИ ОБЯЗАН всегда писать в ответе слово: «зафиксировал».**
-7. **Обязательный алгоритм фиксации результатов (выполняется только по команде «Фиксируй»):**
-   - 1. Вычисление динамических переменных: `NOW_FILE=$(date +%Y%m%d_%H%M%S)`, `NOW_DATE=$(date +%d.%m.%Y)`.
-   - 2. Дамп БД в `/opt/backups/bd_calc_${NOW_FILE}.sql`.
-   - 3. Архив файлов проекта в `/opt/backups/calc_wardrobe_${NOW_FILE}.tar.gz`.
-   - 4. Внесение записи с отчетом в конец `PROJECT_MAP.md` с подстановкой `${NOW_DATE}`.
-   - 5. `cd /opt/calc_wardrobe && git add -A && git commit -m "${NOW_DATE}: описание" && git push origin calc2.0`.
-   - 6. `pm2 restart calc-wardrobe`.
-   - 7. Сообщение в чат с ключевым словом: **«зафиксировал»**.
-
-### Реализовано 25.07.2026:
-- **База данных:** В таблицу `systems` добавлен столбец `page` (Страница) и переименован столбец `note` -> `installation` (Установка).
-- **Бэкенд:** 
-  - `routes/systems.js`: Добавлена обработка `page` и `installation` в роутах получения, создания, редактирования систем и импорте/экспорте Excel.
-  - `routes/cabinets.js`: Роут `GET /api/cabinets/:id/systems` отдает поля `page`, `installation`, `room` и `description`.
-- **Фронтенд:**
-  - `automation.html`: В таблицу добавлены столбцы «Страница» и «Установка» сразу после «Название». Добавлены унифицированные модальные фильтры для столбцов «Шкаф», «Страница», «Установка» с сохранением состояния в БД (`user_table_sort`). В окне редактирования системы работает предвыбор (`selected`) привязанных шкафов. В окне просмотра выведены кнопки «🗑️ Очистить», «+ Привязать», «+ Создать».
-  - `cabinet.html`: В таблицу систем шкафа выведены столбцы «Страница» и «Установка» с интерактивными фильтрами ⚙.
-
-### Файлы:
-- routes/systems.js, routes/cabinets.js, public/pages/automation.html, public/pages/cabinet.html, PROJECT_MAP.md
-
-###---###
-## 26.07.2026 — Фиксация: Автоматическое сохранение и обновление проекта
-- **Дамп БД:** bd_calc_20260726_164859.sql
-- **Архив файлов:** calc_wardrobe_20260726_164859.tar.gz
-- **Изменения:** Автоматическое сохранение и обновление проекта
-
-## 27.07.2026 — Фиксация: Добавлены фильтры компонентов и материалов шкафа, удален столбец Цена
-- **Дамп БД:** bd_calc_20260727_095352.sql
-- **Архив файлов:** calc_wardrobe_20260727_095352.tar.gz
-- **Изменения:** Добавлены фильтры компонентов и материалов шкафа, удален столбец Цена
-
-## 27.07.2026 — Фиксация: Добавлены все поля в окно создания системы, добавлены фильтры компонентов/материалов шкафа и удален столбец Цена
-- **Дамп БД:** bd_calc_20260727_103756.sql
-- **Архив файлов:** calc_wardrobe_20260727_103756.tar.gz
-- **Изменения:** Добавлены все поля в окно создания системы, добавлены фильтры компонентов/материалов шкафа и удален столбец Цена
-
-## 27.07.2026 — Переход в новый чат: Финальная фиксация: выравнивание колонок, сохранение порядка новых компонентов, фильтры и подготовка к новому чату
-- **Дамп БД:** bd_calc_20260727_203057.sql
-- **Архив файлов:** calc_wardrobe_20260727_203057.tar.gz
-- **Реализовано в этой фиксации:**
-  1. Выровнены столбцы таблицы «Компоненты шкафа» в `cabinet.html` и `cabinets.js` (устранено смещение элементов).
-  2. Усовершенствован алгоритм сортировки: любые вновь добавляемые компоненты встают строго **в самый низ таблицы** без алфавитного сброса и изменения существующего порядка.
-  3. Добавлена жирная подсветка и интерактивные тултипы привязанных материалов на вкладке «Компоненты шкафов».
-  4. Добавлены универсальные модальные фильтры (⚙) для компонентов и материалов шкафа, из материалов удалён столбец «Цена».
+📜 ИСТОРИЯ ИЗМЕНЕНИЙ (Сводка)
+Дата	Изменения
+18.07.2026	Добавлены фильтры по шкафам, привязка компонентов и модальные окна в automation.html.
+19.07.2026	Внедрен универсальный Drag-and-Drop и клиентская сортировка во все справочники. Добавлены колонки position в БД.
+23.07.2026	Создана таблица user_table_sort и API /api/table-sort/:tableName для сохранения порядка и фильтров в БД.
+24.07.2026	Оптимизация БД. Ликвидированы N+1 запросы за счет json_agg. Увеличен лимит HTTP телозапросов до 50MB.
+25.07.2026	Добавлены поля page и installation для систем автоматизации. Внедрены универсальные модальные фильтры (⚙).
+27.07.2026	Добавлено добавление новых элементов строго в конец таблиц без алфавитного сброса порядка. Добавлена подсветка материалов.
+28.07.2026	Созданы таблицы БД для групп материалов, бэкенд API materialGroups.js и двухвкладочный интерфейс consumables.html.
+29.07.2026	[ТЕКУЩАЯ СЕССИЯ] Полная сквозная интеграция Групп материалов для Шкафов, Блоков шкафов, Компонентов систем и Типов компонентов систем. Обновлена 8-UNION калькуляция материалов с плашкой [Группа: Название]. Добавлен столбец «Компонент шкафа» на страницу шкафа. Исправлена работа MaterialModal и эндпоинты materials.js.

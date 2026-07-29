@@ -106,6 +106,8 @@ window.SystemCompModal = {
         h += '<div class="form-group"><label>Компоненты шкафа:</label><div id="linkedBlocks"><p>'+(isEdit?'Загрузка...':'Нет связанных компонентов')+'</p></div><button type="button" id="addBlockLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить компонент шкафа</button></div>';
         h += '<div class="form-group"><label>Материалы компонента:</label><div id="componentMaterials"><p>'+(isEdit?'Загрузка...':'Нет материалов')+'</p></div><button type="button" id="addMaterialLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить материал</button></div>';
 
+        h += '<div class="form-group" style="margin-top:15px;"><label>Группы материалов компонента:</label><div id="componentMaterialGroups"><p>'+(isEdit?'Загрузка...':'Нет групп материалов')+'</p></div><button type="button" id="addMaterialGroupLinkBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить группу материалов</button></div>';
+
         h += '<div class="form-actions" style="margin-top:15px;display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary cancel-comp-btn">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';
 
         m.querySelector('#sysCompForm').innerHTML = h;
@@ -300,9 +302,53 @@ window.SystemCompModal = {
                 });
         }
 
+        function refreshComponentMaterialGroups() {
+            var mgc = m.querySelector('#componentMaterialGroups');
+            if (!currentCompId) return;
+            fetch('/api/system-components/' + currentCompId + '/material-groups?_=' + Date.now())
+                .then(function(r){ return r.json(); })
+                .then(function(groups){
+                    if (!groups || !groups.length) {
+                        mgc.innerHTML = '<p style="color:#888;">Нет групп материалов</p>';
+                    } else {
+                        var html = '';
+                        groups.forEach(function(g){
+                            var isInherited = g.inherited === true;
+                            html += '<div style="border:1px solid #e2e8f0;border-radius:6px;padding:8px;margin-bottom:8px;background:'+(isInherited ? '#f8fafc;opacity:0.85;' : '#fff;')+'">';
+                            html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">';
+                            html += '<strong>📦 ' + self._esc(g.group_name || 'Группа') + (isInherited ? ' <span style="font-size:11px;color:#64748b;font-weight:normal;">(из типа)</span>' : '') + '</strong>';
+                            if (!isInherited) {
+                                html += '<button type="button" class="btn btn-sm btn-delete unbind-sys-group-btn" data-link-id="' + g.link_id + '">✕</button>';
+                            }
+                            html += '</div>';
+                            if (g.items && g.items.length) {
+                                html += '<table class="data-table" style="width:100%;font-size:12px;">';
+                                html += '<thead><tr><th>Материал</th><th>Артикул</th><th>Кол-во</th><th>Ед.</th></tr></thead><tbody>';
+                                g.items.forEach(function(it){
+                                    html += '<tr><td>' + self._esc(it.name || '') + '</td><td>' + self._esc(it.article || '-') + '</td><td>' + (it.quantity || 1) + '</td><td>' + self._esc(it.unit || '') + '</td></tr>';
+                                });
+                                html += '</tbody></table>';
+                            } else {
+                                html += '<div style="font-size:12px;color:#94a3b8;">Группа пуста</div>';
+                            }
+                            html += '</div>';
+                        });
+                        mgc.innerHTML = html;
+
+                        mgc.querySelectorAll('.unbind-sys-group-btn').forEach(function(btn){
+                            btn.addEventListener('click', function(){
+                                fetch('/api/system-components/' + currentCompId + '/material-groups/' + btn.dataset.linkId, { method: 'DELETE' })
+                                    .then(function(){ refreshComponentMaterialGroups(); });
+                            });
+                        });
+                    }
+                });
+        }
+
         if (isEdit) {
             refreshLinkedBlocks();
             refreshComponentMaterials();
+            refreshComponentMaterialGroups();
         }
 
         m.querySelector('#addBlockLinkBtn').addEventListener('click', function(){
@@ -337,6 +383,48 @@ window.SystemCompModal = {
                     }
                 });
             }
+        });
+
+        m.querySelector('#addMaterialGroupLinkBtn').addEventListener('click', function(){
+            if (!currentCompId) { alert('Сначала сохраните компонент'); return; }
+            fetch('/api/material-groups')
+                .then(function(r){ return r.json(); })
+                .then(function(groups){
+                    if (!groups || !groups.length) {
+                        alert('В системе нет созданных групп материалов');
+                        return;
+                    }
+                    var bindModal = document.createElement('div');
+                    bindModal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:7000;';
+                    var popHtml = '<div style="background:#fff;padding:20px;border-radius:8px;width:350px;">';
+                    popHtml += '<h4 style="margin-top:0;">Выберите группу материалов</h4>';
+                    popHtml += '<select id="selectSysGroupToBind" class="form-control" style="width:100%;margin-bottom:15px;">';
+                    groups.forEach(function(g) {
+                        popHtml += '<option value="' + g.id + '">' + self._esc(g.name) + '</option>';
+                    });
+                    popHtml += '</select>';
+                    popHtml += '<div style="display:flex;justify-content:flex-end;gap:10px;">';
+                    popHtml += '<button type="button" class="btn btn-secondary cancel-bind-btn">Отмена</button>';
+                    popHtml += '<button type="button" class="btn btn-primary confirm-bind-btn">Привязать</button>';
+                    popHtml += '</div></div>';
+                    bindModal.innerHTML = popHtml;
+                    document.body.appendChild(bindModal);
+
+                    bindModal.querySelector('.cancel-bind-btn').onclick = function() { bindModal.remove(); };
+                    bindModal.querySelector('.confirm-bind-btn').onclick = function() {
+                        var groupId = bindModal.querySelector('#selectSysGroupToBind').value;
+                        if (groupId) {
+                            fetch('/api/system-components/' + currentCompId + '/material-groups', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ group_id: groupId })
+                            }).then(function(){
+                                bindModal.remove();
+                                refreshComponentMaterialGroups();
+                            });
+                        }
+                    };
+                });
         });
 
         // Сохранение

@@ -135,6 +135,26 @@
             });
     }
 
+    function ensureMaterialModal(cb) {
+        if (typeof MaterialModal !== 'undefined') return cb();
+        fetch('/components/material-modal.html')
+            .then(function(r){ return r.text(); })
+            .then(function(html){
+                var div = document.createElement('div');
+                div.innerHTML = html;
+                Array.from(div.querySelectorAll('script')).forEach(function(s){
+                    var newScript = document.createElement('script');
+                    newScript.textContent = s.textContent;
+                    document.body.appendChild(newScript);
+                });
+                cb();
+            })
+            .catch(function(err){
+                console.error(err);
+                alert('Ошибка загрузки компонентов материалов');
+            });
+    }
+
     function setupDragAndDrop(tbody, tableName, onComplete) {
         var dragInfo = null;
 
@@ -205,7 +225,7 @@
             html += '<div class="module-box"><h3>Системы шкафа</h3><div id="cabinetSystems">Загрузка...</div><button id="addSystemBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить систему</button></div>';
             html += '<div class="module-box"><h3>Компоненты систем</h3><div id="cabinetSystemComponents">Загрузка...</div></div>';
             html += '<div class="module-box"><h3>Компоненты шкафа</h3><div id="cabinetBlocks">Загрузка...</div><button id="addBlockBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить компонент шкафа</button></div>';
-            html += '<div class="module-box"><h3>Материалы шкафа</h3><div id="cabinetMaterials">Загрузка...</div><button id="addMaterialToCabinetBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить материал</button></div>';
+            html += '<div class="module-box"><h3>Материалы шкафа</h3><div id="cabinetMaterials">Загрузка...</div><button id="addMaterialToCabinetBtn" class="btn btn-primary btn-sm" style="margin-top:10px;">+ Добавить материал</button> <button id="addMaterialGroupToCabinetBtn" class="btn btn-primary btn-sm" style="margin-top:10px;margin-left:8px;">+ Привязать группу материалов</button></div>';
             html += '</div>';
 
             html += '<div class="tab-content" id="tab-calculation"><div style="margin-bottom:10px;text-align:right;"><button class="btn btn-primary" onclick="exportCalcToPDF()">📄 Экспорт PDF</button></div><div id="cabinetCalculation">Загрузка...</div></div>';
@@ -237,6 +257,7 @@
             document.getElementById('addSystemBtn').addEventListener('click', function(){ openAddSystemToCabinetModal(); });
             document.getElementById('addBlockBtn').addEventListener('click', window.openBlockModal);
             document.getElementById('addMaterialToCabinetBtn').addEventListener('click', openAddMaterialToCabinet);
+            document.getElementById('addMaterialGroupToCabinetBtn').addEventListener('click', openAddMaterialGroupToCabinet);
         });
 
     function refreshAllData() {
@@ -1260,6 +1281,7 @@
                 '<th style="width:1%"></th>' +
                 '<th data-sort="system_name" style="position:relative;">Система<span class="filter-icon" data-col="system_name" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по системе">⚙</span></th>' +
                 '<th data-sort="component_name" style="position:relative;">Компонент системы<span class="filter-icon" data-col="component_name" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по компоненту системы">⚙</span></th>' +
+                '<th data-sort="chain_block_template" style="position:relative;">Компонент шкафа<span class="filter-icon" data-col="chain_block_template" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по компоненту шкафа">⚙</span></th>' +
                 '<th data-sort="name" style="position:relative;">Название<span class="filter-icon" data-col="name" style="cursor:pointer;font-size:14px;margin-left:4px;" title="Фильтр по названию">⚙</span></th>' +
                 '<th data-sort="unit">Ед.</th>' +
                 '<th data-sort="quantity">Кол-во</th>' +
@@ -1270,19 +1292,29 @@
 
             items.forEach(function(item){
                 var linkId = item.link_id || item.id;
+                var isDirectGroup = item.chain_block_template === 'Группа материалов';
+                var cabinetBlockName = (item.chain_block_template && item.chain_block_template !== 'Группа материалов') ? item.chain_block_template : '-';
+                var nameHtml = esc(item.name || '');
+                if (item.group_name) {
+                    nameHtml += ' <span style="font-size:11px;background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:4px;font-weight:normal;margin-left:4px;">[Группа: ' + esc(item.group_name) + ']</span>';
+                }
+
                 html += '<tr data-id="' + linkId + '"><td class="drag-handle" style="cursor:grab;">⠿</td>' +
                     '<td>' + esc(item.system_name || '-') + '</td>' +
                     '<td>' + esc(item.component_name || '-') + '</td>' +
-                    '<td class="material-name-cell" data-material-id="' + item.material_id + '" data-chain-block="' + esc(item.chain_block_template || '-') + '" data-chain-comp="' + esc(item.chain_system_component || '-') + '" data-chain-type="' + esc(item.chain_type || '') + '" style="cursor:pointer;">' + esc(item.name || '') + '</td>' +
+                    '<td>' + esc(cabinetBlockName) + '</td>' +
+                    '<td class="material-name-cell" data-material-id="' + item.material_id + '" data-chain-block="' + esc(item.chain_block_template || '-') + '" data-chain-comp="' + esc(item.chain_system_component || '-') + '" data-chain-type="' + esc(item.chain_type || '') + '" style="cursor:pointer;">' + nameHtml + '</td>' +
                     '<td>' + esc(item.unit || '') + '</td>' +
                     '<td>' + (item.is_component_material ? item.quantity : '<input type="number" value="' + item.quantity + '" style="width:60px;" onchange="updateMaterialQtyInCabinet(' + linkId + ', this.value)">') + '</td>' +
                     '<td>' + esc(item.ln || '') + '</td>' +
                     '<td>' + esc(item.tm || '') + '</td>' +
                     '<td>' +
-                        (item.is_component_material ?
-                            '<span style="font-size:10px;color:#888;">системный</span>' :
-                            '<button class="btn btn-sm btn-edit" onclick="editCabinetMaterialLink(' + linkId + ', ' + item.material_id + ')">✏️</button> ' +
-                            '<button class="btn btn-sm btn-delete" onclick="delCabinetMaterialLink(' + linkId + ')">🗑️</button>') +
+                        (isDirectGroup ?
+                            '<button class="btn btn-sm btn-delete" onclick="delCabinetMaterialGroupLink(' + linkId + ')" title="Отвязать группу от шкафа">🗑️</button>' :
+                            (item.is_component_material ?
+                                '<span style="font-size:10px;color:#888;">системный</span>' :
+                                '<button class="btn btn-sm btn-edit" onclick="editCabinetMaterialLink(' + linkId + ', ' + item.material_id + ')">✏️</button> ' +
+                                '<button class="btn btn-sm btn-delete" onclick="delCabinetMaterialLink(' + linkId + ')">🗑️</button>')) +
                     '</td>' +
                 '</tr>';
             });
@@ -1403,25 +1435,67 @@
     };
 
     window.openAddMaterialToCabinet = function() {
-        if (typeof MaterialModal !== 'undefined') {
-            MaterialModal.open(function(materialId) {
-                if (materialId) {
-                    var quantity = prompt('Количество:', '1');
-                    if (quantity && !isNaN(quantity) && parseInt(quantity) > 0) {
-                        fetch('/api/materials/cabinet/' + cabinetId, {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ material_id: materialId, quantity: parseInt(quantity) })
-                        })
-                        .then(function(r){
-                            if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
-                            refreshAllData();
-                            alert('✅ Материал добавлен в шкаф!');
-                        })
-                        .catch(function(e){ alert('Ошибка: ' + e.message); });
+        ensureMaterialModal(function() {
+            if (typeof MaterialModal !== 'undefined') {
+                var selectFn = MaterialModal.select || MaterialModal.open;
+                selectFn.call(MaterialModal, function(materialId) {
+                    if (materialId) {
+                        var quantity = prompt('Количество:', '1');
+                        if (quantity && !isNaN(quantity) && parseInt(quantity) > 0) {
+                            fetch('/api/materials/cabinet/' + cabinetId, {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ material_id: materialId, quantity: parseInt(quantity) })
+                            })
+                            .then(function(r){
+                                if (!r.ok) return r.json().then(function(d){ throw new Error(d.message); });
+                                refreshAllData();
+                                alert('✅ Материал добавлен в шкаф!');
+                            })
+                            .catch(function(e){ alert('Ошибка: ' + e.message); });
+                        }
                     }
-                }
+                });
+            } else { alert('Модальное окно материалов недоступно'); }
+        });
+    };
+
+    window.openAddMaterialGroupToCabinet = function() {
+        fetch('/api/material-groups')
+            .then(function(r){ return r.json(); })
+            .then(function(groups){
+                if (!groups || !groups.length) { alert('В системе нет созданных групп материалов'); return; }
+                var bindModal = document.createElement('div');
+                bindModal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:7000;';
+                var popHtml = '<div style="background:#fff;padding:20px;border-radius:8px;width:350px;">';
+                popHtml += '<h4 style="margin-top:0;">Привязать группу материалов к шкафу</h4>';
+                popHtml += '<select id="selectCabGroupToBind" class="form-control" style="width:100%;margin-bottom:15px;">';
+                groups.forEach(function(g) {
+                    popHtml += '<option value="' + g.id + '">' + esc(g.name) + '</option>';
+                });
+                popHtml += '</select>';
+                popHtml += '<div style="display:flex;justify-content:flex-end;gap:10px;">';
+                popHtml += '<button type="button" class="btn btn-secondary cancel-bind-btn">Отмена</button>';
+                popHtml += '<button type="button" class="btn btn-primary confirm-bind-btn">Привязать</button>';
+                popHtml += '</div></div>';
+                bindModal.innerHTML = popHtml;
+                document.body.appendChild(bindModal);
+
+                bindModal.querySelector('.cancel-bind-btn').onclick = function() { bindModal.remove(); };
+                bindModal.querySelector('.confirm-bind-btn').onclick = function() {
+                    var groupId = bindModal.querySelector('#selectCabGroupToBind').value;
+                    if (groupId) {
+                        fetch('/api/cabinets/' + cabinetId + '/material-groups', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ group_id: groupId })
+                        }).then(function(){
+                            bindModal.remove();
+                            refreshAllData();
+                            alert('✅ Группа материалов привязана к шкафу!');
+                        });
+                    }
+                };
             });
-        } else { alert('Модальное окно материалов не загружено'); }
     };
 
     window.updateMaterialQtyInCabinet = function(linkId, qty) {
@@ -1443,10 +1517,19 @@
             .catch(function(e){ alert('Ошибка: ' + e.message); });
     };
 
+    window.delCabinetMaterialGroupLink = function(linkId) {
+        if (!confirm('Отвязать группу материалов от шкафа?')) return;
+        fetch('/api/cabinets/' + cabinetId + '/material-groups/' + linkId, { method: 'DELETE' })
+            .then(function(){ refreshAllData(); })
+            .catch(function(e){ alert('Ошибка: ' + e.message); });
+    };
+
     window.editCabinetMaterialLink = function(linkId, materialId) {
-        if (typeof MaterialModal !== 'undefined') {
-            MaterialModal.open(function() { refreshAllData(); }, materialId);
-        } else { alert('Модальное окно материалов не загружено'); }
+        ensureMaterialModal(function() {
+            if (typeof MaterialModal !== 'undefined') {
+                MaterialModal.open(function() { refreshAllData(); }, materialId);
+            } else { alert('Модальное окно материалов недоступно'); }
+        });
     };
 
     // ===== 5. КАЛЬКУЛЯЦИЯ ШКАФА =====
@@ -1612,3 +1695,4 @@
         }
     });
 })();
+</script>

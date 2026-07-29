@@ -108,6 +108,70 @@ router.delete('/:typeId/materials/:materialId', auth, isAdmin, async (req, res) 
     } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+// ========== ГРУППЫ МАТЕРИАЛОВ ТИПА ==========
+router.get('/:id/material-groups', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT smg.id as link_id, mg.id as group_id, mg.name as group_name, mg.description,
+              COALESCE(
+                json_agg(
+                  jsonb_build_object(
+                    'material_id', m.id,
+                    'name', m.name,
+                    'article', m.article,
+                    'unit', m.unit,
+                    'quantity', mgi.quantity
+                  )
+                ) FILTER (WHERE mgi.id IS NOT NULL), '[]'
+              ) as items
+       FROM system_component_type_material_groups smg
+       JOIN material_groups mg ON mg.id = smg.group_id
+       LEFT JOIN material_group_items mgi ON mgi.group_id = mg.id
+       LEFT JOIN materials m ON m.id = mgi.material_id
+       WHERE smg.type_id = $1
+       GROUP BY smg.id, mg.id, mg.name, mg.description
+       ORDER BY smg.id ASC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Ошибка получения групп материалов типа:', err);
+    res.status(500).json({ message: 'Ошибка получения групп материалов типа' });
+  }
+});
+
+router.post('/:id/material-groups', auth, isAdmin, async (req, res) => {
+  try {
+    const { group_id } = req.body;
+    const typeId = req.params.id;
+    if (!group_id) return res.status(400).json({ message: 'group_id обязателен' });
+
+    const result = await pool.query(
+      `INSERT INTO system_component_type_material_groups (type_id, group_id)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING RETURNING *`,
+      [typeId, group_id]
+    );
+    res.status(201).json(result.rows[0] || { message: 'Уже привязано' });
+  } catch (err) {
+    console.error('Ошибка привязки группы материалов к типу:', err);
+    res.status(500).json({ message: 'Ошибка привязки группы материалов к типу' });
+  }
+});
+
+router.delete('/:typeId/material-groups/:linkId', auth, isAdmin, async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM system_component_type_material_groups WHERE type_id = $1 AND (id = $2 OR group_id = $2)',
+      [req.params.typeId, req.params.linkId]
+    );
+    res.json({ message: 'Группа материалов отвязана от типа' });
+  } catch (err) {
+    console.error('Ошибка отвязки группы материалов от типа:', err);
+    res.status(500).json({ message: 'Ошибка отвязки группы материалов' });
+  }
+});
+
 // ========== КОМПОНЕНТЫ ШКАФА ТИПА ==========
 router.get('/:id/blocks', auth, async (req, res) => {
     try {
@@ -189,11 +253,18 @@ router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
         }
 
         await client.query('DELETE FROM system_component_type_materials WHERE type_id = $1', [targetId]);
+        await client.query('DELETE FROM system_component_type_material_groups WHERE type_id = $1', [targetId]);
         await client.query('DELETE FROM system_component_type_blocks WHERE type_id = $1', [targetId]);
 
         const matResult = await client.query(
             `INSERT INTO system_component_type_materials (type_id, material_id, quantity)
              SELECT $1, material_id, quantity FROM system_component_type_materials WHERE type_id = $2`,
+            [targetId, sourceId]
+        );
+
+        const grpResult = await client.query(
+            `INSERT INTO system_component_type_material_groups (type_id, group_id)
+             SELECT $1, group_id FROM system_component_type_material_groups WHERE type_id = $2`,
             [targetId, sourceId]
         );
 
@@ -204,7 +275,7 @@ router.post('/:sourceId/copy-to/:targetId', auth, isAdmin, async (req, res) => {
         );
 
         await client.query('COMMIT');
-        res.json({ message: 'Состав типа скопирован (материалов: ' + matResult.rowCount + ', блоков: ' + blkResult.rowCount + ')' });
+        res.json({ message: 'Состав типа скопирован (материалов: ' + matResult.rowCount + ', групп материалов: ' + grpResult.rowCount + ', блоков: ' + blkResult.rowCount + ')' });
     } catch (err) {
         await client.query('ROLLBACK');
         console.error(err);

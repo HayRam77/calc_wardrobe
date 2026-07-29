@@ -153,6 +153,77 @@ router.delete('/:id/materials/:materialId', auth, isAdmin, async (req, res) => {
   }
 });
 
+// ========== ГРУППЫ МАТЕРИАЛОВ КОМПОНЕНТА ШКАФА ==========
+
+// GET /api/block-templates/:id/material-groups — Получить список привязанных групп материалов с их составом
+router.get('/:id/material-groups', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT bmg.group_id as link_id, mg.id as group_id, mg.name as group_name, mg.description,
+              COALESCE(
+                json_agg(
+                  jsonb_build_object(
+                    'material_id', m.id,
+                    'name', m.name,
+                    'article', m.article,
+                    'unit', m.unit,
+                    'quantity', mgi.quantity
+                  )
+                ) FILTER (WHERE mgi.id IS NOT NULL), '[]'
+              ) as items
+       FROM block_template_material_groups bmg
+       JOIN material_groups mg ON mg.id = bmg.group_id
+       LEFT JOIN material_group_items mgi ON mgi.group_id = mg.id
+       LEFT JOIN materials m ON m.id = mgi.material_id
+       WHERE bmg.block_template_id = $1
+       GROUP BY bmg.group_id, mg.id, mg.name, mg.description
+       ORDER BY bmg.group_id ASC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Ошибка получения групп материалов компонента:', err);
+    res.status(500).json({ message: 'Ошибка получения групп материалов' });
+  }
+});
+
+// POST /api/block-templates/:id/material-groups — Привязать группу материалов
+router.post('/:id/material-groups', auth, isAdmin, async (req, res) => {
+  try {
+    const { group_id } = req.body;
+    const blockTemplateId = req.params.id;
+    if (!group_id) return res.status(400).json({ message: 'group_id обязателен' });
+
+    const result = await pool.query(
+      `INSERT INTO block_template_material_groups (block_template_id, group_id)
+       SELECT $1, $2
+       WHERE NOT EXISTS (
+           SELECT 1 FROM block_template_material_groups WHERE block_template_id = $1 AND group_id = $2
+       )
+       RETURNING *`,
+      [blockTemplateId, group_id]
+    );
+    res.status(201).json(result.rows[0] || { message: 'Привязано' });
+  } catch (err) {
+    console.error('Ошибка привязки группы материалов:', err);
+    res.status(500).json({ message: 'Ошибка привязки группы материалов' });
+  }
+});
+
+// DELETE /api/block-templates/:id/material-groups/:linkId — Отвязать группу материалов
+router.delete('/:id/material-groups/:linkId', auth, isAdmin, async (req, res) => {
+  try {
+    await pool.query(
+      `DELETE FROM block_template_material_groups WHERE block_template_id = $1 AND group_id = $2`,
+      [req.params.id, req.params.linkId]
+    );
+    res.json({ message: 'Группа материалов отвязана' });
+  } catch (err) {
+    console.error('Ошибка отвязки группы материалов:', err);
+    res.status(500).json({ message: 'Ошибка отвязки группы материалов' });
+  }
+});
+
 // GET /api/block-templates/:id — Один компонент
 router.get('/:id', auth, async (req, res) => {
   try {
@@ -188,10 +259,22 @@ router.post('/', auth, isAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { name, type_id, manufacturer_id, article, price, weight_grams, power_watts, ln, tm, url, description, parameters } = req.body;
+    const { id, name, type_id, manufacturer_id, article, price, weight_grams, power_watts, ln, tm, url, description, parameters } = req.body;
 
     let block;
-    if (article) {
+
+    if (id) {
+      const updateRes = await client.query(
+        `UPDATE block_templates 
+         SET name = $1, type_id = $2, manufacturer_id = $3, article = $4, price = $5, weight_grams = $6,
+             power_watts = $7, ln = $8, tm = $9, url = $10, description = $11, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $12 RETURNING *`,
+        [name, type_id || null, manufacturer_id || null, article || null, price || null, weight_grams || null, power_watts || null, ln || null, tm || null, url || null, description || null, id]
+      );
+      if (updateRes.rows.length > 0) block = updateRes.rows[0];
+    }
+
+    if (!block && article) {
       const existing = await client.query('SELECT id FROM block_templates WHERE article = $1', [article]);
       if (existing.rows.length > 0) {
         const existingId = existing.rows[0].id;
@@ -201,6 +284,23 @@ router.post('/', auth, isAdmin, async (req, res) => {
                power_watts = $6, ln = $7, tm = $8, url = $9, description = $10, updated_at = CURRENT_TIMESTAMP
            WHERE id = $11 RETURNING *`,
           [name, type_id || null, manufacturer_id || null, price || null, weight_grams || null, power_watts || null, ln || null, tm || null, url || null, description || null, existingId]
+        );
+        block = updateRes.rows[0];
+      }
+    }
+
+    if (!block && name) {
+      const existingByName = await client.query('SELECT id FROM block_templates WHERE LOWER(name) = LOWER($1)', [name.trim()]);
+      if (existingByName.rows.length > 0) {
+        const existingId = existingByName.rows[0].id;
+        const updateRes = await client.query(
+          `UPDATE block_templates 
+           SET name = $1, type_id = COALESCE($2, type_id), manufacturer_id = COALESCE($3, manufacturer_id),
+               article = COALESCE($4, article), price = COALESCE($5, price), weight_grams = COALESCE($6, weight_grams),
+               power_watts = COALESCE($7, power_watts), ln = COALESCE($8, ln), tm = COALESCE($9, tm), url = COALESCE($10, url),
+               description = COALESCE($11, description), updated_at = CURRENT_TIMESTAMP
+           WHERE id = $12 RETURNING *`,
+          [name, type_id || null, manufacturer_id || null, article || null, price || null, weight_grams || null, power_watts || null, ln || null, tm || null, url || null, description || null, existingId]
         );
         block = updateRes.rows[0];
       }

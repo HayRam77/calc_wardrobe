@@ -29,25 +29,25 @@ router.get('/', auth, async (req, res) => {
                 (
                     SELECT json_build_object(
                         'block_templates', COALESCE((
-                            SELECT json_agg(json_build_object('id', bt.id, 'name', bt.name, 'link_id', bmg.id))
+                            SELECT json_agg(json_build_object('id', bt.id, 'name', bt.name, 'link_id', bmg.group_id))
                             FROM block_template_material_groups bmg
                             JOIN block_templates bt ON bt.id = bmg.block_template_id
                             WHERE bmg.group_id = g.id
                         ), '[]'::json),
                         'system_component_types', COALESCE((
-                            SELECT json_agg(json_build_object('id', sct.id, 'name', sct.name, 'link_id', smg.id))
+                            SELECT json_agg(json_build_object('id', sct.id, 'name', sct.name, 'link_id', smg.group_id))
                             FROM system_component_type_material_groups smg
                             JOIN system_component_types sct ON sct.id = smg.type_id
                             WHERE smg.group_id = g.id
                         ), '[]'::json),
                         'system_components', COALESCE((
-                            SELECT json_agg(json_build_object('id', sc.id, 'name', sc.name, 'link_id', scmg.id))
+                            SELECT json_agg(json_build_object('id', sc.id, 'name', sc.name, 'link_id', scmg.group_id))
                             FROM system_component_material_groups scmg
                             JOIN system_components sc ON sc.id = scmg.component_id
                             WHERE scmg.group_id = g.id
                         ), '[]'::json),
                         'cabinets', COALESCE((
-                            SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'link_id', cmg.id))
+                            SELECT json_agg(json_build_object('id', c.id, 'name', c.name, 'link_id', cmg.group_id))
                             FROM cabinet_material_groups cmg
                             JOIN cabinets c ON c.id = cmg.cabinet_id
                             WHERE cmg.group_id = g.id
@@ -237,22 +237,34 @@ router.post('/:id/bind', auth, isAdmin, async (req, res) => {
     try {
         if (target_type === 'block_template') {
             await pool.query(
-                'INSERT INTO block_template_material_groups (block_template_id, group_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                `INSERT INTO block_template_material_groups (block_template_id, group_id)
+                 SELECT $1, $2 WHERE NOT EXISTS (
+                     SELECT 1 FROM block_template_material_groups WHERE block_template_id = $1 AND group_id = $2
+                 )`,
                 [target_id, id]
             );
         } else if (target_type === 'system_component_type') {
             await pool.query(
-                'INSERT INTO system_component_type_material_groups (type_id, group_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                `INSERT INTO system_component_type_material_groups (type_id, group_id)
+                 SELECT $1, $2 WHERE NOT EXISTS (
+                     SELECT 1 FROM system_component_type_material_groups WHERE type_id = $1 AND group_id = $2
+                 )`,
                 [target_id, id]
             );
         } else if (target_type === 'system_component') {
             await pool.query(
-                'INSERT INTO system_component_material_groups (component_id, group_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                `INSERT INTO system_component_material_groups (component_id, group_id)
+                 SELECT $1, $2 WHERE NOT EXISTS (
+                     SELECT 1 FROM system_component_material_groups WHERE component_id = $1 AND group_id = $2
+                 )`,
                 [target_id, id]
             );
         } else if (target_type === 'cabinet') {
             await pool.query(
-                'INSERT INTO cabinet_material_groups (cabinet_id, group_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                `INSERT INTO cabinet_material_groups (cabinet_id, group_id)
+                 SELECT $1, $2 WHERE NOT EXISTS (
+                     SELECT 1 FROM cabinet_material_groups WHERE cabinet_id = $1 AND group_id = $2
+                 )`,
                 [target_id, id]
             );
         } else {
@@ -271,13 +283,13 @@ router.delete('/:id/bind', auth, isAdmin, async (req, res) => {
 
     try {
         if (target_type === 'block_template') {
-            await pool.query('DELETE FROM block_template_material_groups WHERE id = $1', [link_id]);
+            await pool.query('DELETE FROM block_template_material_groups WHERE group_id = $1', [link_id]);
         } else if (target_type === 'system_component_type') {
-            await pool.query('DELETE FROM system_component_type_material_groups WHERE id = $1', [link_id]);
+            await pool.query('DELETE FROM system_component_type_material_groups WHERE group_id = $1', [link_id]);
         } else if (target_type === 'system_component') {
-            await pool.query('DELETE FROM system_component_material_groups WHERE id = $1', [link_id]);
+            await pool.query('DELETE FROM system_component_material_groups WHERE group_id = $1', [link_id]);
         } else if (target_type === 'cabinet') {
-            await pool.query('DELETE FROM cabinet_material_groups WHERE id = $1', [link_id]);
+            await pool.query('DELETE FROM cabinet_material_groups WHERE group_id = $1', [link_id]);
         } else {
             return res.status(400).json({ message: 'Неизвестный тип объекта' });
         }

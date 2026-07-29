@@ -312,6 +312,67 @@ router.delete('/:id/systems/:systemId', auth, isAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+// ========== ГРУППЫ МАТЕРИАЛОВ ШКАФА ==========
+
+// GET /api/cabinets/:id/material-groups — Получить группы материалов шкафа
+router.get('/:id/material-groups', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT cmg.group_id as link_id, mg.id as group_id, mg.name as group_name, mg.description,
+             COALESCE(
+               json_agg(
+                 jsonb_build_object(
+                   'material_id', m.id,
+                   'name', m.name,
+                   'article', m.article,
+                   'unit', m.unit,
+                   'quantity', mgi.quantity
+                 )
+               ) FILTER (WHERE mgi.id IS NOT NULL), '[]'
+             ) as items
+      FROM cabinet_material_groups cmg
+      JOIN material_groups mg ON mg.id = cmg.group_id
+      LEFT JOIN material_group_items mgi ON mgi.group_id = mg.id
+      LEFT JOIN materials m ON m.id = mgi.material_id
+      WHERE cmg.cabinet_id = $1
+      GROUP BY cmg.group_id, mg.id, mg.name, mg.description
+      ORDER BY cmg.group_id ASC
+    `, [req.params.id]);
+    res.json(result.rows);
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка получения групп материалов шкафа' }); }
+});
+
+// POST /api/cabinets/:id/material-groups — Привязать группу материалов к шкафу
+router.post('/:id/material-groups', auth, isAdmin, async (req, res) => {
+  try {
+    const { group_id } = req.body;
+    const cabinetId = req.params.id;
+    if (!group_id) return res.status(400).json({ message: 'group_id обязателен' });
+
+    const result = await pool.query(
+      `INSERT INTO cabinet_material_groups (cabinet_id, group_id)
+       SELECT $1, $2
+       WHERE NOT EXISTS (
+           SELECT 1 FROM cabinet_material_groups WHERE cabinet_id = $1 AND group_id = $2
+       )
+       RETURNING *`,
+      [cabinetId, group_id]
+    );
+    res.status(201).json(result.rows[0] || { message: 'Привязано' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка привязки группы материалов' }); }
+});
+
+// DELETE /api/cabinets/:id/material-groups/:linkId — Отвязать группу материалов от шкафа
+router.delete('/:id/material-groups/:linkId', auth, isAdmin, async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM cabinet_material_groups WHERE cabinet_id = $1 AND group_id = $2',
+      [req.params.id, req.params.linkId]
+    );
+    res.json({ message: 'Группа материалов отвязана от шкафа' });
+  } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка отвязки группы материалов' }); }
+});
+
 router.get('/:id/blocks/html', auth, async (req, res) => {
   try {
     const cabinetId = req.params.id;

@@ -268,6 +268,105 @@ router.delete('/:id/blocks/:blockId', auth, isAdmin, async (req, res) => {
     } catch (err) { console.error(err); res.status(500).json({ message: 'Ошибка' }); }
 });
 
+// ========== ГРУППЫ МАТЕРИАЛОВ СИСТЕМНОГО КОМПОНЕНТА ==========
+
+// GET /api/system-components/:id/material-groups — Получить группы материалов (прямые + наследуемые от типа)
+router.get('/:id/material-groups', auth, async (req, res) => {
+    try {
+        const direct = await pool.query(
+            `SELECT scmg.id as link_id, mg.id as group_id, mg.name as group_name, mg.description,
+                    false as inherited,
+                    COALESCE(
+                      json_agg(
+                        jsonb_build_object(
+                          'material_id', m.id,
+                          'name', m.name,
+                          'article', m.article,
+                          'unit', m.unit,
+                          'quantity', mgi.quantity
+                        )
+                      ) FILTER (WHERE mgi.id IS NOT NULL), '[]'
+                    ) as items
+             FROM system_component_material_groups scmg
+             JOIN material_groups mg ON mg.id = scmg.group_id
+             LEFT JOIN material_group_items mgi ON mgi.group_id = mg.id
+             LEFT JOIN materials m ON m.id = mgi.material_id
+             WHERE scmg.component_id = $1
+             GROUP BY scmg.id, mg.id, mg.name, mg.description
+             ORDER BY scmg.id ASC`,
+            [req.params.id]
+        );
+
+        const inherited = await pool.query(
+            `SELECT sctmg.id as link_id, mg.id as group_id, mg.name as group_name, mg.description,
+                    true as inherited,
+                    COALESCE(
+                      json_agg(
+                        jsonb_build_object(
+                          'material_id', m.id,
+                          'name', m.name,
+                          'article', m.article,
+                          'unit', m.unit,
+                          'quantity', mgi.quantity
+                        )
+                      ) FILTER (WHERE mgi.id IS NOT NULL), '[]'
+                    ) as items
+             FROM system_components sc
+             JOIN system_component_type_material_groups sctmg ON sc.type_id = sctmg.type_id
+             JOIN material_groups mg ON mg.id = sctmg.group_id
+             LEFT JOIN material_group_items mgi ON mgi.group_id = mg.id
+             LEFT JOIN materials m ON m.id = mgi.material_id
+             WHERE sc.id = $1
+             AND NOT EXISTS (
+               SELECT 1 FROM system_component_material_groups scmg2
+               WHERE scmg2.component_id = sc.id AND scmg2.group_id = sctmg.group_id
+             )
+             GROUP BY sctmg.id, mg.id, mg.name, mg.description
+             ORDER BY sctmg.id ASC`,
+            [req.params.id]
+        );
+
+        res.json([...direct.rows, ...inherited.rows]);
+    } catch (err) {
+        console.error('Ошибка получения групп материалов системного компонента:', err);
+        res.status(500).json({ message: 'Ошибка получения групп материалов' });
+    }
+});
+
+// POST /api/system-components/:id/material-groups — Привязать группу материалов
+router.post('/:id/material-groups', auth, isAdmin, async (req, res) => {
+    try {
+        const { group_id } = req.body;
+        if (!group_id) return res.status(400).json({ message: 'group_id обязателен' });
+
+        const result = await pool.query(
+            `INSERT INTO system_component_material_groups (component_id, group_id)
+             VALUES ($1, $2)
+             ON CONFLICT DO NOTHING
+             RETURNING *`,
+            [req.params.id, group_id]
+        );
+        res.status(201).json(result.rows[0] || { message: 'Уже привязано' });
+    } catch (err) {
+        console.error('Ошибка привязки группы материалов к системному компоненту:', err);
+        res.status(500).json({ message: 'Ошибка привязки группы материалов' });
+    }
+});
+
+// DELETE /api/system-components/:id/material-groups/:linkId — Отвязать группу материалов
+router.delete('/:id/material-groups/:linkId', auth, isAdmin, async (req, res) => {
+    try {
+        await pool.query(
+            'DELETE FROM system_component_material_groups WHERE id = $1 AND component_id = $2',
+            [req.params.linkId, req.params.id]
+        );
+        res.json({ message: 'Группа материалов отвязана' });
+    } catch (err) {
+        console.error('Ошибка отвязки группы материалов:', err);
+        res.status(500).json({ message: 'Ошибка отвязки группы материалов' });
+    }
+});
+
 router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
     try {
         const wb = XLSX.read(req.file.buffer, { type:'buffer' });
@@ -316,6 +415,12 @@ router.post('/:id/duplicate', auth, isAdmin, async (req, res) => {
         await client.query(
             `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
              SELECT $1, material_id, quantity FROM system_component_materials WHERE system_component_id = $2`,
+            [newId, id]
+        );
+
+        await client.query(
+            `INSERT INTO system_component_material_groups (component_id, group_id)
+             SELECT $1, group_id FROM system_component_material_groups WHERE component_id = $2`,
             [newId, id]
         );
 

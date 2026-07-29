@@ -41,6 +41,26 @@ th[data-sort]:hover { background-color: #e0e0e0; }
     var allManufacturers = [];
     var allMaterialsList = [];
 
+    function ensureMaterialModal(cb) {
+        if (typeof MaterialModal !== 'undefined') return cb();
+        fetch('/components/material-modal.html')
+            .then(function(r) { return r.text(); })
+            .then(function(html) {
+                var div = document.createElement('div');
+                div.innerHTML = html;
+                Array.from(div.querySelectorAll('script')).forEach(function(s) {
+                    var newScript = document.createElement('script');
+                    newScript.textContent = s.textContent;
+                    document.body.appendChild(newScript);
+                });
+                cb();
+            })
+            .catch(function(err) {
+                console.error(err);
+                alert('Ошибка загрузки компонентов материалов');
+            });
+    }
+
     // Переключение вкладок
     document.querySelectorAll('.tab-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -227,9 +247,10 @@ th[data-sort]:hover { background-color: #e0e0e0; }
 
             container.querySelectorAll('.btn-edit').forEach(function(btn) {
                 btn.addEventListener('click', function() {
-                    if (typeof MaterialModal !== 'undefined') {
-                        MaterialModal.open(function(id) { if (id) loadMaterials(); }, this.dataset.id);
-                    } else { alert('Модальное окно не загружено'); }
+                    var matId = this.dataset.id;
+                    ensureMaterialModal(function() {
+                        MaterialModal.open(function(id) { if (id) loadMaterials(); }, matId);
+                    });
                 });
             });
 
@@ -248,6 +269,15 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             console.error(e);
         }
     }
+
+    // Обработчик кнопки "Добавить материал"
+    document.getElementById('addConsumableBtn').addEventListener('click', function() {
+        ensureMaterialModal(function() {
+            MaterialModal.open(function(id) {
+                if (id) loadMaterials();
+            });
+        });
+    });
 
     // ===== 2. ВКЛАДКА ГРУППЫ МАТЕРИАЛОВ =====
     window.loadMaterialGroups = async function() {
@@ -291,7 +321,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                 
                 if (b.block_templates && b.block_templates.length) {
                     b.block_templates.forEach(function(x) {
-                        bindingsHtml += '<span class="binding-tag">📦 Тип шкафа: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'block_template\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
+                        bindingsHtml += '<span class="binding-tag">📦 Компонент шкафа: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'block_template\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
                     });
                 }
                 if (b.system_component_types && b.system_component_types.length) {
@@ -322,7 +352,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                 if (isAdmin) {
                     html += '<td>' +
                         '<button class="btn btn-sm btn-primary" onclick="openAddMaterialToGroupModal(' + g.id + ')" title="Добавить материал из справочника к группе">+ Материал</button> ' +
-                        '<button class="btn btn-sm btn-secondary" onclick="openBindGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\')" title="Привязать группу к объекту">🔗 Привязать</button> ' +
+                        '<button class="btn btn-sm btn-secondary" onclick="openBindGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\')" title="Привязать группу к объекту">�� Привязать</button> ' +
                         '<button class="btn btn-sm btn-secondary" onclick="clearGroup(' + g.id + ')" title="Очистить группу от всех материалов">🧹 Очистить</button> ' +
                         '<button class="btn btn-sm btn-edit" onclick="openEditGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\',\'' + esc(g.description || '').replace(/'/g, "\\'") + '\')">✏️</button> ' +
                         '<button class="btn btn-sm btn-delete" onclick="deleteGroup(' + g.id + ')">🗑️</button>' +
@@ -515,7 +545,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             '<h3 style="margin-top:0;">Привязать группу «' + esc(groupName) + '»</h3>' +
             '<div class="form-group" style="margin-bottom:12px;"><label style="font-weight:bold;display:block;margin-bottom:4px;">Выберите тип объекта:</label>' +
             '<select id="bindTypeSel" class="form-control" style="width:100%;padding:8px;">' +
-            '<option value="block_template">Тип компонента шкафа</option>' +
+            '<option value="block_template">Компонент шкафа</option>' +
             '<option value="system_component_type">Тип компонента системы</option>' +
             '<option value="system_component">Компонент системы</option>' +
             '<option value="cabinet">Шкаф напрямую</option>' +

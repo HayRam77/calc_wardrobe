@@ -48,6 +48,9 @@ window.TypeModal = {
         // Материалы типа
         h += '<div class="form-group" style="margin-top:15px;border-top:1px solid #eee;padding-top:10px;"><label style="font-weight:bold;display:block;margin-bottom:5px;">Материалы типа (наследуются всеми компонентами этого типа):</label><div id="typeLinkedMaterials"><p style="color:#888;">'+(isEdit ? 'Загрузка...' : 'Сначала сохраните создаваемый тип')+'</p></div><button type="button" id="addTypeMaterialBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить материал</button></div>';
 
+        // Группы материалов типа
+        h += '<div class="form-group" style="margin-top:15px;border-top:1px solid #eee;padding-top:10px;"><label style="font-weight:bold;display:block;margin-bottom:5px;">Группы материалов типа (наследуются всеми компонентами этого типа):</label><div id="typeLinkedMaterialGroups"><p style="color:#888;">'+(isEdit ? 'Загрузка...' : 'Сначала сохраните создаваемый тип')+'</p></div><button type="button" id="addTypeMaterialGroupBtn" class="btn btn-sm btn-secondary" style="margin-top:5px;">+ добавить группу материалов</button></div>';
+
         h += '<div class="form-actions" style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary cancel-type-btn">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>';
 
         m.querySelector('#typeForm').innerHTML = h;
@@ -146,9 +149,52 @@ window.TypeModal = {
                 .catch(function(err){ console.error('Ошибка загрузки материалов типа:', err); });
         }
 
+        // Функция обновления привязанных групп материалов типа
+        function refreshTypeMaterialGroups() {
+            var mgc = m.querySelector('#typeLinkedMaterialGroups');
+            if (!currentTypeId) return;
+            fetch('/api/system-component-types/' + currentTypeId + '/material-groups?_=' + Date.now())
+                .then(function(r){ return r.json(); })
+                .then(function(groups){
+                    if (!groups || !groups.length) {
+                        mgc.innerHTML = '<p style="color:#888;">Нет привязанных групп материалов</p>';
+                    } else {
+                        var html = '';
+                        groups.forEach(function(g){
+                            html += '<div style="border:1px solid #e2e8f0;border-radius:6px;padding:8px;margin-bottom:8px;background:#fff;">';
+                            html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">';
+                            html += '<strong>📦 ' + self._esc(g.group_name || 'Группа') + '</strong>';
+                            html += '<button type="button" class="btn btn-sm btn-delete unbind-type-group-btn" data-link-id="' + g.link_id + '">✕</button>';
+                            html += '</div>';
+                            if (g.items && g.items.length) {
+                                html += '<table class="data-table" style="width:100%;font-size:12px;">';
+                                html += '<thead><tr><th>Материал</th><th>Артикул</th><th>Кол-во</th><th>Ед.</th></tr></thead><tbody>';
+                                g.items.forEach(function(it){
+                                    html += '<tr><td>' + self._esc(it.name || '') + '</td><td>' + self._esc(it.article || '-') + '</td><td>' + (it.quantity || 1) + '</td><td>' + self._esc(it.unit || '') + '</td></tr>';
+                                });
+                                html += '</tbody></table>';
+                            } else {
+                                html += '<div style="font-size:12px;color:#94a3b8;">Группа пуста</div>';
+                            }
+                            html += '</div>';
+                        });
+                        mgc.innerHTML = html;
+
+                        mgc.querySelectorAll('.unbind-type-group-btn').forEach(function(btn){
+                            btn.addEventListener('click', function(){
+                                fetch('/api/system-component-types/' + currentTypeId + '/material-groups/' + btn.dataset.linkId, { method: 'DELETE' })
+                                    .then(function(){ refreshTypeMaterialGroups(); });
+                            });
+                        });
+                    }
+                })
+                .catch(function(err){ console.error('Ошибка загрузки групп материалов типа:', err); });
+        }
+
         if (isEdit) {
             refreshTypeBlocks();
             refreshTypeMaterials();
+            refreshTypeMaterialGroups();
         }
 
         m.querySelector('#addTypeBlockBtn').addEventListener('click', function(){
@@ -187,6 +233,48 @@ window.TypeModal = {
             } else {
                 alert('Модальное окно выбора материалов недоступно');
             }
+        });
+
+        m.querySelector('#addTypeMaterialGroupBtn').addEventListener('click', function(){
+            if (!currentTypeId) { alert('Сначала сохраните основной заголовок типа'); return; }
+            fetch('/api/material-groups')
+                .then(function(r){ return r.json(); })
+                .then(function(groups){
+                    if (!groups || !groups.length) {
+                        alert('В системе нет созданных групп материалов');
+                        return;
+                    }
+                    var bindModal = document.createElement('div');
+                    bindModal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:7000;';
+                    var popHtml = '<div style="background:#fff;padding:20px;border-radius:8px;width:350px;">';
+                    popHtml += '<h4 style="margin-top:0;">Выберите группу материалов</h4>';
+                    popHtml += '<select id="selectTypeGroupToBind" class="form-control" style="width:100%;margin-bottom:15px;">';
+                    groups.forEach(function(g) {
+                        popHtml += '<option value="' + g.id + '">' + self._esc(g.name) + '</option>';
+                    });
+                    popHtml += '</select>';
+                    popHtml += '<div style="display:flex;justify-content:flex-end;gap:10px;">';
+                    popHtml += '<button type="button" class="btn btn-secondary cancel-bind-btn">Отмена</button>';
+                    popHtml += '<button type="button" class="btn btn-primary confirm-bind-btn">Привязать</button>';
+                    popHtml += '</div></div>';
+                    bindModal.innerHTML = popHtml;
+                    document.body.appendChild(bindModal);
+
+                    bindModal.querySelector('.cancel-bind-btn').onclick = function() { bindModal.remove(); };
+                    bindModal.querySelector('.confirm-bind-btn').onclick = function() {
+                        var groupId = bindModal.querySelector('#selectTypeGroupToBind').value;
+                        if (groupId) {
+                            fetch('/api/system-component-types/' + currentTypeId + '/material-groups', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ group_id: groupId })
+                            }).then(function(){
+                                bindModal.remove();
+                                refreshTypeMaterialGroups();
+                            });
+                        }
+                    };
+                });
         });
 
         // Сохранение

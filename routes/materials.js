@@ -3,11 +3,19 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const isAdmin = require('../middleware/isAdmin');
+const XLSX = require('xlsx');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 // GET /api/materials - Получить список всех материалов
 router.get('/', auth, async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM materials ORDER BY position ASC, id ASC');
+        const result = await pool.query(`
+            SELECT m.*, man.name as manufacturer_name 
+            FROM materials m
+            LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
+            ORDER BY m.position ASC, m.id ASC
+        `);
         res.json(result.rows);
     } catch (err) {
         console.error('Error fetching materials:', err);
@@ -32,6 +40,58 @@ router.put('/sort-order', auth, isAdmin, async (req, res) => {
     }
 });
 
+// GET /api/materials/export — Экспорт материалов в Excel
+router.get('/export', auth, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT m.id as ID, m.article as Артикул, m.name as Название, man.name as Производитель,
+             m.description as Описание, m.unit as Ед_изм, m.price as Цена,
+             m.ln as LN, m.tm as TM, m.manufacturer_url as Ссылка
+      FROM materials m
+      LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
+      ORDER BY m.position ASC, m.id ASC
+    `);
+    const ws = XLSX.utils.json_to_sheet(result.rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Материалы');
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=materials.xlsx');
+    res.send(buffer);
+  } catch (err) {
+    console.error('Ошибка экспорта материалов:', err);
+    res.status(500).json({ message: 'Ошибка экспорта' });
+  }
+});
+
+// POST /api/materials/import — Импорт материалов из Excel
+router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    let imported = 0;
+    for (const row of data) {
+      try {
+        let manId = null;
+        if (row['Производитель']) {
+          const manRes = await pool.query('SELECT id FROM manufacturers WHERE name = $1', [row['Производитель']]);
+          if (manRes.rows.length > 0) manId = manRes.rows[0].id;
+        }
+        await pool.query(
+          `INSERT INTO materials (article, name, manufacturer_id, description, unit, price, ln, tm, manufacturer_url)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [row['Артикул'] || null, row['Название'] || row['name'], manId, row['Описание'] || null, row['Ед_изм'] || row['unit'] || null, parseFloat(row['Цена']) || null, row['LN'] || null, row['TM'] || null, row['Ссылка'] || null]
+        );
+        imported++;
+      } catch (e) { console.error(e); }
+    }
+    res.json({ message: 'Импортировано ' + imported + ' записей' });
+  } catch (err) {
+    console.error('Ошибка импорта материалов:', err);
+    res.status(500).json({ message: 'Ошибка импорта' });
+  }
+});
+
 // GET /api/materials/cabinet/:id/items - Наследуемые материалы шкафа с цепочками связей
 router.get('/cabinet/:id/items', auth, async (req, res) => {
     const cabinetId = req.params.id;
@@ -39,42 +99,44 @@ router.get('/cabinet/:id/items', auth, async (req, res) => {
         const query = `
             -- 1. Прямые материалы шкафа
             SELECT 
-                cm.id as link_id,
+                pm.id as link_id,
                 m.id as material_id,
-                m.name,
-                m.unit,
+                m.name::text as name,
+                m.unit::text as unit,
                 m.price,
-                m.ln,
-                m.tm,
-                cm.quantity,
+                m.ln::text as ln,
+                m.tm::text as tm,
+                COALESCE(pm.quantity, 1)::numeric as quantity,
                 FALSE as is_component_material,
-                NULL as system_name,
-                NULL as component_name,
-                NULL as chain_block_template,
-                NULL as chain_system_component,
-                NULL as chain_type
-            FROM cabinet_materials cm
-            JOIN materials m ON m.id = cm.material_id
-            WHERE cm.cabinet_id = $1
+                NULL::text as system_name,
+                NULL::text as component_name,
+                NULL::text as chain_block_template,
+                NULL::text as chain_system_component,
+                NULL::text as chain_type,
+                NULL::text as group_name
+            FROM project_materials pm
+            JOIN materials m ON m.id = pm.material_id
+            WHERE pm.cabinet_id = $1
 
             UNION ALL
 
             -- 2. Материалы из прямых групп шкафа
             SELECT 
-                cmg.id as link_id,
+                cmg.group_id as link_id,
                 m.id as material_id,
-                m.name,
-                m.unit,
+                m.name::text as name,
+                m.unit::text as unit,
                 m.price,
-                m.ln,
-                m.tm,
-                (mgi.quantity * cmg.quantity) as quantity,
+                m.ln::text as ln,
+                m.tm::text as tm,
+                COALESCE(mgi.quantity, 1)::numeric as quantity,
                 TRUE as is_component_material,
-                NULL as system_name,
-                NULL as component_name,
-                'Группа материалов' as chain_block_template,
-                mg.name as chain_system_component,
-                NULL as chain_type
+                NULL::text as system_name,
+                NULL::text as component_name,
+                NULL::text as chain_block_template,
+                mg.name::text as chain_system_component,
+                NULL::text as chain_type,
+                mg.name::text as group_name
             FROM cabinet_material_groups cmg
             JOIN material_groups mg ON mg.id = cmg.group_id
             JOIN material_group_items mgi ON mgi.group_id = cmg.group_id
@@ -87,24 +149,25 @@ router.get('/cabinet/:id/items', auth, async (req, res) => {
             SELECT 
                 scm.id as link_id,
                 m.id as material_id,
-                m.name,
-                m.unit,
+                m.name::text as name,
+                m.unit::text as unit,
                 m.price,
-                m.ln,
-                m.tm,
-                (scm.quantity * sc_link.quantity) as quantity,
+                m.ln::text as ln,
+                m.tm::text as tm,
+                COALESCE(scm.quantity, 1)::numeric as quantity,
                 TRUE as is_component_material,
-                s.name as system_name,
-                sc.name as component_name,
-                NULL as chain_block_template,
-                sc.name as chain_system_component,
-                sct.name as chain_type
+                s.name::text as system_name,
+                sc.name::text as component_name,
+                NULL::text as chain_block_template,
+                sc.name::text as chain_system_component,
+                sct.name::text as chain_type,
+                NULL::text as group_name
             FROM cabinet_systems cs
-            JOIN system_block_links sc_link ON sc_link.system_id = cs.system_id
-            JOIN system_components sc ON sc.id = sc_link.component_id
-            JOIN system_component_materials scm ON scm.component_id = sc.id
-            JOIN materials m ON m.id = scm.material_id
             JOIN systems s ON s.id = cs.system_id
+            JOIN system_components_link scl ON scl.system_id = s.id
+            JOIN system_components sc ON sc.id = scl.component_id
+            JOIN system_component_materials scm ON scm.system_component_id = sc.id
+            JOIN materials m ON m.id = scm.material_id
             LEFT JOIN system_component_types sct ON sct.id = sc.type_id
             WHERE cs.cabinet_id = $1
 
@@ -112,27 +175,29 @@ router.get('/cabinet/:id/items', auth, async (req, res) => {
 
             -- 4. Материалы из групп компонентов систем шкафа
             SELECT 
-                scmg.id as link_id,
+                scmg.group_id as link_id,
                 m.id as material_id,
-                m.name,
-                m.unit,
+                m.name::text as name,
+                m.unit::text as unit,
                 m.price,
-                m.ln,
-                m.tm,
-                (mgi.quantity * scmg.quantity * sc_link.quantity) as quantity,
+                m.ln::text as ln,
+                m.tm::text as tm,
+                COALESCE(mgi.quantity, 1)::numeric as quantity,
                 TRUE as is_component_material,
-                s.name as system_name,
-                sc.name as component_name,
-                NULL as chain_block_template,
-                sc.name as chain_system_component,
-                sct.name as chain_type
+                s.name::text as system_name,
+                sc.name::text as component_name,
+                NULL::text as chain_block_template,
+                sc.name::text as chain_system_component,
+                sct.name::text as chain_type,
+                mg.name::text as group_name
             FROM cabinet_systems cs
-            JOIN system_block_links sc_link ON sc_link.system_id = cs.system_id
-            JOIN system_components sc ON sc.id = sc_link.component_id
+            JOIN systems s ON s.id = cs.system_id
+            JOIN system_components_link scl ON scl.system_id = s.id
+            JOIN system_components sc ON sc.id = scl.component_id
             JOIN system_component_material_groups scmg ON scmg.component_id = sc.id
+            JOIN material_groups mg ON mg.id = scmg.group_id
             JOIN material_group_items mgi ON mgi.group_id = scmg.group_id
             JOIN materials m ON m.id = mgi.material_id
-            JOIN systems s ON s.id = cs.system_id
             LEFT JOIN system_component_types sct ON sct.id = sc.type_id
             WHERE cs.cabinet_id = $1
 
@@ -142,53 +207,56 @@ router.get('/cabinet/:id/items', auth, async (req, res) => {
             SELECT 
                 sctm.id as link_id,
                 m.id as material_id,
-                m.name,
-                m.unit,
+                m.name::text as name,
+                m.unit::text as unit,
                 m.price,
-                m.ln,
-                m.tm,
-                (sctm.quantity * sc_link.quantity) as quantity,
+                m.ln::text as ln,
+                m.tm::text as tm,
+                COALESCE(sctm.quantity, 1)::numeric as quantity,
                 TRUE as is_component_material,
-                s.name as system_name,
-                sc.name as component_name,
-                NULL as chain_block_template,
-                sc.name as chain_system_component,
-                sct.name as chain_type
+                s.name::text as system_name,
+                sc.name::text as component_name,
+                NULL::text as chain_block_template,
+                sc.name::text as chain_system_component,
+                sct.name::text as chain_type,
+                NULL::text as group_name
             FROM cabinet_systems cs
-            JOIN system_block_links sc_link ON sc_link.system_id = cs.system_id
-            JOIN system_components sc ON sc.id = sc_link.component_id
+            JOIN systems s ON s.id = cs.system_id
+            JOIN system_components_link scl ON scl.system_id = s.id
+            JOIN system_components sc ON sc.id = scl.component_id
             JOIN system_component_types sct ON sct.id = sc.type_id
             JOIN system_component_type_materials sctm ON sctm.type_id = sct.id
             JOIN materials m ON m.id = sctm.material_id
-            JOIN systems s ON s.id = cs.system_id
             WHERE cs.cabinet_id = $1
 
             UNION ALL
 
             -- 6. Материалы из групп типов компонентов систем
             SELECT 
-                sctmg.id as link_id,
+                sctmg.group_id as link_id,
                 m.id as material_id,
-                m.name,
-                m.unit,
+                m.name::text as name,
+                m.unit::text as unit,
                 m.price,
-                m.ln,
-                m.tm,
-                (mgi.quantity * sctmg.quantity * sc_link.quantity) as quantity,
+                m.ln::text as ln,
+                m.tm::text as tm,
+                COALESCE(mgi.quantity, 1)::numeric as quantity,
                 TRUE as is_component_material,
-                s.name as system_name,
-                sc.name as component_name,
-                NULL as chain_block_template,
-                sc.name as chain_system_component,
-                sct.name as chain_type
+                s.name::text as system_name,
+                sc.name::text as component_name,
+                NULL::text as chain_block_template,
+                sc.name::text as chain_system_component,
+                sct.name::text as chain_type,
+                mg.name::text as group_name
             FROM cabinet_systems cs
-            JOIN system_block_links sc_link ON sc_link.system_id = cs.system_id
-            JOIN system_components sc ON sc.id = sc_link.component_id
+            JOIN systems s ON s.id = cs.system_id
+            JOIN system_components_link scl ON scl.system_id = s.id
+            JOIN system_components sc ON sc.id = scl.component_id
             JOIN system_component_types sct ON sct.id = sc.type_id
             JOIN system_component_type_material_groups sctmg ON sctmg.type_id = sct.id
+            JOIN material_groups mg ON mg.id = sctmg.group_id
             JOIN material_group_items mgi ON mgi.group_id = sctmg.group_id
             JOIN materials m ON m.id = mgi.material_id
-            JOIN systems s ON s.id = cs.system_id
             WHERE cs.cabinet_id = $1
 
             UNION ALL
@@ -197,48 +265,51 @@ router.get('/cabinet/:id/items', auth, async (req, res) => {
             SELECT 
                 btm.id as link_id,
                 m.id as material_id,
-                m.name,
-                m.unit,
+                m.name::text as name,
+                m.unit::text as unit,
                 m.price,
-                m.ln,
-                m.tm,
-                (btm.quantity * cb.quantity) as quantity,
+                m.ln::text as ln,
+                m.tm::text as tm,
+                (COALESCE(btm.quantity, 1) * COALESCE(pb.quantity, 1))::numeric as quantity,
                 TRUE as is_component_material,
-                NULL as system_name,
-                NULL as component_name,
-                bt.name as chain_block_template,
-                NULL as chain_system_component,
-                NULL as chain_type
-            FROM cabinet_blocks cb
-            JOIN block_template_materials btm ON btm.block_template_id = cb.block_template_id
+                NULL::text as system_name,
+                NULL::text as component_name,
+                bt.name::text as chain_block_template,
+                NULL::text as chain_system_component,
+                NULL::text as chain_type,
+                NULL::text as group_name
+            FROM project_blocks pb
+            JOIN block_templates bt ON bt.id = pb.template_id
+            JOIN block_template_materials btm ON btm.block_template_id = bt.id
             JOIN materials m ON m.id = btm.material_id
-            JOIN block_templates bt ON bt.id = cb.block_template_id
-            WHERE cb.cabinet_id = $1
+            WHERE pb.cabinet_id = $1
 
             UNION ALL
 
             -- 8. Материалы из групп типов блоков шкафа
             SELECT 
-                bmg.id as link_id,
+                bmg.group_id as link_id,
                 m.id as material_id,
-                m.name,
-                m.unit,
+                m.name::text as name,
+                m.unit::text as unit,
                 m.price,
-                m.ln,
-                m.tm,
-                (mgi.quantity * bmg.quantity * cb.quantity) as quantity,
+                m.ln::text as ln,
+                m.tm::text as tm,
+                (COALESCE(mgi.quantity, 1) * COALESCE(pb.quantity, 1))::numeric as quantity,
                 TRUE as is_component_material,
-                NULL as system_name,
-                NULL as component_name,
-                bt.name as chain_block_template,
-                NULL as chain_system_component,
-                NULL as chain_type
-            FROM cabinet_blocks cb
-            JOIN block_template_material_groups bmg ON bmg.block_template_id = cb.block_template_id
+                NULL::text as system_name,
+                NULL::text as component_name,
+                bt.name::text as chain_block_template,
+                NULL::text as chain_system_component,
+                NULL::text as chain_type,
+                mg.name::text as group_name
+            FROM project_blocks pb
+            JOIN block_templates bt ON bt.id = pb.template_id
+            JOIN block_template_material_groups bmg ON bmg.block_template_id = bt.id
+            JOIN material_groups mg ON mg.id = bmg.group_id
             JOIN material_group_items mgi ON mgi.group_id = bmg.group_id
             JOIN materials m ON m.id = mgi.material_id
-            JOIN block_templates bt ON bt.id = cb.block_template_id
-            WHERE cb.cabinet_id = $1;
+            WHERE pb.cabinet_id = $1;
         `;
         const result = await pool.query(query, [cabinetId]);
         res.json(result.rows);
@@ -264,21 +335,21 @@ router.get('/cabinet/:id/html', auth, async (req, res) => {
                 SUM(q.quantity * COALESCE(NULLIF(regexp_replace(m.ln, '[^0-9.]', '', 'g'), '')::numeric, 0)) as total_ln,
                 SUM(q.quantity * COALESCE(NULLIF(regexp_replace(m.tm, '[^0-9.]', '', 'g'), '')::numeric, 0)) as total_tm
             FROM (
-                SELECT material_id, quantity FROM cabinet_materials WHERE cabinet_id = $1
+                SELECT material_id, COALESCE(quantity, 1)::numeric as quantity FROM project_materials WHERE cabinet_id = $1
                 UNION ALL
-                SELECT mgi.material_id, (mgi.quantity * cmg.quantity) FROM cabinet_material_groups cmg JOIN material_group_items mgi ON mgi.group_id = cmg.group_id WHERE cmg.cabinet_id = $1
+                SELECT mgi.material_id, COALESCE(mgi.quantity, 1)::numeric as quantity FROM cabinet_material_groups cmg JOIN material_group_items mgi ON mgi.group_id = cmg.group_id WHERE cmg.cabinet_id = $1
                 UNION ALL
-                SELECT scm.material_id, (scm.quantity * sc_link.quantity) FROM cabinet_systems cs JOIN system_block_links sc_link ON sc_link.system_id = cs.system_id JOIN system_component_materials scm ON scm.component_id = sc_link.component_id WHERE cs.cabinet_id = $1
+                SELECT scm.material_id, COALESCE(scm.quantity, 1)::numeric as quantity FROM cabinet_systems cs JOIN systems s ON s.id = cs.system_id JOIN system_components_link scl ON scl.system_id = s.id JOIN system_component_materials scm ON scm.system_component_id = scl.component_id WHERE cs.cabinet_id = $1
                 UNION ALL
-                SELECT mgi.material_id, (mgi.quantity * scmg.quantity * sc_link.quantity) FROM cabinet_systems cs JOIN system_block_links sc_link ON sc_link.system_id = cs.system_id JOIN system_component_material_groups scmg ON scmg.component_id = sc_link.component_id JOIN material_group_items mgi ON mgi.group_id = scmg.group_id WHERE cs.cabinet_id = $1
+                SELECT mgi.material_id, COALESCE(mgi.quantity, 1)::numeric as quantity FROM cabinet_systems cs JOIN systems s ON s.id = cs.system_id JOIN system_components_link scl ON scl.system_id = s.id JOIN system_component_material_groups scmg ON scmg.component_id = scl.component_id JOIN material_group_items mgi ON mgi.group_id = scmg.group_id WHERE cs.cabinet_id = $1
                 UNION ALL
-                SELECT sctm.material_id, (sctm.quantity * sc_link.quantity) FROM cabinet_systems cs JOIN system_block_links sc_link ON sc_link.system_id = cs.system_id JOIN system_components sc ON sc.id = sc_link.component_id JOIN system_component_type_materials sctm ON sctm.type_id = sc.type_id WHERE cs.cabinet_id = $1
+                SELECT sctm.material_id, COALESCE(sctm.quantity, 1)::numeric as quantity FROM cabinet_systems cs JOIN systems s ON s.id = cs.system_id JOIN system_components_link scl ON scl.system_id = s.id JOIN system_components sc ON sc.id = scl.component_id JOIN system_component_type_materials sctm ON sctm.type_id = sc.type_id WHERE cs.cabinet_id = $1
                 UNION ALL
-                SELECT mgi.material_id, (mgi.quantity * sctmg.quantity * sc_link.quantity) FROM cabinet_systems cs JOIN system_block_links sc_link ON sc_link.system_id = cs.system_id JOIN system_components sc ON sc.id = sc_link.component_id JOIN system_component_type_material_groups sctmg ON sctmg.type_id = sc.type_id JOIN material_group_items mgi ON mgi.group_id = sctmg.group_id WHERE cs.cabinet_id = $1
+                SELECT mgi.material_id, COALESCE(mgi.quantity, 1)::numeric as quantity FROM cabinet_systems cs JOIN systems s ON s.id = cs.system_id JOIN system_components_link scl ON scl.system_id = s.id JOIN system_components sc ON sc.id = scl.component_id JOIN system_component_type_material_groups sctmg ON sctmg.type_id = sc.type_id JOIN material_group_items mgi ON mgi.group_id = sctmg.group_id WHERE cs.cabinet_id = $1
                 UNION ALL
-                SELECT btm.material_id, (btm.quantity * cb.quantity) FROM cabinet_blocks cb JOIN block_template_materials btm ON btm.block_template_id = cb.block_template_id WHERE cb.cabinet_id = $1
+                SELECT btm.material_id, (COALESCE(btm.quantity, 1) * COALESCE(pb.quantity, 1))::numeric as quantity FROM project_blocks pb JOIN block_template_materials btm ON btm.block_template_id = pb.template_id WHERE pb.cabinet_id = $1
                 UNION ALL
-                SELECT mgi.material_id, (mgi.quantity * bmg.quantity * cb.quantity) FROM cabinet_blocks cb JOIN block_template_material_groups bmg ON bmg.block_template_id = cb.block_template_id JOIN material_group_items mgi ON mgi.group_id = bmg.group_id WHERE cb.cabinet_id = $1
+                SELECT mgi.material_id, (COALESCE(mgi.quantity, 1) * COALESCE(pb.quantity, 1))::numeric as quantity FROM project_blocks pb JOIN block_template_material_groups bmg ON bmg.block_template_id = pb.template_id JOIN material_group_items mgi ON mgi.group_id = bmg.group_id WHERE pb.cabinet_id = $1
             ) q
             JOIN materials m ON m.id = q.material_id
             GROUP BY m.id, m.name, m.unit, m.price, m.ln, m.tm
@@ -306,14 +377,16 @@ router.get('/cabinet/:id/html', auth, async (req, res) => {
     }
 });
 
-// POST /api/materials/cabinet/:id
+// POST /api/materials/cabinet/:id - Добавить материал в шкаф
 router.post('/cabinet/:id', auth, isAdmin, async (req, res) => {
     const cabinetId = req.params.id;
     const { material_id, quantity } = req.body;
     try {
+        const cabRes = await pool.query('SELECT project_id FROM cabinets WHERE id = $1', [cabinetId]);
+        const projectId = cabRes.rows[0]?.project_id || null;
         const result = await pool.query(
-            'INSERT INTO cabinet_materials (cabinet_id, material_id, quantity) VALUES ($1, $2, $3) RETURNING *',
-            [cabinetId, material_id, quantity || 1]
+            'INSERT INTO project_materials (cabinet_id, project_id, material_id, quantity) VALUES ($1, $2, $3, $4) RETURNING *',
+            [cabinetId, projectId, material_id, quantity || 1]
         );
         res.status(201).json(result.rows[0]);
     } catch (err) {
@@ -322,13 +395,13 @@ router.post('/cabinet/:id', auth, isAdmin, async (req, res) => {
     }
 });
 
-// PUT /api/materials/cabinet/:id/:linkId
+// PUT /api/materials/cabinet/:id/:linkId - Обновить количество
 router.put('/cabinet/:id/:linkId', auth, isAdmin, async (req, res) => {
     const { linkId } = req.params;
     const { quantity } = req.body;
     try {
         const result = await pool.query(
-            'UPDATE cabinet_materials SET quantity = $1 WHERE id = $2 RETURNING *',
+            'UPDATE project_materials SET quantity = $1 WHERE id = $2 RETURNING *',
             [quantity, linkId]
         );
         res.json(result.rows[0]);
@@ -338,15 +411,185 @@ router.put('/cabinet/:id/:linkId', auth, isAdmin, async (req, res) => {
     }
 });
 
-// DELETE /api/materials/cabinet/:id/:linkId
+// DELETE /api/materials/cabinet/:id/:linkId - Удалить из шкафа
 router.delete('/cabinet/:id/:linkId', auth, isAdmin, async (req, res) => {
     const { linkId } = req.params;
     try {
-        await pool.query('DELETE FROM cabinet_materials WHERE id = $1', [linkId]);
+        await pool.query('DELETE FROM project_materials WHERE id = $1', [linkId]);
         res.json({ message: 'Материал удалён из шкафа' });
     } catch (err) {
         console.error('Error deleting cabinet material:', err);
         res.status(500).json({ message: 'Ошибка сервера' });
+    }
+});
+
+// ========== МАТЕРИАЛЫ СИСТЕМНОГО КОМПОНЕНТА ==========
+
+// GET /api/materials/system-component/:id - Получить материалы системного компонента
+router.get('/system-component/:id', auth, async (req, res) => {
+    try {
+        const direct = await pool.query(
+            `SELECT scm.*, m.name, m.article, m.unit, m.price,
+                    COALESCE(m.ln, '') AS ln, COALESCE(m.tm, '') AS tm,
+                    false as inherited
+             FROM system_component_materials scm
+             JOIN materials m ON scm.material_id = m.id
+             WHERE scm.system_component_id = $1
+             ORDER BY m.name`,
+            [req.params.id]
+        );
+
+        const inherited = await pool.query(
+            `SELECT sctm.material_id, sctm.quantity, m.name, m.article, m.unit, m.price,
+                    COALESCE(m.ln, '') AS ln, COALESCE(m.tm, '') AS tm,
+                    true as inherited
+             FROM system_components sc
+             JOIN system_component_type_materials sctm ON sc.type_id = sctm.type_id
+             JOIN materials m ON sctm.material_id = m.id
+             WHERE sc.id = $1
+             AND NOT EXISTS (
+               SELECT 1 FROM system_component_materials scm2
+               WHERE scm2.system_component_id = sc.id AND scm2.material_id = sctm.material_id
+             )
+             ORDER BY m.name`,
+            [req.params.id]
+        );
+
+        res.json([...direct.rows, ...inherited.rows]);
+    } catch (err) {
+        console.error('Error fetching system component materials:', err);
+        res.status(500).json({ message: 'Ошибка получения материалов компонента' });
+    }
+});
+
+// POST /api/materials/system-component/:id - Добавить материал в системный компонент
+router.post('/system-component/:id', auth, isAdmin, async (req, res) => {
+    const { material_id, quantity } = req.body;
+    try {
+        const result = await pool.query(
+            `INSERT INTO system_component_materials (system_component_id, material_id, quantity)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (system_component_id, material_id) DO UPDATE SET quantity = EXCLUDED.quantity
+             RETURNING *`,
+            [req.params.id, material_id, quantity || 1]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error adding material to system component:', err);
+        res.status(500).json({ message: 'Ошибка добавления материала' });
+    }
+});
+
+// DELETE /api/materials/system-component/:id/:materialId - Удалить материал из системного компонента
+router.delete('/system-component/:id/:materialId', auth, isAdmin, async (req, res) => {
+    try {
+        await pool.query(
+            `DELETE FROM system_component_materials WHERE system_component_id = $1 AND material_id = $2`,
+            [req.params.id, req.params.materialId]
+        );
+        res.json({ message: 'Материал удалён из компонента' });
+    } catch (err) {
+        console.error('Error deleting material from system component:', err);
+        res.status(500).json({ message: 'Ошибка удаления материала' });
+    }
+});
+
+// ========== ОПЕРАЦИИ СО СПРАВОЧНИКОМ МАТЕРИАЛОВ (CRUD) ==========
+
+// GET /api/materials/:id - Один материал
+router.get('/:id', auth, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT m.*, man.name as manufacturer_name 
+             FROM materials m
+             LEFT JOIN manufacturers man ON m.manufacturer_id = man.id
+             WHERE m.id = $1`,
+            [req.params.id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Материал не найден' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error fetching material by ID:', err);
+        res.status(500).json({ message: 'Ошибка сервера' });
+    }
+});
+
+// POST /api/materials - Создать новый материал
+router.post('/', auth, isAdmin, async (req, res) => {
+    const { article, name, manufacturer_id, description, unit, price, manufacturer_url, ln, tm } = req.body;
+    if (!name || !name.trim()) {
+        return res.status(400).json({ message: 'Название материала обязательно' });
+    }
+    try {
+        const posResult = await pool.query('SELECT COALESCE(MAX(position), 0) + 1 as next_pos FROM materials');
+        const nextPos = posResult.rows[0].next_pos;
+
+        const result = await pool.query(
+            `INSERT INTO materials (article, name, manufacturer_id, description, unit, price, manufacturer_url, ln, tm, position)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+            [
+                article ? article.trim() : null,
+                name.trim(),
+                manufacturer_id || null,
+                description ? description.trim() : null,
+                unit ? unit.trim() : null,
+                price !== undefined && price !== null && price !== '' ? parseFloat(price) : null,
+                manufacturer_url ? manufacturer_url.trim() : null,
+                ln ? ln.trim() : null,
+                tm ? tm.trim() : null,
+                nextPos
+            ]
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error creating material:', err);
+        res.status(500).json({ message: 'Ошибка создания материала' });
+    }
+});
+
+// PUT /api/materials/:id - Обновить материал
+router.put('/:id', auth, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { article, name, manufacturer_id, description, unit, price, manufacturer_url, ln, tm } = req.body;
+    if (!name || !name.trim()) {
+        return res.status(400).json({ message: 'Название материала обязательно' });
+    }
+    try {
+        const result = await pool.query(
+            `UPDATE materials 
+             SET article = $1, name = $2, manufacturer_id = $3, description = $4, unit = $5,
+                 price = $6, manufacturer_url = $7, ln = $8, tm = $9, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $10 RETURNING *`,
+            [
+                article ? article.trim() : null,
+                name.trim(),
+                manufacturer_id || null,
+                description ? description.trim() : null,
+                unit ? unit.trim() : null,
+                price !== undefined && price !== null && price !== '' ? parseFloat(price) : null,
+                manufacturer_url ? manufacturer_url.trim() : null,
+                ln ? ln.trim() : null,
+                tm ? tm.trim() : null,
+                id
+            ]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Материал не найден' });
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('Error updating material:', err);
+        res.status(500).json({ message: 'Ошибка обновления материала' });
+    }
+});
+
+// DELETE /api/materials/:id - Удалить материал из справочника
+router.delete('/:id', auth, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        await pool.query('DELETE FROM materials WHERE id = $1', [id]);
+        res.json({ message: 'Материал удалён' });
+    } catch (err) {
+        console.error('Error deleting material:', err);
+        res.status(500).json({ message: 'Ошибка удаления материала' });
     }
 });
 
