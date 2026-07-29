@@ -55,7 +55,8 @@
      var html = "";
      for (var i = 0; i < data.length; i++) {
        var item = data[i];
-       html += "<tr draggable=\"false\" data-id=\""+item.id+"\"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+esc(item.type_name||"")+"</td><td>"+esc(item.name)+"</td><td>"+esc(item.manufacturer_name||"")+"</td><td>"+esc(item.article||"")+"</td><td>"+(item.price||"")+"</td><td>"+(item.weight_grams||"")+"</td><td>"+(item.power_watts||"")+"</td><td>"+esc(item.ln||"")+"</td><td>"+(item.tm||"")+"</td><td>"+(item.url?"<a href=\""+esc(item.url)+"\" target=_blank>\uD83D\uDD17</a>":"")+"</td>";
+       var nameHtml = item.has_bindings ? '<strong>' + esc(item.name) + '</strong>' : esc(item.name);
+       html += "<tr draggable=\"false\" data-id=\""+item.id+"\"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+esc(item.type_name||"")+"</td><td>"+nameHtml+"</td><td>"+esc(item.manufacturer_name||"")+"</td><td>"+esc(item.article||"")+"</td><td>"+(item.price||"")+"</td><td>"+(item.weight_grams||"")+"</td><td>"+(item.power_watts||"")+"</td><td>"+esc(item.ln||"")+"</td><td>"+(item.tm||"")+"</td><td>"+(item.url?"<a href=\""+esc(item.url)+"\" target=_blank>\uD83D\uDD17</a>":"")+"</td>";
        if(isAdmin) html += "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editTemplate("+item.id+")\">\u270F\uFE0F</button> <button class=\"btn btn-sm btn-delete\" onclick=\"deleteTemplate("+item.id+")\">\uD83D\uDDD1\uFE0F</button></td>";
        html += "</tr>";
      }

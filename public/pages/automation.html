@@ -634,10 +634,12 @@
 
                     comps.forEach(function(c){
                         var linkId = c.link_id || c.id;
+                        var isBound = c.has_bindings === true || c.has_materials || c.has_blocks || c.has_groups || c.has_params;
+                        var nameHtml = isBound ? '<strong>' + esc(c.name) + '</strong>' : esc(c.name);
                         h += '<tr data-id="' + linkId + '">' +
                             '<td class="drag-handle" style="cursor:grab;">⠿</td>' +
                             '<td>' + c.id + '</td>' +
-                            '<td><strong>' + esc(c.name) + '</strong></td>' +
+                            '<td>' + nameHtml + '</td>' +
                             '<td>' + esc(c.type_name || '-') + '</td>' +
                             '<td>' + esc(c.module_name || '-') + '</td>' +
                             '<td>' + (c.quantity || 1) + '</td>' +

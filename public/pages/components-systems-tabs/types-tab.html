@@ -63,9 +63,10 @@
   el.innerHTML = 'Загрузка...'; el.style.display = 'block'; moveTypeTooltip(e);
   Promise.all([
     fetch('/api/system-component-types/' + typeId + '/blocks').then(function(r){ return r.json(); }),
-    fetch('/api/system-component-types/' + typeId + '/materials').then(function(r){ return r.json(); })
+    fetch('/api/system-component-types/' + typeId + '/materials').then(function(r){ return r.json(); }),
+    fetch('/api/system-component-types/' + typeId + '/material-groups').then(function(r){ return r.json(); })
   ]).then(function(results) {
-    var blocks = results[0] || [], materials = results[1] || [];
+    var blocks = results[0] || [], materials = results[1] || [], groups = results[2] || [];
     var html = '<div style="font-weight:bold;margin-bottom:5px;">Компоненты шкафа типа:</div>';
     if (blocks.length) {
       html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Тип</th><th>Название</th><th>LN</th><th>TM</th><th>Кол-во</th></tr>';
@@ -78,6 +79,12 @@
       materials.forEach(function(m){ html += '<tr><td>'+esc(m.name)+'</td><td>'+esc(m.unit || '')+'</td><td>'+esc(m.ln || '')+'</td><td>'+esc(m.tm || '')+'</td><td>'+m.quantity+'</td></tr>'; });
       html += '</table>';
     } else { html += '<p style="color:#888;">Нет материалов</p>'; }
+    html += '<div style="font-weight:bold;margin:10px 0 5px;">Группы материалов типа:</div>';
+    if (groups.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Группа</th></tr>';
+      groups.forEach(function(g){ html += '<tr><td>📦 '+esc(g.group_name || g.name)+'</td></tr>'; });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет групп материалов</p>'; }
     typeTooltipCache[typeId] = html; el.innerHTML = html; moveTypeTooltip(e);
   }).catch(function(err) { el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; });
  }
@@ -102,7 +109,7 @@
      var html = "";
      for (var i = 0; i < data.length; i++) {
        var item = data[i];
-       var hasLinks = item.has_blocks || item.has_materials;
+       var hasLinks = item.has_bindings === true || item.has_blocks || item.has_materials || item.has_groups;
        var nameHtml = hasLinks ? '<span class="type-name-link" style="cursor:pointer;text-decoration:underline;"><strong>' + esc(item.name) + '</strong></span>' : esc(item.name);
 
        html += "<tr draggable=\"false\" data-id=\""+item.id+"\""+(hasLinks ? ' data-has-links="1"' : '')+"><td class=\"drag-handle\" style=\"cursor:grab;width:1%;\">\u282F</td><td>"+item.id+"</td><td>"+nameHtml+"</td><td>"+esc(item.description||"")+"</td>";

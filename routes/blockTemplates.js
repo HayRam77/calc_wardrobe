@@ -13,7 +13,11 @@ router.get('/', auth, async (req, res) => {
     const result = await pool.query(`
       SELECT bt.*, ct.name as type_name, m.name as manufacturer_name,
              COALESCE(bt.ln, '') AS ln,
-             COALESCE(bt.tm, '') AS tm
+             COALESCE(bt.tm, '') AS tm,
+             (
+               EXISTS(SELECT 1 FROM block_template_materials WHERE block_template_id = bt.id) OR
+               EXISTS(SELECT 1 FROM block_template_material_groups WHERE block_template_id = bt.id)
+             ) as has_bindings
       FROM block_templates bt
       LEFT JOIN component_types ct ON bt.type_id = ct.id
       LEFT JOIN manufacturers m ON bt.manufacturer_id = m.id

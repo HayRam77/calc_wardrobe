@@ -44,8 +44,7 @@ pm2 logs calc-wardrobe --lines 15 --nostream    # Просмотр логов
 node -c /opt/calc_wardrobe/routes/файл.js       # Проверка синтаксиса JS
 git checkout -- файл                            # Откатить изменения файла из Git
 psql -U hrroot -h localhost -d bd_calc -c "SQL"  # Запрос к БД
-
-СТРУКТУРА ПРОЕКТА
+📂 СТРУКТУРА ПРОЕКТА
 Бэкенд (Node.js / Express)
 server.js — Главный сервер (подключает CORS, парсеры 50MB, роутеры /api/*, SPA fallback index.html)
 config/db.js — Пул соединений PostgreSQL (pg.Pool)
@@ -60,16 +59,16 @@ auth.js — Авторизация (POST /login, /register)
 admin.js — Управление пользователями, дамп БД, оптимизация
 projects.js — CRUD проектов
 cabinets.js — CRUD шкафов, привязка систем, компонентов и групп материалов
-blockTemplates.js — CRUD компонентов шкафа (шаблонов блоков), привязка материалов и групп материалов
+blockTemplates.js — CRUD компонентов шкафа, привязка материалов и групп материалов
 systems.js — CRUD систем автоматизации, копирование систем
 systemComponents.js — CRUD системных компонентов, привязанные блоки, материалы и группы материалов
 systemComponentTypes.js — CRUD типов системных компонентов, привязанные материалы и группы материалов
+componentTypes.js — CRUD типов компонентов шкафа, привязка материалов и групп материалов (component_type_materials, component_type_material_groups)
 systemModules.js — CRUD модулей систем
 systemParameters.js / systemParameterTypes.js — Справочники параметров
-componentTypes.js — CRUD типов компонентов шкафа
 parameters.js — CRUD общих параметров
-materialGroups.js — CRUD групп материалов, привязка/отвязка к 4 типам объектов (/bind)
-materials.js — CRUD материалов, 8-UNION SQL калькуляция с учётом наследования из Групп материалов
+materialGroups.js — CRUD групп материалов, привязка/отвязка к 5 типам объектов (/bind)
+materials.js — CRUD материалов, 10-UNION SQL калькуляция с учётом полного древовидного наследования
 manufacturers.js — CRUD производителей
 table-sort.js — Сохранение и загрузка сортировки/фильтров таблиц (user_table_sort)
 Фронтенд (SPA / Vanilla JS)
@@ -77,32 +76,35 @@ public/index.html — Главный каркас SPA приложения
 public/pages/
 home.html — Список проектов
 project.html — Карточка проекта
-cabinet.html — Конфигуратор шкафа (системы, компоненты систем, компоненты шкафа, материалы, калькуляция, расценки, экспорт PDF)
+cabinet.html — Конфигуратор шкафа (системы, компоненты систем, компоненты шкафа, материалы, калькуляция, расценки, столбец «Компонент шкафа», экспорт PDF)
 automation.html — Системы автоматизации
 consumables.html — Двухвкладочный интерфейс («Материалы» и «Группы материалов»)
 manufacturers.html — Справочник производителей
+components-cabinets-tabs/ (templates-tab.html, types-tab.html, params-tab.html) — Вкладки компонентов шкафа
+components-systems-tabs/ (components-tab.html, types-tab.html) — Вкладки системных компонентов
 public/components/
-block-template-modal.html — Модальное окно компонента шкафа (параметры, материалы, группы материалов)
-system-comp-modal.html — Модальное окно системных компонентов (блоки, материалы, группы материалов)
+block-template-modal.html — Модальное окно компонента шкафа
+cabinet-component-type-modal.html — Модальное окно типа компонента шкафа (материалы, группы материалов)
+system-comp-modal.html — Модальное окно системных компонентов
 types-modal.html — Модальное окно типов системных компонентов
 material-modal.html — Модальное окно выбора/создания материала
-public/js/
-app.js — Отрисовка навигации, роутинг
-router.js — SPA роутер
 🗄️ БАЗА ДАННЫХ (Ключевые таблицы)
 systems — Системы автоматизации (id, name, page, installation, room, description, position)
 cabinets — Шкафы (id, project_id, name, description, width, height, depth)
 cabinet_systems — Связь шкафов и систем (id, cabinet_id, system_id, description, position)
 project_blocks — Компоненты в шкафу (id, cabinet_id, template_id, quantity, position)
 block_templates — Компоненты шкафа (id, name, article, price, ln, tm, position)
+component_types — Типы компонентов шкафа (id, name, description, position)
 system_components — Системные компоненты (id, name, type_id, module_id, ln, tm, position)
 system_components_link — Связь систем и компонентов (id, system_id, component_id, quantity)
 materials — Справочник материалов (id, article, name, manufacturer_id, unit, price, ln, tm, position)
 material_groups — Группы материалов (id, name, description, position)
 material_group_items — Состав групп материалов (id, group_id, material_id, quantity, position)
-Таблицы привязок групп материалов:
+Таблицы привязок материалов и групп материалов:
 cabinet_material_groups (id, cabinet_id, group_id, quantity)
 block_template_material_groups (id, block_template_id, group_id, quantity)
+component_type_materials (id, type_id, material_id, quantity)
+component_type_material_groups (id, type_id, group_id, quantity)
 system_component_material_groups (id, component_id, group_id, quantity)
 system_component_type_material_groups (id, type_id, group_id, quantity)
 user_table_sort — Состояние Drag-and-Drop, сортировок и фильтров (user_id, table_name, sort_order, sort_key, sort_dir, filter_data)
@@ -114,21 +116,13 @@ NOW_FILE=$(date +%Y%m%d_%H%M%S)
 mkdir -p /opt/backups
 pg_dump -U hrroot -h localhost bd_calc > /opt/backups/bd_calc_${NOW_FILE}.sql
 tar --exclude=node_modules --exclude=.git -czf /opt/backups/calc_wardrobe_${NOW_FILE}.tar.gz -C /opt/calc_wardrobe .
-Откат БД и файлов
-code
-Bash
-# Восстановление БД из файла
-psql -U hrroot -h localhost bd_calc < /opt/backups/bd_calc_ИМЯ_ФАЙЛА.sql
-
-# Восстановление файлов
-tar -xzf /opt/backups/calc_wardrobe_ИМЯ_ФАЙЛА.tar.gz -C /opt/calc_wardrobe
 📜 ИСТОРИЯ ИЗМЕНЕНИЙ (Сводка)
 Дата	Изменения
 18.07.2026	Добавлены фильтры по шкафам, привязка компонентов и модальные окна в automation.html.
-19.07.2026	Внедрен универсальный Drag-and-Drop и клиентская сортировка во все справочники. Добавлены колонки position в БД.
+19.07.2026	Внедрен универсальный Drag-and-Drop и клиентская сортировка во все справочники.
 23.07.2026	Создана таблица user_table_sort и API /api/table-sort/:tableName для сохранения порядка и фильтров в БД.
 24.07.2026	Оптимизация БД. Ликвидированы N+1 запросы за счет json_agg. Увеличен лимит HTTP телозапросов до 50MB.
 25.07.2026	Добавлены поля page и installation для систем автоматизации. Внедрены универсальные модальные фильтры (⚙).
-27.07.2026	Добавлено добавление новых элементов строго в конец таблиц без алфавитного сброса порядка. Добавлена подсветка материалов.
+27.07.2026	Добавлено добавление новых элементов строго в конец таблиц без алфавитного сброса порядка.
 28.07.2026	Созданы таблицы БД для групп материалов, бэкенд API materialGroups.js и двухвкладочный интерфейс consumables.html.
-29.07.2026	[ТЕКУЩАЯ СЕССИЯ] Полная сквозная интеграция Групп материалов для Шкафов, Блоков шкафов, Компонентов систем и Типов компонентов систем. Обновлена 8-UNION калькуляция материалов с плашкой [Группа: Название]. Добавлен столбец «Компонент шкафа» на страницу шкафа. Исправлена работа MaterialModal и эндпоинты materials.js.
+29.07.2026	[ТЕКУЩАЯ СЕССИЯ] Полное завершение сквозного наследования материалов и Групп материалов для всех 5 типов объектов (Шкафы, Компоненты шкафов, Типы компонентов шкафов, Компоненты систем, Типы компонентов систем). Расширена калькуляция материалов шкафа до 10 UNION. Внедрено выделение жирным шрифтом (<strong>) элементов с привязками во всех 4 справочниках. В предпросмотр тултипов при наведении добавлены группы материалов. Создан компонент CabinetComponentTypeModal.

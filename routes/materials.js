@@ -261,7 +261,7 @@ router.get('/cabinet/:id/items', auth, async (req, res) => {
 
             UNION ALL
 
-            -- 7. Материалы типов блоков шкафа
+            -- 7. Материалы компонентов шкафа (блоков)
             SELECT 
                 btm.id as link_id,
                 m.id as material_id,
@@ -286,7 +286,7 @@ router.get('/cabinet/:id/items', auth, async (req, res) => {
 
             UNION ALL
 
-            -- 8. Материалы из групп типов блоков шкафа
+            -- 8. Материалы из групп компонентов шкафа (блоков)
             SELECT 
                 bmg.group_id as link_id,
                 m.id as material_id,
@@ -308,6 +308,60 @@ router.get('/cabinet/:id/items', auth, async (req, res) => {
             JOIN block_template_material_groups bmg ON bmg.block_template_id = bt.id
             JOIN material_groups mg ON mg.id = bmg.group_id
             JOIN material_group_items mgi ON mgi.group_id = bmg.group_id
+            JOIN materials m ON m.id = mgi.material_id
+            WHERE pb.cabinet_id = $1
+
+            UNION ALL
+
+            -- 9. Материалы типов компонентов шкафа
+            SELECT 
+                ctm.id as link_id,
+                m.id as material_id,
+                m.name::text as name,
+                m.unit::text as unit,
+                m.price,
+                m.ln::text as ln,
+                m.tm::text as tm,
+                (COALESCE(ctm.quantity, 1) * COALESCE(pb.quantity, 1))::numeric as quantity,
+                TRUE as is_component_material,
+                NULL::text as system_name,
+                NULL::text as component_name,
+                bt.name::text as chain_block_template,
+                NULL::text as chain_system_component,
+                ct.name::text as chain_type,
+                NULL::text as group_name
+            FROM project_blocks pb
+            JOIN block_templates bt ON bt.id = pb.template_id
+            JOIN component_types ct ON ct.id = bt.type_id
+            JOIN component_type_materials ctm ON ctm.type_id = ct.id
+            JOIN materials m ON m.id = ctm.material_id
+            WHERE pb.cabinet_id = $1
+
+            UNION ALL
+
+            -- 10. Материалы из групп типов компонентов шкафа
+            SELECT 
+                ctmg.group_id as link_id,
+                m.id as material_id,
+                m.name::text as name,
+                m.unit::text as unit,
+                m.price,
+                m.ln::text as ln,
+                m.tm::text as tm,
+                (COALESCE(mgi.quantity, 1) * COALESCE(pb.quantity, 1))::numeric as quantity,
+                TRUE as is_component_material,
+                NULL::text as system_name,
+                NULL::text as component_name,
+                bt.name::text as chain_block_template,
+                NULL::text as chain_system_component,
+                ct.name::text as chain_type,
+                mg.name::text as group_name
+            FROM project_blocks pb
+            JOIN block_templates bt ON bt.id = pb.template_id
+            JOIN component_types ct ON ct.id = bt.type_id
+            JOIN component_type_material_groups ctmg ON ctmg.type_id = ct.id
+            JOIN material_groups mg ON mg.id = ctmg.group_id
+            JOIN material_group_items mgi ON mgi.group_id = ctmg.group_id
             JOIN materials m ON m.id = mgi.material_id
             WHERE pb.cabinet_id = $1;
         `;
@@ -350,6 +404,10 @@ router.get('/cabinet/:id/html', auth, async (req, res) => {
                 SELECT btm.material_id, (COALESCE(btm.quantity, 1) * COALESCE(pb.quantity, 1))::numeric as quantity FROM project_blocks pb JOIN block_template_materials btm ON btm.block_template_id = pb.template_id WHERE pb.cabinet_id = $1
                 UNION ALL
                 SELECT mgi.material_id, (COALESCE(mgi.quantity, 1) * COALESCE(pb.quantity, 1))::numeric as quantity FROM project_blocks pb JOIN block_template_material_groups bmg ON bmg.block_template_id = pb.template_id JOIN material_group_items mgi ON mgi.group_id = bmg.group_id WHERE pb.cabinet_id = $1
+                UNION ALL
+                SELECT ctm.material_id, (COALESCE(ctm.quantity, 1) * COALESCE(pb.quantity, 1))::numeric as quantity FROM project_blocks pb JOIN block_templates bt ON bt.id = pb.template_id JOIN component_type_materials ctm ON ctm.type_id = bt.type_id WHERE pb.cabinet_id = $1
+                UNION ALL
+                SELECT mgi.material_id, (COALESCE(mgi.quantity, 1) * COALESCE(pb.quantity, 1))::numeric as quantity FROM project_blocks pb JOIN block_templates bt ON bt.id = pb.template_id JOIN component_type_material_groups ctmg ON ctmg.type_id = bt.type_id JOIN material_group_items mgi ON mgi.group_id = ctmg.group_id WHERE pb.cabinet_id = $1
             ) q
             JOIN materials m ON m.id = q.material_id
             GROUP BY m.id, m.name, m.unit, m.price, m.ln, m.tm

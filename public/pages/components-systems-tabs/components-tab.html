@@ -150,10 +150,10 @@
      var paramsHtml = '-';
      if (item.params && item.params.length) {
        paramsHtml = item.params.map(function(p) {
-         return esc(p.name) + (p.type ? ' (' + esc(p.type) + ')' : '') + ': ' + esc(p.value);
+         return esc(p.name || p.parameter_name) + (p.type ? ' (' + esc(p.type) + ')' : '') + ': ' + esc(p.value);
        }).join('<br>');
      }
-     var hasLinks = item.has_blocks || item.has_materials;
+     var hasLinks = item.has_bindings === true || item.has_blocks || item.has_materials || item.has_groups || item.has_params;
      var nameHtml = hasLinks ? '<span class="comp-name-link" style="cursor:pointer;text-decoration:underline;"><strong>' + esc(item.name) + '</strong></span>' : esc(item.name);
      
      html += '<tr draggable="false" title="' + esc(item.description || '') + '" data-id="' + item.id + '"' + (hasLinks ? ' data-has-links="1"' : '') + '>' +
@@ -332,9 +332,10 @@
   el.innerHTML = 'Загрузка...'; el.style.display = 'block'; moveComponentTooltip(e);
   Promise.all([
     fetch('/api/system-components/' + compId + '/blocks').then(function(r){ return r.json(); }),
-    fetch('/api/materials/system-component/' + compId).then(function(r){ return r.json(); })
+    fetch('/api/materials/system-component/' + compId).then(function(r){ return r.json(); }),
+    fetch('/api/system-components/' + compId + '/material-groups').then(function(r){ return r.json(); })
   ]).then(function(results) {
-    var blocks = results[0] || [], materials = results[1] || [];
+    var blocks = results[0] || [], materials = results[1] || [], groups = results[2] || [];
     var compData = (window._componentsData && window._componentsData[compId]) || {};
     var params = compData.params || [];
     var html = '<div style="font-weight:bold;margin-bottom:5px;">Параметры:</div>';
@@ -355,6 +356,12 @@
       materials.forEach(function(m){ html += '<tr><td>'+esc(m.name || m.material_name)+'</td><td>'+esc(m.unit || '')+'</td><td>'+m.quantity+'</td></tr>'; });
       html += '</table>';
     } else { html += '<p style="color:#888;">Нет материалов</p>'; }
+    html += '<div style="font-weight:bold;margin:10px 0 5px;">Группы материалов:</div>';
+    if (groups.length) {
+      html += '<table class="data-table" style="font-size:11px;width:100%;"><tr><th>Группа</th></tr>';
+      groups.forEach(function(g){ html += '<tr><td>📦 '+esc(g.group_name || g.name)+'</td></tr>'; });
+      html += '</table>';
+    } else { html += '<p style="color:#888;">Нет групп материалов</p>'; }
     componentTooltipCache[compId] = html; el.innerHTML = html; moveComponentTooltip(e);
   }).catch(function(err) { el.innerHTML = '<p style="color:red;">Ошибка загрузки</p>'; });
  }

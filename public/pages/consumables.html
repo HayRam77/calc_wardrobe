@@ -324,6 +324,11 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                         bindingsHtml += '<span class="binding-tag">📦 Компонент шкафа: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'block_template\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
                     });
                 }
+                if (b.component_types && b.component_types.length) {
+                    b.component_types.forEach(function(x) {
+                        bindingsHtml += '<span class="binding-tag">🏷️ Тип компонента шкафа: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'component_type\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
+                    });
+                }
                 if (b.system_component_types && b.system_component_types.length) {
                     b.system_component_types.forEach(function(x) {
                         bindingsHtml += '<span class="binding-tag">⚙️ Тип систем: ' + esc(x.name) + (isAdmin ? ' <button onclick="unbindGroup(' + g.id + ',\'system_component_type\',' + x.link_id + ')">✕</button>' : '') + '</span> ';
@@ -352,7 +357,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                 if (isAdmin) {
                     html += '<td>' +
                         '<button class="btn btn-sm btn-primary" onclick="openAddMaterialToGroupModal(' + g.id + ')" title="Добавить материал из справочника к группе">+ Материал</button> ' +
-                        '<button class="btn btn-sm btn-secondary" onclick="openBindGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\')" title="Привязать группу к объекту">�� Привязать</button> ' +
+                        '<button class="btn btn-sm btn-secondary" onclick="openBindGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\')" title="Привязать группу к объекту">🔗 Привязать</button> ' +
                         '<button class="btn btn-sm btn-secondary" onclick="clearGroup(' + g.id + ')" title="Очистить группу от всех материалов">🧹 Очистить</button> ' +
                         '<button class="btn btn-sm btn-edit" onclick="openEditGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\',\'' + esc(g.description || '').replace(/'/g, "\\'") + '\')">✏️</button> ' +
                         '<button class="btn btn-sm btn-delete" onclick="deleteGroup(' + g.id + ')">🗑️</button>' +
@@ -546,6 +551,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             '<div class="form-group" style="margin-bottom:12px;"><label style="font-weight:bold;display:block;margin-bottom:4px;">Выберите тип объекта:</label>' +
             '<select id="bindTypeSel" class="form-control" style="width:100%;padding:8px;">' +
             '<option value="block_template">Компонент шкафа</option>' +
+            '<option value="component_type">Тип компонента шкафа</option>' +
             '<option value="system_component_type">Тип компонента системы</option>' +
             '<option value="system_component">Компонент системы</option>' +
             '<option value="cabinet">Шкаф напрямую</option>' +
@@ -577,6 +583,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             var sel = m.querySelector('#bindTargetSel');
             var list = [];
             if (type === 'block_template') list = targetsData.block_templates || [];
+            else if (type === 'component_type') list = targetsData.component_types || [];
             else if (type === 'system_component_type') list = targetsData.system_component_types || [];
             else if (type === 'system_component') list = targetsData.system_components || [];
             else if (type === 'cabinet') list = targetsData.cabinets || [];

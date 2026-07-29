@@ -34,6 +34,12 @@ router.get('/', auth, async (req, res) => {
                             JOIN block_templates bt ON bt.id = bmg.block_template_id
                             WHERE bmg.group_id = g.id
                         ), '[]'::json),
+                        'component_types', COALESCE((
+                            SELECT json_agg(json_build_object('id', ct.id, 'name', ct.name, 'link_id', ctmg.group_id))
+                            FROM component_type_material_groups ctmg
+                            JOIN component_types ct ON ct.id = ctmg.type_id
+                            WHERE ctmg.group_id = g.id
+                        ), '[]'::json),
                         'system_component_types', COALESCE((
                             SELECT json_agg(json_build_object('id', sct.id, 'name', sct.name, 'link_id', smg.group_id))
                             FROM system_component_type_material_groups smg
@@ -71,14 +77,16 @@ router.get('/', auth, async (req, res) => {
 // GET /api/material-groups/targets - получить списки доступных объектов для привязки
 router.get('/targets', auth, async (req, res) => {
     try {
-        const [blockTemplates, sysCompTypes, sysComps, cabinets] = await Promise.all([
+        const [blockTemplates, compTypes, sysCompTypes, sysComps, cabinets] = await Promise.all([
             pool.query('SELECT id, name FROM block_templates ORDER BY name ASC'),
+            pool.query('SELECT id, name FROM component_types ORDER BY name ASC'),
             pool.query('SELECT id, name FROM system_component_types ORDER BY name ASC'),
             pool.query('SELECT id, name FROM system_components ORDER BY name ASC'),
             pool.query('SELECT id, name FROM cabinets ORDER BY name ASC')
         ]);
         res.json({
             block_templates: blockTemplates.rows,
+            component_types: compTypes.rows,
             system_component_types: sysCompTypes.rows,
             system_components: sysComps.rows,
             cabinets: cabinets.rows
@@ -243,6 +251,14 @@ router.post('/:id/bind', auth, isAdmin, async (req, res) => {
                  )`,
                 [target_id, id]
             );
+        } else if (target_type === 'component_type') {
+            await pool.query(
+                `INSERT INTO component_type_material_groups (type_id, group_id)
+                 SELECT $1, $2 WHERE NOT EXISTS (
+                     SELECT 1 FROM component_type_material_groups WHERE type_id = $1 AND group_id = $2
+                 )`,
+                [target_id, id]
+            );
         } else if (target_type === 'system_component_type') {
             await pool.query(
                 `INSERT INTO system_component_type_material_groups (type_id, group_id)
@@ -284,6 +300,8 @@ router.delete('/:id/bind', auth, isAdmin, async (req, res) => {
     try {
         if (target_type === 'block_template') {
             await pool.query('DELETE FROM block_template_material_groups WHERE group_id = $1', [link_id]);
+        } else if (target_type === 'component_type') {
+            await pool.query('DELETE FROM component_type_material_groups WHERE group_id = $1', [link_id]);
         } else if (target_type === 'system_component_type') {
             await pool.query('DELETE FROM system_component_type_material_groups WHERE group_id = $1', [link_id]);
         } else if (target_type === 'system_component') {

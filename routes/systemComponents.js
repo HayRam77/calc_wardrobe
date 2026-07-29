@@ -19,6 +19,13 @@ router.get('/', auth, async (req, res) => {
                    EXISTS(SELECT 1 FROM system_component_params WHERE component_id = sc.id) as has_params,
                    EXISTS(SELECT 1 FROM system_block_links WHERE system_component_id = sc.id) as has_blocks,
                    EXISTS(SELECT 1 FROM system_component_materials WHERE system_component_id = sc.id) as has_materials,
+                   EXISTS(SELECT 1 FROM system_component_material_groups WHERE component_id = sc.id) as has_groups,
+                   (
+                     EXISTS(SELECT 1 FROM system_component_params WHERE component_id = sc.id) OR
+                     EXISTS(SELECT 1 FROM system_block_links WHERE system_component_id = sc.id) OR
+                     EXISTS(SELECT 1 FROM system_component_materials WHERE system_component_id = sc.id) OR
+                     EXISTS(SELECT 1 FROM system_component_material_groups WHERE component_id = sc.id)
+                   ) as has_bindings,
                    COALESCE(
                      (
                        SELECT json_agg(
@@ -274,7 +281,7 @@ router.delete('/:id/blocks/:blockId', auth, isAdmin, async (req, res) => {
 router.get('/:id/material-groups', auth, async (req, res) => {
     try {
         const direct = await pool.query(
-            `SELECT scmg.id as link_id, mg.id as group_id, mg.name as group_name, mg.description,
+            `SELECT scmg.group_id as link_id, mg.id as group_id, mg.name as group_name, mg.description,
                     false as inherited,
                     COALESCE(
                       json_agg(
@@ -292,13 +299,13 @@ router.get('/:id/material-groups', auth, async (req, res) => {
              LEFT JOIN material_group_items mgi ON mgi.group_id = mg.id
              LEFT JOIN materials m ON m.id = mgi.material_id
              WHERE scmg.component_id = $1
-             GROUP BY scmg.id, mg.id, mg.name, mg.description
-             ORDER BY scmg.id ASC`,
+             GROUP BY scmg.group_id, mg.id, mg.name, mg.description
+             ORDER BY scmg.group_id ASC`,
             [req.params.id]
         );
 
         const inherited = await pool.query(
-            `SELECT sctmg.id as link_id, mg.id as group_id, mg.name as group_name, mg.description,
+            `SELECT sctmg.group_id as link_id, mg.id as group_id, mg.name as group_name, mg.description,
                     true as inherited,
                     COALESCE(
                       json_agg(
@@ -321,8 +328,8 @@ router.get('/:id/material-groups', auth, async (req, res) => {
                SELECT 1 FROM system_component_material_groups scmg2
                WHERE scmg2.component_id = sc.id AND scmg2.group_id = sctmg.group_id
              )
-             GROUP BY sctmg.id, mg.id, mg.name, mg.description
-             ORDER BY sctmg.id ASC`,
+             GROUP BY sctmg.group_id, mg.id, mg.name, mg.description
+             ORDER BY sctmg.group_id ASC`,
             [req.params.id]
         );
 
@@ -341,12 +348,14 @@ router.post('/:id/material-groups', auth, isAdmin, async (req, res) => {
 
         const result = await pool.query(
             `INSERT INTO system_component_material_groups (component_id, group_id)
-             VALUES ($1, $2)
-             ON CONFLICT DO NOTHING
+             SELECT $1, $2
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM system_component_material_groups WHERE component_id = $1 AND group_id = $2
+             )
              RETURNING *`,
             [req.params.id, group_id]
         );
-        res.status(201).json(result.rows[0] || { message: 'Уже привязано' });
+        res.status(201).json(result.rows[0] || { message: 'Привязано' });
     } catch (err) {
         console.error('Ошибка привязки группы материалов к системному компоненту:', err);
         res.status(500).json({ message: 'Ошибка привязки группы материалов' });
@@ -357,8 +366,8 @@ router.post('/:id/material-groups', auth, isAdmin, async (req, res) => {
 router.delete('/:id/material-groups/:linkId', auth, isAdmin, async (req, res) => {
     try {
         await pool.query(
-            'DELETE FROM system_component_material_groups WHERE id = $1 AND component_id = $2',
-            [req.params.linkId, req.params.id]
+            'DELETE FROM system_component_material_groups WHERE component_id = $1 AND group_id = $2',
+            [req.params.id, req.params.linkId]
         );
         res.json({ message: 'Группа материалов отвязана' });
     } catch (err) {

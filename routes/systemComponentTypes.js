@@ -36,7 +36,13 @@ router.get('/', auth, async (req, res) => {
     const r = await pool.query(
       'SELECT sct.*, ' +
       'EXISTS(SELECT 1 FROM system_component_type_materials WHERE type_id = sct.id) as has_materials, ' +
-      'EXISTS(SELECT 1 FROM system_component_type_blocks WHERE type_id = sct.id) as has_blocks ' +
+      'EXISTS(SELECT 1 FROM system_component_type_blocks WHERE type_id = sct.id) as has_blocks, ' +
+      'EXISTS(SELECT 1 FROM system_component_type_material_groups WHERE type_id = sct.id) as has_groups, ' +
+      '(' +
+        'EXISTS(SELECT 1 FROM system_component_type_materials WHERE type_id = sct.id) OR ' +
+        'EXISTS(SELECT 1 FROM system_component_type_blocks WHERE type_id = sct.id) OR ' +
+        'EXISTS(SELECT 1 FROM system_component_type_material_groups WHERE type_id = sct.id)' +
+      ') as has_bindings ' +
       'FROM system_component_types sct ORDER BY sct.' + sort + ' ' + order
     ); 
     res.json(r.rows); 
@@ -112,7 +118,7 @@ router.delete('/:typeId/materials/:materialId', auth, isAdmin, async (req, res) 
 router.get('/:id/material-groups', auth, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT smg.id as link_id, mg.id as group_id, mg.name as group_name, mg.description,
+      `SELECT smg.group_id as link_id, mg.id as group_id, mg.name as group_name, mg.description,
               COALESCE(
                 json_agg(
                   jsonb_build_object(
@@ -129,8 +135,8 @@ router.get('/:id/material-groups', auth, async (req, res) => {
        LEFT JOIN material_group_items mgi ON mgi.group_id = mg.id
        LEFT JOIN materials m ON m.id = mgi.material_id
        WHERE smg.type_id = $1
-       GROUP BY smg.id, mg.id, mg.name, mg.description
-       ORDER BY smg.id ASC`,
+       GROUP BY smg.group_id, mg.id, mg.name, mg.description
+       ORDER BY smg.group_id ASC`,
       [req.params.id]
     );
     res.json(result.rows);
@@ -148,11 +154,14 @@ router.post('/:id/material-groups', auth, isAdmin, async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO system_component_type_material_groups (type_id, group_id)
-       VALUES ($1, $2)
-       ON CONFLICT DO NOTHING RETURNING *`,
+       SELECT $1, $2
+       WHERE NOT EXISTS (
+           SELECT 1 FROM system_component_type_material_groups WHERE type_id = $1 AND group_id = $2
+       )
+       RETURNING *`,
       [typeId, group_id]
     );
-    res.status(201).json(result.rows[0] || { message: 'Уже привязано' });
+    res.status(201).json(result.rows[0] || { message: 'Привязано' });
   } catch (err) {
     console.error('Ошибка привязки группы материалов к типу:', err);
     res.status(500).json({ message: 'Ошибка привязки группы материалов к типу' });
@@ -162,7 +171,7 @@ router.post('/:id/material-groups', auth, isAdmin, async (req, res) => {
 router.delete('/:typeId/material-groups/:linkId', auth, isAdmin, async (req, res) => {
   try {
     await pool.query(
-      'DELETE FROM system_component_type_material_groups WHERE type_id = $1 AND (id = $2 OR group_id = $2)',
+      'DELETE FROM system_component_type_material_groups WHERE type_id = $1 AND group_id = $2',
       [req.params.typeId, req.params.linkId]
     );
     res.json({ message: 'Группа материалов отвязана от типа' });
