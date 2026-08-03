@@ -359,6 +359,7 @@ th[data-sort]:hover { background-color: #e0e0e0; }
                     html += '<td><div style="display:flex; flex-direction:column; gap:4px; align-items:stretch;">' +
                         '<button class="btn btn-sm btn-primary" onclick="openAddMaterialToGroupModal(' + g.id + ')" title="Добавить материал из справочника к группе">+ Материал</button>' +
                         '<button class="btn btn-sm btn-secondary" onclick="openBindGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\')" title="Привязать группу к объекту">🔗 Привязать</button>' +
+                        '<button class="btn btn-sm btn-secondary" onclick="openCopyGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\')" title="Копировать состав группы">📋 Копировать</button>' +
                         '<button class="btn btn-sm btn-secondary" onclick="clearGroup(' + g.id + ')" title="Очистить группу от всех материалов">🧹 Очистить</button>' +
                         '<div style="display:flex; gap:4px;">' +
                             '<button class="btn btn-sm btn-edit" style="flex:1;" onclick="openEditGroupModal(' + g.id + ',\'' + esc(g.name).replace(/'/g, "\\'") + '\',\'' + esc(g.description || '').replace(/'/g, "\\'") + '\')">✏️</button>' +
@@ -383,6 +384,99 @@ th[data-sort]:hover { background-color: #e0e0e0; }
             console.error('Ошибка загрузки групп:', e);
             container.innerHTML = '<p style="color:red;">Ошибка загрузки групп материалов</p>';
         }
+    };
+
+    // МОДАЛЬНОЕ ОКНО КОПИРОВАНИЯ СОСТАВА ГРУППЫ
+    window.openCopyGroupModal = function(sourceId, sourceName) {
+        fetch('/api/material-groups')
+            .then(function(r) { return r.json(); })
+            .then(function(groups) {
+                var modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.style.cssText = 'display:flex;justify-content:center;align-items:center;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;';
+
+                var optionsHtml = '<option value="">-- выберите целевую группу --</option>';
+                groups.forEach(function(g) {
+                    if (g.id !== sourceId) {
+                        optionsHtml += '<option value="' + g.id + '">' + esc(g.name) + '</option>';
+                    }
+                });
+
+                modal.innerHTML = '<div style="background:#fff;border-radius:8px;padding:20px;max-width:500px;width:90vw;">' +
+                    '<h3 style="margin-top:0;">Копировать состав «' + esc(sourceName) + '»</h3>' +
+                    '<form id="copyGroupForm">' +
+                    '<div style="margin-bottom:12px;">' +
+                    '<label style="display:block;font-weight:bold;margin-bottom:6px;"><input type="radio" name="copyTargetType" value="new" checked> В новую группу</label>' +
+                    '<input type="text" id="newGroupNameInput" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;" placeholder="Название новой группы" value="' + esc(sourceName) + ' (копия)" required>' +
+                    '</div>' +
+                    '<div style="margin-bottom:15px;">' +
+                    '<label style="display:block;font-weight:bold;margin-bottom:6px;"><input type="radio" name="copyTargetType" value="existing"> В существующую группу</label>' +
+                    '<select id="existingGroupSelect" class="form-control" style="width:100%;padding:8px;box-sizing:border-box;" disabled>' + optionsHtml + '</select>' +
+                    '</div>' +
+                    '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+                    '<button type="button" class="btn btn-secondary btn-cancel">Отмена</button>' +
+                    '<button type="submit" class="btn btn-primary">Копировать</button>' +
+                    '</div>' +
+                    '</form>' +
+                    '</div>';
+                document.body.appendChild(modal);
+
+                var close = function() { modal.remove(); };
+                modal.querySelector('.btn-cancel').onclick = close;
+                modal.onclick = function(e) { if (e.target === modal) close(); };
+
+                var radios = modal.querySelectorAll('input[name="copyTargetType"]');
+                var nameInput = modal.querySelector('#newGroupNameInput');
+                var groupSelect = modal.querySelector('#existingGroupSelect');
+
+                radios.forEach(function(radio) {
+                    radio.addEventListener('change', function() {
+                        if (this.value === 'new') {
+                            nameInput.disabled = false;
+                            nameInput.required = true;
+                            groupSelect.disabled = true;
+                            groupSelect.required = false;
+                        } else {
+                            nameInput.disabled = true;
+                            nameInput.required = false;
+                            groupSelect.disabled = false;
+                            groupSelect.required = true;
+                        }
+                    });
+                });
+
+                modal.querySelector('#copyGroupForm').onsubmit = function(e) {
+                    e.preventDefault();
+                    var targetType = modal.querySelector('input[name="copyTargetType"]:checked').value;
+                    var payload = { target_type: targetType };
+
+                    if (targetType === 'new') {
+                        var newName = nameInput.value.trim();
+                        if (!newName) { alert('Введите название новой группы'); return; }
+                        payload.new_group_name = newName;
+                    } else {
+                        var targetId = groupSelect.value;
+                        if (!targetId) { alert('Выберите целевую группу'); return; }
+                        payload.target_group_id = parseInt(targetId);
+                    }
+
+                    fetch('/api/material-groups/' + sourceId + '/copy', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    })
+                    .then(function(r) {
+                        if (!r.ok) return r.json().then(function(d) { throw new Error(d.message); });
+                        return r.json();
+                    })
+                    .then(function(res) {
+                        close();
+                        alert('✅ ' + (res.message || 'Состав успешно скопирован'));
+                        loadMaterialGroups();
+                    })
+                    .catch(function(err) { alert('Ошибка: ' + err.message); });
+                };
+            });
     };
 
     // МОДАЛЬНОЕ ОКНО СОЗДАНИЯ / РЕДАКТИРОВАНИЯ ГРУППЫ МАТЕРИАЛОВ

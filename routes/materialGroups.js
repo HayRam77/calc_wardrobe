@@ -318,4 +318,74 @@ router.delete('/:id/bind', auth, isAdmin, async (req, res) => {
     }
 });
 
+// POST /api/material-groups/:id/copy - копировать состав материалов в новую или существующую группу
+router.post('/:id/copy', auth, isAdmin, async (req, res) => {
+    const sourceId = req.params.id;
+    const { target_type, new_group_name, target_group_id } = req.body;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Проверить существование исходной группы
+        const srcRes = await client.query('SELECT * FROM material_groups WHERE id = $1', [sourceId]);
+        if (srcRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Исходная группа не найдена' });
+        }
+
+        let destGroupId;
+        let groupName;
+
+        if (target_type === 'new') {
+            if (!new_group_name || !new_group_name.trim()) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ message: 'Название новой группы обязательно' });
+            }
+            const posResult = await client.query('SELECT COALESCE(MAX(position), 0) + 1 as next_pos FROM material_groups');
+            const nextPos = posResult.rows[0].next_pos;
+
+            const newGrpRes = await client.query(
+                'INSERT INTO material_groups (name, description, position) VALUES ($1, $2, $3) RETURNING *',
+                [new_group_name.trim(), srcRes.rows[0].description || null, nextPos]
+            );
+            destGroupId = newGrpRes.rows[0].id;
+            groupName = newGrpRes.rows[0].name;
+        } else if (target_type === 'existing') {
+            if (!target_group_id) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ message: 'Укажите целевую группу' });
+            }
+            const destRes = await client.query('SELECT * FROM material_groups WHERE id = $1', [target_group_id]);
+            if (destRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ message: 'Целевая группа не найдена' });
+            }
+            destGroupId = target_group_id;
+            groupName = destRes.rows[0].name;
+        } else {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ message: 'Неизвестный тип назначения' });
+        }
+
+        // 2. Скопировать материалы состава
+        const copyRes = await client.query(`
+            INSERT INTO material_group_items (group_id, material_id, quantity, position)
+            SELECT $1, material_id, quantity,
+                   (SELECT COALESCE(MAX(position), 0) FROM material_group_items WHERE group_id = $1) + ROW_NUMBER() OVER (ORDER BY position, id)
+            FROM material_group_items
+            WHERE group_id = $2
+        `, [destGroupId, sourceId]);
+
+        await client.query('COMMIT');
+        res.json({ message: 'Состав материалов успешно скопирован в группу «' + groupName + '» (элементов: ' + copyRes.rowCount + ')' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error copying material group composition:', err);
+        res.status(500).json({ message: 'Ошибка копирования состава группы' });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
