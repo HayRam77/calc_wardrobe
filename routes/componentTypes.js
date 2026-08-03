@@ -55,8 +55,7 @@ router.get('/', auth, async (req, res) => {
       SELECT ct.*,
              (
                EXISTS(SELECT 1 FROM component_type_materials WHERE type_id = ct.id) OR
-               EXISTS(SELECT 1 FROM component_type_material_groups WHERE type_id = ct.id) OR
-               EXISTS(SELECT 1 FROM block_templates WHERE type_id = ct.id)
+               EXISTS(SELECT 1 FROM component_type_material_groups WHERE type_id = ct.id)
              ) as has_bindings
       FROM component_types ct
       ORDER BY COALESCE(ct.position, 9999), ct.${sort} ${order}

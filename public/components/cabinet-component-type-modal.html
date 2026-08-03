@@ -13,7 +13,10 @@ window.CabinetComponentTypeModal = {
         m.innerHTML = '<div class="modal-content" style="max-width:850px;width:95vw;max-height:90vh;overflow-y:auto;padding:20px;background:#fff;border-radius:8px;"><span class="modal-close" style="cursor:pointer;float:right;font-size:24px;font-weight:bold;">&times;</span><h3 style="margin-top:0;">'+(isEdit ? 'Редактировать тип компонента шкафа' : 'Добавить тип компонента шкафа')+'</h3><form id="cabTypeForm"></form></div>';
         document.body.appendChild(m);
 
-        var closeModal = function() { m.remove(); };
+        var closeModal = function() {
+            m.remove();
+            if (self._cb) self._cb();
+        };
         m.querySelector('.modal-close').addEventListener('click', closeModal);
         m.addEventListener('click', function(e){ if(e.target === m) closeModal(); });
 
@@ -21,7 +24,7 @@ window.CabinetComponentTypeModal = {
             fetch('/api/component-types/' + typeId + '?_=' + Date.now())
                 .then(function(r){ return r.json(); })
                 .then(function(typeData){
-                    self._buildForm(m, typeData, callback);
+                    self._buildForm(m, typeData, callback, closeModal);
                 })
                 .catch(function(err){
                     console.error('Ошибка загрузки типа:', err);
@@ -29,11 +32,11 @@ window.CabinetComponentTypeModal = {
                     closeModal();
                 });
         } else {
-            self._buildForm(m, null, callback);
+            self._buildForm(m, null, callback, closeModal);
         }
     },
 
-    _buildForm: function(m, typeData, callback) {
+    _buildForm: function(m, typeData, callback, closeModal) {
         var self = this;
         var isEdit = !!typeData;
         var currentTypeId = typeData ? typeData.id : null;
@@ -52,7 +55,7 @@ window.CabinetComponentTypeModal = {
 
         m.querySelector('#cabTypeForm').innerHTML = h;
 
-        m.querySelector('.cancel-type-btn').onclick = function() { m.remove(); };
+        m.querySelector('.cancel-type-btn').onclick = closeModal;
 
         function refreshTypeMaterials() {
             var mc = m.querySelector('#typeLinkedMaterials');
@@ -104,7 +107,7 @@ window.CabinetComponentTypeModal = {
                         groups.forEach(function(g){
                             html += '<div style="border:1px solid #e2e8f0;border-radius:6px;padding:8px;margin-bottom:8px;background:#fff;">';
                             html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">';
-                            html += '<strong>📦 ' + self._esc(g.group_name || 'Группа') + '</strong>';
+                            html += '<strong>📦 ' + self._esc(g.group_name || g.name) + '</strong>';
                             html += '<button type="button" class="btn btn-sm btn-delete unbind-type-group-btn" data-link-id="' + g.link_id + '">✕</button>';
                             html += '</div>';
                             if (g.items && g.items.length) {
@@ -221,8 +224,7 @@ window.CabinetComponentTypeModal = {
                 return r.json();
             })
             .then(function(data){
-                m.remove();
-                if (callback) callback(data.id || data);
+                closeModal();
             })
             .catch(function(err){ alert(err.message); });
         });
